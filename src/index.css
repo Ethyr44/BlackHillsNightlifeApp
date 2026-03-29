@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* MOBILE TEXT WRAPPING FIX */
+* {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* ORIGINAL SONGLIST STYLING */
+.song-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid #374151; 
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.song-item:hover { border-color: rgba(0, 245, 255, 0.4); }
+
+/* CUSTOM FONTS & BACKGROUNDS */
+body {
+  background-color: #030712; 
+  color: #e5e7eb;
+}

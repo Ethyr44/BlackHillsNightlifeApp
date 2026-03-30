@@ -16,6 +16,7 @@ const Map = lazy(() => import('./Map'))
 const Live = lazy(() => import('./Live'))
 const Shop = lazy(() => import('./Shop'))
 const Settings = lazy(() => import('./Settings'))
+const SongBook = lazy(() => import('./SongBook'))
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -90,7 +91,7 @@ export default function App() {
     return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
   }
 
-  const baseTabs = ["FYP", "Profile", "Events", "Leaderboard", "Live", "Shop", "Map", "Settings"]
+  const baseTabs = ["FYP", "Profile", "Songbook", "Events", "Leaderboard", "Live", "Shop", "Map", "Settings"]
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
   const handleTabSwitch = (tab) => {
@@ -207,6 +208,7 @@ export default function App() {
             {activeTab === 'Profile' && <Profile session={session} />}
             {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
             {activeTab === 'Leaderboard' && <Leaderboard />}
+            {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
             {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
             {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
             {activeTab === 'Live' && <Live currentUser={currentUser} />}

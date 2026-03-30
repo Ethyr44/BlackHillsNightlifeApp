@@ -14,22 +14,29 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
     setLoading(true)
     
     // N+1 Fix: Fetch everything needed for rendering in a single query
+    // Notice how we changed "profiles:user_id" to "profiles:author_id"
     let query = supabase
       .from('posts')
       .select(`
         *,
-        profiles:user_id (username, profile_pic, account_type),
+        profiles:author_id (username, profile_pic, account_type),
         likes (id, user_id),
         comments (id, text, user_id, created_at)
       `)
       .order('created_at', { ascending: false })
 
     if (targetUserId) {
-      query = query.eq('user_id', targetUserId)
+      // Changed 'user_id' to 'author_id' here as well
+      query = query.eq('author_id', targetUserId)
       if (!isFriend && !isOwner) {
         query = query.limit(1)
       }
     }
+
+    const { data, error } = await query
+    if (!error && data) setPosts(data)
+    setLoading(false)
+  }
 
     const { data, error } = await query
     if (!error && data) setPosts(data)

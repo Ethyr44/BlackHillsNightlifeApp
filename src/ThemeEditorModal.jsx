@@ -1,105 +1,91 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient'
 
+const GRADIENTS = {
+  'deep-space': 'bg-gradient-to-b from-slate-900 via-[#090812] to-black',
+  'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812] to-black',
+  'toxic-glow': 'bg-gradient-to-b from-green-900/30 via-[#090812] to-black',
+  'blood-moon': 'bg-gradient-to-b from-red-900/30 via-[#090812] to-black',
+  'golden-hour': 'bg-gradient-to-b from-orange-900/30 via-[#090812] to-black',
+  'abyss': 'bg-black'
+}
+
 export default function ThemeEditorModal({ session, profile, onClose, onUpdate }) {
-  const [uploading, setUploading] = useState(false)
-  const [themeColors, setThemeColors] = useState({
-    primary: profile.primary_color || '#3b82f6',
-    secondary: profile.secondary_color || '#9333ea',
-    accent: profile.accent_color || '#10b981'
-  })
-  const [slideshowUrls, setSlideshowUrls] = useState(profile.slideshow_urls || [])
+  const [saving, setSaving] = useState(false)
+  
+  // Current Selections
+  const [primary, setPrimary] = useState(profile.primary_color || '#3b82f6')
+  const [secondary, setSecondary] = useState(profile.secondary_color || '#9333ea')
+  const [accent, setAccent] = useState(profile.accent_color || '#10b981')
+  const [bgGradient, setBgGradient] = useState(profile.bg_gradient || 'deep-space')
 
-  const handleImageUpload = async (event, type) => {
-    try {
-      setUploading(true)
-      const file = event.target.files[0]
-      if (!file) return
-
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${session.user.id}-${Math.random()}.${fileExt}`
-      const { error: uploadError } = await supabase.storage.from('profile_images').upload(fileName, file)
-      if (uploadError) throw uploadError
-
-      const { data: { publicUrl } } = supabase.storage.from('profile_images').getPublicUrl(fileName)
-
-      if (type === 'avatar') {
-        await supabase.from('profiles').update({ profile_pic: publicUrl }).eq('id', session.user.id)
-        onUpdate({ ...profile, profile_pic: publicUrl })
-      } else if (type === 'slideshow') {
-        const newSlides = [...slideshowUrls, publicUrl]
-        setSlideshowUrls(newSlides)
-        await supabase.from('profiles').update({ slideshow_urls: newSlides }).eq('id', session.user.id)
-        onUpdate({ ...profile, slideshow_urls: newSlides })
-      }
-    } catch (error) {
-      alert('Error uploading image: ' + error.message)
-    } finally {
-      setUploading(false)
+  const handleSave = async () => {
+    setSaving(true)
+    const updates = {
+      primary_color: primary,
+      secondary_color: secondary,
+      accent_color: accent,
+      bg_gradient: bgGradient,
+      updated_at: new Date()
     }
-  }
 
-  const handleRemoveSlide = async (indexToRemove) => {
-      const newSlides = slideshowUrls.filter((_, idx) => idx !== indexToRemove)
-      setSlideshowUrls(newSlides)
-      await supabase.from('profiles').update({ slideshow_urls: newSlides }).eq('id', session.user.id)
-      onUpdate({ ...profile, slideshow_urls: newSlides })
-  }
-
-  const handleSaveTheme = async () => {
-      setUploading(true)
-      await supabase.from('profiles').update({
-          primary_color: themeColors.primary, 
-          secondary_color: themeColors.secondary, 
-          accent_color: themeColors.accent
-      }).eq('id', session.user.id)
-      
-      onUpdate({ 
-          ...profile, 
-          primary_color: themeColors.primary, 
-          secondary_color: themeColors.secondary, 
-          accent_color: themeColors.accent 
-      })
-      setUploading(false)
+    const { error } = await supabase.from('profiles').update(updates).eq('id', session.user.id)
+    
+    if (!error) {
+      onUpdate({ ...profile, ...updates })
       onClose()
+    } else {
+      alert("Error saving theme: " + error.message)
+    }
+    setSaving(false)
   }
 
   return (
-    <div className="bg-[#090812]/95 backdrop-blur-xl border-2 rounded-2xl p-6 shadow-2xl space-y-6 animate-fade-in relative z-50" style={{ borderColor: themeColors.primary, boxShadow: `0 0 50px ${themeColors.primary}44` }}>
-        <div className="flex justify-between items-center border-b border-gray-800 pb-4">
-            <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest" style={{ textShadow: `0 0 10px ${themeColors.primary}` }}>Customize Appearance</h3>
-            <button onClick={onClose} className="text-gray-500 hover:text-white text-xl">✕</button>
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
+      <div className="bg-[#090812] border border-gray-700 rounded-3xl p-6 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+        <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-6 text-white text-center">Customize Theme</h3>
+        
+        <div className="space-y-6">
+          {/* Neon Accents */}
+          <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
+              <h4 className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Neon Accents</h4>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-white font-bold">Primary Core</span>
+                <input type="color" value={primary} onChange={e => setPrimary(e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-none" />
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-white font-bold">Secondary Aura</span>
+                <input type="color" value={secondary} onChange={e => setSecondary(e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-none" />
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-white font-bold">Action Highlight</span>
+                <input type="color" value={accent} onChange={e => setAccent(e.target.value)} className="w-8 h-8 rounded cursor-pointer bg-transparent border-none" />
+              </div>
+          </div>
+
+          {/* Background Gradients */}
+          <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
+              <h4 className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Vibe Background</h4>
+              <div className="grid grid-cols-3 gap-2">
+                  {Object.keys(GRADIENTS).map(key => (
+                      <button 
+                          key={key} 
+                          onClick={() => setBgGradient(key)}
+                          className={`h-12 rounded-lg border-2 transition-all ${GRADIENTS[key]} ${bgGradient === key ? 'border-white scale-105 shadow-[0_0_15px_rgba(255,255,255,0.3)]' : 'border-gray-800 hover:border-gray-500'}`}
+                          title={key.replace('-', ' ').toUpperCase()}
+                      />
+                  ))}
+              </div>
+          </div>
         </div>
 
-        <div>
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Change Profile Picture</label>
-            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} disabled={uploading} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-gray-800 file:text-white hover:file:bg-gray-700 cursor-pointer" />
+        <div className="flex gap-3 mt-8">
+            <button onClick={onClose} className="px-6 py-3 border border-gray-700 text-gray-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                {saving ? 'Saving...' : 'Lock it in'}
+            </button>
         </div>
-
-        <div className="grid grid-cols-3 gap-4 border-t border-gray-800 pt-4">
-            <div><label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Primary</label><input type="color" value={themeColors.primary} onChange={(e) => setThemeColors({...themeColors, primary: e.target.value})} className="w-full h-10 rounded cursor-pointer bg-transparent border-0" /></div>
-            <div><label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Secondary</label><input type="color" value={themeColors.secondary} onChange={(e) => setThemeColors({...themeColors, secondary: e.target.value})} className="w-full h-10 rounded cursor-pointer bg-transparent border-0" /></div>
-            <div><label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Accent</label><input type="color" value={themeColors.accent} onChange={(e) => setThemeColors({...themeColors, accent: e.target.value})} className="w-full h-10 rounded cursor-pointer bg-transparent border-0" /></div>
-        </div>
-
-        <div className="border-t border-gray-800 pt-4">
-            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Add Cover Photo / Slideshow</label>
-            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'slideshow')} disabled={uploading} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-gray-800 file:text-white hover:file:bg-gray-700 cursor-pointer mb-4" />
-            {slideshowUrls.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                    {slideshowUrls.map((url, idx) => (
-                        <div key={idx} className="relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border border-gray-700">
-                            <img src={url} className="w-full h-full object-cover" alt={`Slide ${idx}`} />
-                            <button onClick={() => handleRemoveSlide(idx)} className="absolute top-1 right-1 bg-red-600 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center">✕</button>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-
-        <button onClick={handleSaveTheme} disabled={uploading} className="w-full bg-green-600 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-xs hover:bg-green-500 shadow-[0_0_15px_rgba(22,163,74,0.4)] disabled:opacity-50">
-            {uploading ? 'Uploading...' : 'Save Appearance'}
-        </button>
+      </div>
     </div>
   )
 }

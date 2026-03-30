@@ -13,20 +13,19 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
   const fetchPosts = async () => {
     setLoading(true)
     
-    // Notice how much smaller this query is now! 
-    // FeedPost handles the likes/comments fetching on its own.
+    // N+1 Fix: Fetch everything needed for rendering in a single query
     let query = supabase
       .from('posts')
       .select(`
         *,
-        profiles:user_id (username, profile_pic, account_type)
+        profiles:user_id (username, profile_pic, account_type),
+        likes (id, user_id),
+        comments (id, text, user_id, created_at)
       `)
       .order('created_at', { ascending: false })
 
-    // If looking at a specific profile, filter the posts
     if (targetUserId) {
       query = query.eq('user_id', targetUserId)
-      // Enforce the Friend Rule: Non-friends only see the 1 most recent post
       if (!isFriend && !isOwner) {
         query = query.limit(1)
       }
@@ -51,7 +50,6 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
         </div>
       ) : (
         posts.map(post => {
-          // Format the data perfectly for the FeedPost component
           const formattedItem = {
              id: `post_${post.id}`,
              type: 'post',
@@ -59,7 +57,9 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
              data: {
                  ...post,
                  username: post.profiles?.username || 'Unknown',
-                 profile_pic: post.profiles?.profile_pic
+                 profile_pic: post.profiles?.profile_pic,
+                 likes: post.likes || [],
+                 comments: post.comments || []
              }
           }
           

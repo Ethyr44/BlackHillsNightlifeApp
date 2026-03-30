@@ -1,18 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
-import Profile from './Profile'
-import Leaderboard from './Leaderboard'
-import Events from './Events'
-import AdminPanel from './AdminPanel'
-import Map from './Map'
 import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
 import NotificationsMenu from './NotificationsMenu'
-import FYP from './FYP' 
-import Live from './Live' 
-import Shop from './Shop' // <-- NEW IMPORT
+
+// Code Splitting: These only download when the user clicks the tab
+const FYP = lazy(() => import('./FYP'))
+const Profile = lazy(() => import('./Profile'))
+const Leaderboard = lazy(() => import('./Leaderboard'))
+const Events = lazy(() => import('./Events'))
+const AdminPanel = lazy(() => import('./AdminPanel'))
+const Map = lazy(() => import('./Map'))
+const Live = lazy(() => import('./Live'))
+const Shop = lazy(() => import('./Shop'))
+const Settings = lazy(() => import('./Settings'))
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -63,19 +66,14 @@ export default function App() {
               const isAlreadyFriend = existingConns && existingConns.some(c => c.status === 'friend')
 
               if (!isAlreadyFriend) {
-                  await supabase.from('connections').delete().eq('follower_id', userProfile.id).eq('following_id', connectId)
-                  await supabase.from('connections').delete().eq('follower_id', connectId).eq('following_id', userProfile.id)
-
-                  await supabase.from('connections').insert([
-                      { follower_id: userProfile.id, following_id: connectId, status: 'friend' },
-                      { follower_id: connectId, following_id: userProfile.id, status: 'friend' }
-                  ])
-
-                  await supabase.from('notifications').insert({
-                      user_id: connectId,
-                      title: "New Friend Connection!",
-                      message: `${userProfile.username} scanned your VibeCode. You are now friends!`,
+                  // Replaced 4 client queries with 1 secure server transaction
+                  const { error } = await supabase.rpc('establish_friendship', {
+                      user_a: userProfile.id,
+                      user_b: connectId,
+                      user_a_name: userProfile.username
                   })
+
+                  if (error) console.error("Error making connection:", error)
               }
 
               setForceFriendView(true)
@@ -125,47 +123,12 @@ export default function App() {
     alert("This entity hasn't been added to the directory yet!")
   }
 
-  const Settings = () => {
-    const [editName, setEditName] = useState(currentUser.username)
-    const [updateStatus, setUpdateStatus] = useState('')
-
-    const handleSaveName = async () => {
-        setUpdateStatus('Saving...')
-        const { error } = await supabase.from('profiles').update({ username: editName }).eq('id', currentUser.id)
-        if (!error) {
-            setCurrentUser({...currentUser, username: editName})
-            setUpdateStatus('✅ Username Updated!')
-            setTimeout(() => setUpdateStatus(''), 2000)
-        } else {
-            setUpdateStatus('⚠️ Error saving name.')
-        }
-    }
-
-    return (
-      <div className="max-w-xl mx-auto p-4 mt-4 space-y-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg">
-            <h2 className="text-xl font-['Bebas_Neue'] text-blue-400 tracking-wider mb-4 border-b border-gray-800 pb-2">Edit Profile</h2>
-            <div className="flex flex-col space-y-2">
-                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Username</label>
-                <input 
-                    type="text" 
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="bg-black border border-gray-700 text-white rounded-lg p-3 focus:outline-none focus:border-blue-500"
-                />
-                <button onClick={handleSaveName} className="bg-blue-600 text-white font-bold py-2 rounded-lg mt-2 hover:bg-blue-500 transition-colors">
-                    Save Changes
-                </button>
-                {updateStatus && <p className="text-xs text-center text-green-400 mt-2">{updateStatus}</p>}
-            </div>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-lg mt-8">
-          <h2 className="text-xl font-['Bebas_Neue'] text-red-500 tracking-wider mb-4 border-b border-gray-800 pb-2">Danger Zone</h2>
-          <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 text-white font-bold py-3 px-4 rounded-lg w-full mb-4 hover:bg-gray-700">Log Out</button>
-        </div>
-      </div>
-    )
-  }
+  // Loading spinner for lazy components
+  const SuspenseLoader = () => (
+    <div className="flex justify-center mt-20">
+      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#030712] text-gray-200 font-['DM_Sans'] pb-20 relative">
@@ -221,15 +184,15 @@ export default function App() {
             forceAccess={forceFriendView ? 'friend' : null} 
           />
         ) : (
-          <>
+          <Suspense fallback={<SuspenseLoader />}>
             {activeTab === 'Search' && searchResults && (
-              <div className="p-4 mt-4">
+              <div className="p-4 mt-4 animate-fade-in">
                 <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>
                 {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
                 <div className="space-y-4">
                   {searchResults.profiles.map(user => (
                     <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                       <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" />
+                       <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
                        <div>
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                        </div>
@@ -239,17 +202,16 @@ export default function App() {
               </div>
             )}
             
-            {/* THE FIX: Passed currentUser instead of session so comments/likes work */}
             {activeTab === 'FYP' && <FYP currentUser={currentUser} />}
             {activeTab === 'Admin Console' && <AdminPanel session={session} />}
             {activeTab === 'Profile' && <Profile session={session} />}
             {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
             {activeTab === 'Leaderboard' && <Leaderboard />}
-            {activeTab === 'Settings' && <Settings />}
+            {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
             {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
             {activeTab === 'Live' && <Live currentUser={currentUser} />}
             {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
-          </>
+          </Suspense>
         )}
       </main>
 
@@ -260,7 +222,6 @@ export default function App() {
           onClick={() => setShowVibeCode(true)}
           className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#090812] text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border-2 border-blue-500 flex items-center justify-center hover:scale-110 transition-transform z-50 group"
         >
-          {/* THE FIX: Replaced Emoji with slick QR Scanner SVG */}
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-blue-400 group-hover:text-white transition-colors">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />

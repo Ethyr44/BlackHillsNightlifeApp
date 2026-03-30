@@ -21,12 +21,13 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
 
   const handleSave = async () => {
     setSaving(true)
+    
+    // THE FIX: Removed updated_at so it doesn't crash the database cache
     const updates = {
       primary_color: primary,
       secondary_color: secondary,
       accent_color: accent,
-      bg_gradient: bgGradient,
-      updated_at: new Date()
+      bg_gradient: bgGradient
     }
 
     const { error } = await supabase.from('profiles').update(updates).eq('id', session.user.id)

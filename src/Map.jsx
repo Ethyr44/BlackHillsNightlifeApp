@@ -21,46 +21,29 @@ export default function Map({ onViewEntity }) {
     { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f1a" }] }
   ]
 
-  // Generates a custom SVG with a built-in drop shadow for the Neon Glow
-  const createGlowMarkerURI = (hexColor, isGlowing) => {
-    const shadow = isGlowing ? `<feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>` : '';
-    const scale = isGlowing ? '10' : '6';
-    
-    const svg = `
-      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            ${shadow}
-          </filter>
-        </defs>
-        <circle cx="20" cy="20" r="${scale}" fill="${hexColor}" stroke="#ffffff" stroke-width="2" filter="url(#glow)" />
-      </svg>
-    `;
-    return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-  }
-
   useEffect(() => {
     async function init() {
       // 1. Fetch Venues
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
-      // 2. Fetch all Events
-      const { data: eventData } = await supabase.from('events').select('*')
+      // 2. Fetch all approved Events
+      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved')
 
       const processedVenues = venueData ? venueData.map(v => {
          // Determine if an event is happening RIGHT NOW at this venue
          const now = new Date()
          const activeEvents = (eventData || []).filter(e => {
-            if (e.location !== v.name) return false;
-            const start = new Date(e.start_time);
-            const end = e.end_time ? new Date(e.end_time) : new Date(start.getTime() + (4 * 60 * 60 * 1000)); // Assume 4 hours if no end time
+            if (e.venue !== v.name) return false;
+            const start = new Date(e.event_date);
+            const end = new Date(start.getTime() + (4 * 60 * 60 * 1000)); // Assume 4 hours if no end time
             return now >= start && now <= end;
          })
 
          const isLive = activeEvents.length > 0;
-         const isKaraoke = isLive && activeEvents.some(e => e.title.toLowerCase().includes('karaoke') || e.title.toLowerCase().includes('ksocial'));
+         const hasKSocial = isLive && activeEvents.some(e => e.event_type === 'KSocial');
+         const hasKaraoke = isLive && activeEvents.some(e => e.event_type === 'Karaoke');
 
-         return { ...v, isLive, isKaraoke }
+         return { ...v, isLive, hasKSocial, hasKaraoke }
       }) : []
 
       setVenues(processedVenues)
@@ -97,23 +80,32 @@ export default function Map({ onViewEntity }) {
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         
-        // Determine Marker Color and Glow State
-        let markerIconUri;
-        if (venue.isKaraoke) {
-            markerIconUri = createGlowMarkerURI('#ff00ff', true); // Neon Pink Glow
-        } else if (venue.isLive) {
-            markerIconUri = createGlowMarkerURI('#00f5ff', true); // Neon Blue Glow
-        } else {
-            markerIconUri = createGlowMarkerURI('#4b5563', false); // Dull Gray, no glow
+        // 1. Determine the highest priority event for the venue
+        let pinColor = 'http://maps.google.com/mapfiles/ms/icons/white-dot.png' // Default
+        let pinScale = new window.google.maps.Size(32, 32) // Default Size
+
+        if (venue.isLive) {
+            const hasKSocial = venue.hasKSocial
+            const hasKaraoke = venue.hasKaraoke
+
+            if (hasKSocial) {
+                pinColor = 'http://maps.google.com/mapfiles/ms/icons/pink-dot.png'
+                pinScale = new window.google.maps.Size(48, 48) // Make it bigger!
+            } else if (hasKaraoke) {
+                pinColor = 'http://maps.google.com/mapfiles/ms/icons/pink-dot.png'
+            } else {
+                pinColor = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' // Standard Live Event
+            }
         }
-        
+
+        // 2. Apply it to the marker
         const marker = new window.google.maps.Marker({
           position,
           map,
           title: venue.name,
           icon: {
-              url: markerIconUri,
-              anchor: new window.google.maps.Point(20, 20) // Centers the custom SVG 
+              url: pinColor,
+              scaledSize: pinScale
           }
         })
 

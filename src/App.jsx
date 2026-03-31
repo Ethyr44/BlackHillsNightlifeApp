@@ -5,7 +5,7 @@ import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
 import NotificationsMenu from './NotificationsMenu'
-import SplashScreen from './SplashScreen' // <-- NEW IMPORT
+import SplashScreen from './SplashScreen' 
 
 // Code Splitting: These only download when the user clicks the tab
 const FYP = lazy(() => import('./FYP'))
@@ -25,83 +25,163 @@ export default function App() {
   
   const [activeTab, setActiveTab] = useState('FYP')
   const [viewingEntity, setViewingEntity] = useState(null)
-  const [showSplash, setShowSplash] = useState(true) // <-- NEW STATE
+  const [showSplash, setShowSplash] = useState(false)
   
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [showVibeCode, setShowVibeCode] = useState(false)
 
-  const [friendToast, setFriendToast] = useState(null)
+  const [rewardToast, setRewardToast] = useState(null) // Stores { title, points }
+  const [notificationToast, setNotificationToast] = useState(null) // Fallback for push notifications
   const [showNotifications, setShowNotifications] = useState(false) 
   const [forceFriendView, setForceFriendView] = useState(false)
 
+  const showReward = (title, points) => {
+      if (points > 0) {
+          setRewardToast({ title, points })
+          setTimeout(() => setRewardToast(null), 5000)
+      }
+  }
+
+  // 1. The Once-Per-Time-Block Splash Screen Logic
+  useEffect(() => {
+      const hour = new Date().getHours()
+      const date = new Date().toDateString()
+      let currentPhase = 'Midnight'
+      
+      if (hour >= 6 && hour < 10) currentPhase = 'Morning'
+      else if (hour >= 10 && hour < 12) currentPhase = 'Day'
+      else if (hour >= 12 && hour < 14) currentPhase = 'Noon'
+      else if (hour >= 14 && hour < 17) currentPhase = 'Afternoon'
+      else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
+      else if (hour >= 20 && hour < 24) currentPhase = 'Night'
+
+      const timeBlockKey = `${date}-${currentPhase}`
+      const lastSeen = localStorage.getItem('bhnl_last_splash')
+
+      if (lastSeen !== timeBlockKey) {
+          setShowSplash(currentPhase) 
+          localStorage.setItem('bhnl_last_splash', timeBlockKey)
+      }
+  }, [])
+
+  // 2. Auth Listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session))
     return () => subscription.unsubscribe()
   }, [])
 
+  // 3. User Fetch & Daily Bonus Trigger
   useEffect(() => {
     if (session) {
       supabase.from('profiles').select('*').eq('id', session.user.id).single()
         .then(({ data }) => {
-            setCurrentUser(data)
-            checkForConnection(data) 
+            if (data) {
+              setCurrentUser(data)
+              checkDailyBonus(data)
+            }
         })
     }
   }, [session])
 
-  const checkForConnection = async (userProfile) => {
-      const urlParams = new URLSearchParams(window.location.search)
-      const connectId = urlParams.get('connect')
+  // 4. Mobile Hardware Back Button Interceptor
+  useEffect(() => {
+    const handlePopState = (event) => {
+      if (event.state && event.state.tab) {
+        setActiveTab(event.state.tab)
+      } else {
+        setActiveTab('FYP') 
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
-      if (connectId && connectId !== userProfile.id) {
-          window.history.replaceState({}, document.title, window.location.pathname)
+  // 5. Active Native Push Notifications (Supabase Realtime)
+  useEffect(() => {
+    if (!currentUser) return
 
-          const { data: newFriend } = await supabase.from('profiles').select('*').eq('id', connectId).single()
-          
-          if (newFriend) {
-              const { data: existingConns } = await supabase.from('connections')
-                  .select('status')
-                  .eq('follower_id', userProfile.id)
-                  .eq('following_id', connectId)
+    // Ask the OS for permission to send notifications
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        Notification.requestPermission()
+    }
 
-              const isAlreadyFriend = existingConns && existingConns.some(c => c.status === 'friend')
+    // Open a secure websocket to listen for NEW rows in the 'notifications' table
+    const notifSubscription = supabase.channel('realtime-notifs')
+      .on('postgres', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}` // ONLY listen to this specific user's alerts
+      }, (payload) => {
+          const newNotif = payload.new
 
-              if (!isAlreadyFriend) {
-                  // Replaced 4 client queries with 1 secure server transaction
-                  const { error } = await supabase.rpc('establish_friendship', {
-                      user_a: userProfile.id,
-                      user_b: connectId,
-                      user_a_name: userProfile.username
-                  })
-
-                  if (error) console.error("Error making connection:", error)
-              }
-
-              setForceFriendView(true)
-              setViewingEntity(newFriend)
-              setFriendToast(`🎉 You are now Friends with ${newFriend.username}!`)
-              setTimeout(() => setFriendToast(null), 4000)
+          // Trigger the OS-level Native Push Notification!
+          if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification(newNotif.title, {
+                  body: newNotif.message,
+                  icon: '/vite.svg', 
+                  vibrate: [200, 100, 200] 
+              })
+          } else {
+              // Fallback: If they denied OS permissions, show an in-app toast instead
+              setNotificationToast(`🔔 ${newNotif.title}: ${newNotif.message}`)
+              setTimeout(() => setNotificationToast(null), 5000)
           }
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(notifSubscription)
+  }, [currentUser])
+
+  // 6. 2-Way VibeCode Connection Interceptor
+  useEffect(() => {
+    const handleVibeScan = async () => {
+      if (!currentUser) return
+      const params = new URLSearchParams(window.location.search)
+      const targetId = params.get('connect')
+
+      if (targetId && targetId !== currentUser.id) {
+        const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('following_id', targetId).maybeSingle()
+
+        if (!existing) {
+            await supabase.from('connections').insert([
+                { follower_id: currentUser.id, following_id: targetId, status: 'friend' },
+                { follower_id: targetId, following_id: currentUser.id, status: 'friend' }
+            ])
+            
+            // Trigger VibeCode Reward
+            const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
+            showReward('VibeCode Scanned!', earnedPts)
+        }
+        window.history.replaceState({}, document.title, "/")
+        setViewingEntity({ id: targetId }) 
+      }
+    }
+    handleVibeScan()
+  }, [currentUser])
+
+  // Helpers
+  const checkDailyBonus = async (userProfile) => {
+      if (!userProfile) return
+      const today = new Date().toDateString()
+      const lastClaim = userProfile.last_bonus_claim ? new Date(userProfile.last_bonus_claim).toDateString() : null
+
+      if (today !== lastClaim) {
+          const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
+          await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
+          showReward('Daily Login Bonus', earnedPts)
       }
   }
 
-  if (!session) return <Auth />
-  if (session && !currentUser) return <div className="flex justify-center mt-32"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
-  if (currentUser && currentUser.onboarding_complete === false) {
-    return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
-  }
-
-  const baseTabs = ["FYP", "Profile", "Songbook", "Events", "Leaderboard", "Live", "Shop", "Map", "Settings"]
-  const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
-
-  const handleTabSwitch = (tab) => {
+  const changeTab = (newTab) => {
+    window.history.pushState({ tab: newTab }, '', `?tab=${newTab}`)
     setViewingEntity(null)
     setForceFriendView(false) 
     setSearchResults(null)
     setSearchQuery('')
-    setActiveTab(tab)
+    setActiveTab(newTab)
   }
 
   const executeSearch = async (e) => {
@@ -126,7 +206,16 @@ export default function App() {
     alert("This entity hasn't been added to the directory yet!")
   }
 
-  // Loading spinner for lazy components
+  // Pre-Render Checks
+  if (!session) return <Auth />
+  if (session && !currentUser) return <div className="flex justify-center mt-32"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
+  if (currentUser && currentUser.onboarding_complete === false) {
+    return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
+  }
+
+  const baseTabs = ["FYP", "Profile", "Songbook", "Events", "Leaderboard", "Live", "Shop", "Map", "Settings"]
+  const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
+
   const SuspenseLoader = () => (
     <div className="flex justify-center mt-20">
       <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -135,10 +224,31 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#030712] text-gray-200 font-['DM_Sans'] pb-20 relative">
-      {friendToast && (
-          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] bg-green-500 text-white px-6 py-3 rounded-full shadow-[0_0_30px_rgba(34,197,94,0.5)] font-bold text-sm uppercase tracking-widest animate-bounce whitespace-nowrap">
-              {friendToast}
-          </div>
+      
+      {/* 🎁 THE UNIVERSAL REWARD TOAST 🎁 */}
+      {rewardToast && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
+            <div className="bg-gradient-to-r from-yellow-600 via-orange-500 to-yellow-600 p-[2px] rounded-full shadow-[0_0_30px_rgba(234,179,8,0.4)]">
+                <div className="bg-black/95 backdrop-blur-xl px-6 py-3 rounded-full flex items-center gap-4">
+                    <div className="text-3xl animate-bounce">🎁</div>
+                    <div>
+                        <p className="text-white font-bold text-[10px] uppercase tracking-widest shadow-black">{rewardToast.title}</p>
+                        <p className="text-yellow-400 font-['Bebas_Neue'] text-3xl leading-none tracking-wider drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">
+                            +{rewardToast.points} PTS
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* 🔔 FALLBACK NOTIFICATION TOAST 🔔 */}
+      {notificationToast && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
+            <div className="bg-blue-600 border border-blue-400 px-6 py-3 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)]">
+                <p className="text-white text-sm font-bold">{notificationToast}</p>
+            </div>
+        </div>
       )}
 
       <nav className="bg-gray-900/95 backdrop-blur-md sticky top-0 z-50 border-b border-gray-800 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
@@ -165,8 +275,8 @@ export default function App() {
         <div className="max-w-2xl mx-auto px-4 flex overflow-x-auto hide-scrollbar border-t border-gray-800">
           <div className="flex gap-1 py-2">
             {tabs.map(tab => (
-              <button 
-                key={tab} onClick={() => handleTabSwitch(tab)}
+              <button
+                key={tab} onClick={() => changeTab(tab)}
                 className={`px-4 py-2 rounded-full text-sm font-bold tracking-widest uppercase transition-all whitespace-nowrap ${
                   activeTab === tab && !viewingEntity ? (tab === 'Admin Console' ? 'bg-red-900/20 text-red-500 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-blue-600/20 text-blue-400 border border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.2)]') : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
                 }`}
@@ -233,12 +343,11 @@ export default function App() {
         </button>
       )}
 
-      {/* ... bottom navigation bar ... */}
-
       {/* THE SPLASH SCREEN OVERLAY */}
       {showSplash && (
         <SplashScreen 
-          username={currentUser?.username} 
+          username={currentUser?.username}
+          phase={showSplash} 
           onComplete={() => setShowSplash(false)} 
         />
       )}

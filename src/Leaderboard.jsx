@@ -9,19 +9,33 @@ export default function Leaderboard() {
   useEffect(() => {
     async function fetchLeaderboard() {
       setLoading(true)
-      const { data, error } = await supabase.rpc('get_leaderboard', { time_filter: timeframe })
       
-      if (!error && data && data.length > 0) {
-          setUsers(data)
+      // Match the active tab to the exact column name in Supabase
+      let column = 'league_all_time'
+      if (timeframe === 'nightly') column = 'league_nightly'
+      if (timeframe === 'weekly') column = 'league_weekly'
+      if (timeframe === 'monthly') column = 'league_monthly'
+      if (timeframe === 'yearly') column = 'league_yearly'
+      if (timeframe === 'all_time') column = 'league_all_time'
+
+      // THE FIX: Removed the 'Singer' restriction so ALL users are pulled
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order(column, { ascending: false, nullsFirst: false })
+        .limit(100) // Bumped to 100 to ensure everyone fits
+      
+      if (!error && data) {
+          const realUsers = data.map(u => ({
+              user_id: u.id,
+              username: u.username,
+              account_type: u.account_type,
+              profile_pic: u.profile_pic,
+              period_points: u[column] || 0 // Default to 0 points so they still show up
+          }))
+          setUsers(realUsers)
       } else {
-          // THE FIX: Inject Dummy Placeholders if the DB returns empty
-          setUsers([
-              { user_id: '1', username: 'DJ Ethyr', account_type: 'Admin', period_points: 14500, profile_pic: '' },
-              { user_id: '2', username: 'KaraokeKing99', account_type: 'User', period_points: 12200, profile_pic: '' },
-              { user_id: '3', username: 'VibeCheck', account_type: 'User', period_points: 9800, profile_pic: '' },
-              { user_id: '4', username: 'NeonNights', account_type: 'User', period_points: 8450, profile_pic: '' },
-              { user_id: '5', username: 'MicDrop', account_type: 'User', period_points: 7200, profile_pic: '' }
-          ])
+          setUsers([])
       }
       setLoading(false)
     }
@@ -39,8 +53,8 @@ export default function Leaderboard() {
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 space-y-6 animate-fade-in pb-32">
       <div className="text-center mb-8">
-        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Circuit</h2>
-        <p className="text-gray-400 font-bold tracking-widest uppercase text-xs mt-2">Black Hills Nightlife Tournaments</p>
+        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">KSocial Live!</h2>
+        <p className="text-gray-400 font-bold tracking-widest uppercase text-xs mt-2">League Rankings</p>
       </div>
 
       <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 justify-center">
@@ -61,6 +75,8 @@ export default function Leaderboard() {
       <div className="space-y-3 mt-6">
         {loading ? (
            <div className="flex justify-center p-8"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
+        ) : users.length === 0 ? (
+           <p className="text-center text-gray-500 text-sm font-bold tracking-widest uppercase mt-10">No users ranked yet.</p>
         ) : (
           users.map((user, index) => {
             const isTop3 = index < 3;

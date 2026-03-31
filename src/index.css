@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* MOBILE SCREEN OVERFLOW FIX */
+html, body, #root {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+
 /* MOBILE TEXT WRAPPING FIX */
 * {
   overflow-wrap: break-word;

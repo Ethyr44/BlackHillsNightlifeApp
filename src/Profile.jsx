@@ -50,7 +50,7 @@ export default function Profile({ session }) {
     }
 
     // Get REAL Friends count
-    const { count } = await supabase.from('connections').select('*', { count: 'exact', head: true }).eq('following_id', session.user.id)
+    const { count } = await supabase.from('connections').select('*', { count: 'exact', head: true }).eq('following_id', session.user.id).eq('status', 'friend')
     setFriendsCount(count || 0)
 
     const { data: postData } = await supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false })
@@ -132,6 +132,7 @@ export default function Profile({ session }) {
               </p>
           </div>
 
+          {/* THE FIX: Added League Points and adjusted labels */}
           <div className="flex gap-4 sm:gap-6 mt-6 pt-6 border-t border-white/10 w-full justify-center relative z-10">
             <div className="text-center">
               <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicPrimary}` }}>{friendsCount}</span>
@@ -139,7 +140,11 @@ export default function Profile({ session }) {
             </div>
             <div className="text-center">
               <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicSecondary}` }}>{profile.lifestyle_points || 0}</span>
-              <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">PTS</span>
+              <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">Life Pts</span>
+            </div>
+            <div className="text-center">
+              <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicAccent}` }}>{profile.league_all_time || 0}</span>
+              <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">League</span>
             </div>
           </div>
 

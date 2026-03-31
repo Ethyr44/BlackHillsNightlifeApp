@@ -25,3 +25,21 @@ body {
   background-color: #030712; 
   color: #e5e7eb;
 }
+
+/* SPLASH SCREEN ANIMATIONS */
+@keyframes slide-up-reveal {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+.animate-slide-up-slow {
+  animation: slide-up-reveal 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-slide-up-med {
+  animation: slide-up-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.1s;
+}
+.animate-slide-up-fast {
+  animation: slide-up-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 0.2s;
+}

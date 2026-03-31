@@ -5,6 +5,7 @@ import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
 import NotificationsMenu from './NotificationsMenu'
+import SplashScreen from './SplashScreen' // <-- NEW IMPORT
 
 // Code Splitting: These only download when the user clicks the tab
 const FYP = lazy(() => import('./FYP'))
@@ -24,6 +25,7 @@ export default function App() {
   
   const [activeTab, setActiveTab] = useState('FYP')
   const [viewingEntity, setViewingEntity] = useState(null)
+  const [showSplash, setShowSplash] = useState(true) // <-- NEW STATE
   
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
@@ -229,6 +231,16 @@ export default function App() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
           </svg>
         </button>
+      )}
+
+      {/* ... bottom navigation bar ... */}
+
+      {/* THE SPLASH SCREEN OVERLAY */}
+      {showSplash && (
+        <SplashScreen 
+          username={currentUser?.username} 
+          onComplete={() => setShowSplash(false)} 
+        />
       )}
     </div>
   )

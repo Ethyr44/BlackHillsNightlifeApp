@@ -23,7 +23,11 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   
-  const [activeTab, setActiveTab] = useState('FYP')
+  // THE FIX: Read the URL to remember the tab on refresh!
+  const [activeTab, setActiveTab] = useState(() => {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('tab') || 'FYP'
+  })
   const [viewingEntity, setViewingEntity] = useState(null)
   const [showSplash, setShowSplash] = useState(false)
   

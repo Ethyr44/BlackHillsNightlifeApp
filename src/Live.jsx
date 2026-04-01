@@ -1,11 +1,27 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import KSocialHost from './KSocialHost'
+import KSocialUser from './KSocialUser'
 
 export default function Live({ currentUser }) {
     const [activeSessions, setActiveSessions] = useState([])
     const [isScanning, setIsScanning] = useState(false)
     const [scanComplete, setScanComplete] = useState(false)
+
+    // THE FIX: Remember the Audience Room on refresh!
+    const [joinedSessionId, setJoinedSessionId] = useState(() => localStorage.getItem('bhnl_joined_session') || null)
+
+    const handleJoin = (sessionId, hostName) => {
+        if (window.confirm(`Join ${hostName}'s Session?`)) {
+            localStorage.setItem('bhnl_joined_session', sessionId)
+            setJoinedSessionId(sessionId)
+        }
+    }
+
+    const handleExitAudience = () => {
+        localStorage.removeItem('bhnl_joined_session')
+        setJoinedSessionId(null)
+    }
 
     // KSocial Hosting State
     const [hostMode, setHostMode] = useState(null) // null, 'casual', or 'league'
@@ -53,14 +69,6 @@ export default function Live({ currentUser }) {
         }, 1500)
     }
 
-    const handleJoin = (localIp, hostName) => {
-        if (window.confirm(`Join ${hostName}'s Nearby Session?`)) {
-            // NOTE: We will update this to route to your Cloud UI in a future step!
-            const ksocialUrl = `http://${localIp}/?bhnl_id=${currentUser.id}#user`
-            window.location.href = ksocialUrl
-        }
-    }
-
     const verifyPin = () => {
         if (pinCode === '1992') {
             setShowPinPrompt(false)
@@ -75,6 +83,11 @@ export default function Live({ currentUser }) {
     // If they activated KSocial, completely hijack this view and show the KSocial UI
     if (hostMode) {
         return <KSocialHost currentUser={currentUser} mode={hostMode} onExit={() => setHostMode(null)} />
+    }
+
+    // If they joined a session as a user, hijack the view!
+    if (joinedSessionId) {
+        return <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={handleExitAudience} />
     }
 
     return (
@@ -112,7 +125,7 @@ export default function Live({ currentUser }) {
                                     <h4 className="font-bold text-white text-lg">{sess.host_name}</h4>
                                     <p className="text-gray-400 text-xs">📍 {sess.venue_name}</p>
                                 </div>
-                                <button onClick={() => handleJoin(sess.local_ip, sess.host_name)} className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]">Join</button>
+                                <button onClick={() => handleJoin(sess.id, sess.host_name)} className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]">Join</button>
                             </div>
                         ))}
                     </div>

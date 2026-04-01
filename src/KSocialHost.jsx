@@ -12,7 +12,10 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [bizName, setBizName] = useState('Black Hills Nightlife')
     const [venueName, setVenueName] = useState('')
 
-    // 1. THE PERSISTENCE CHECK: Does a session already exist?
+    // Queue State
+    const [singers, setSingers] = useState([])
+
+    // 1. THE PERSISTENCE CHECK
     useEffect(() => {
         const checkExistingSession = async () => {
             const { data } = await supabase.from('active_sessions')
@@ -21,8 +24,8 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                 .single()
             
             if (data) {
-                // Recover the lost session!
                 setActiveSession(data)
+                fetchSingers(data.id)
                 setView('dashboard')
             }
             setIsLoading(false)
@@ -30,7 +33,38 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         checkExistingSession()
     }, [currentUser.id])
 
-    // 2. CREATE A NEW SESSION
+    // 2. REAL-TIME QUEUE LISTENER
+    useEffect(() => {
+        if (!activeSession) return
+
+        // Fetch the queue immediately
+        fetchSingers(activeSession.id)
+
+        // Listen for anyone joining or points changing!
+        const singerSub = supabase.channel('realtime-queue')
+            .on('postgres', {
+                event: '*',
+                schema: 'public',
+                table: 'session_singers',
+                filter: `session_id=eq.${activeSession.id}`
+            }, () => {
+                fetchSingers(activeSession.id) 
+            })
+            .subscribe()
+
+        return () => supabase.removeChannel(singerSub)
+    }, [activeSession])
+
+    const fetchSingers = async (sessionId) => {
+        const { data } = await supabase.from('session_singers')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('total_points', { ascending: false }) // Auto-sort by highest score!
+        
+        if (data) setSingers(data)
+    }
+
+    // 3. CREATE A NEW SESSION
     const handleStartSession = async () => {
         const newSession = {
             host_id: currentUser.id,
@@ -38,32 +72,45 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             session_title: sessionTitle,
             venue_name: venueName,
             mode: mode 
-            // Note: We'll add business_name to the database in a second if needed!
         }
 
         const { data, error } = await supabase.from('active_sessions').insert([newSession]).select().single()
         
         if (error) {
-            // THIS WILL TELL US EXACTLY WHAT BROKE
             alert(`Supabase Error: ${error.message}`)
-            console.error("FULL ERROR:", error)
         } else if (data) {
             setActiveSession(data)
             setView('dashboard')
         }
     }
 
-    // 3. END SESSION & DISTRIBUTE POINTS
+    // 4. END SESSION & DISTRIBUTE POINTS
     const handleEndSession = async () => {
         if (window.confirm("🛑 Are you sure you want to end this session? If this is a League Session, all points will be distributed now.")) {
-            // Trigger the secure backend script we just wrote
             await supabase.rpc('close_ksocial_session', { target_session_id: activeSession.id })
             
             alert(activeSession.mode === 'league' ? "🏆 League Session Ended! Points have been paid out to the Leaderboards." : "Session Ended.")
             
             setActiveSession(null)
-            onExit() // Kick them back to the main BHNL Live tab
+            setSingers([])
+            onExit() 
         }
+    }
+
+    // 5. MANUALLY ADD A SINGER
+    const handleAddSinger = async () => {
+        const name = window.prompt("🎤 Enter Singer's Name:")
+        if (!name || name.trim() === '') return
+
+        const newSinger = {
+            session_id: activeSession.id,
+            name: name.trim(),
+            total_points: 0,
+            status: 'waiting'
+        }
+
+        // We just insert it. The Real-Time listener will automatically catch it and update the screen!
+        await supabase.from('session_singers').insert([newSinger])
     }
 
     if (isLoading) return <div className="flex justify-center py-20"><div className="w-12 h-12 border-4 border-[#ff2d78] border-t-transparent rounded-full animate-spin"></div></div>
@@ -133,7 +180,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     <p className="text-gray-400 text-xs uppercase tracking-widest font-bold mb-6">Host: {activeSession.host_name} • Mode: <span className={activeSession.mode === 'league' ? 'text-[#00f5ff]' : 'text-gray-300'}>{activeSession.mode}</span></p>
                     
                     <div className="flex gap-4 justify-center">
-                        <button className="flex-1 bg-white/5 border border-gray-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">
+                        <button onClick={handleAddSinger} className="flex-1 bg-white/5 border border-gray-700 text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">
                             + Add Singer
                         </button>
                         <button onClick={handleEndSession} className="flex-1 bg-red-900/20 border border-red-500 text-red-500 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">
@@ -142,13 +189,37 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     </div>
                 </div>
 
-                {/* 2. THE QUEUE (Placeholder for next step) */}
-                <div className="space-y-3">
-                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2">Live Queue & Leaderboard</h3>
-                    <div className="text-center p-8 border border-dashed border-gray-800 rounded-2xl bg-black/50">
-                        <p className="text-gray-500 text-sm font-bold tracking-widest uppercase">No singers added yet.</p>
-                        <p className="text-gray-600 text-[10px] mt-2">Users can join this session from the Live tab.</p>
-                    </div>
+                {/* 2. THE QUEUE & LEADERBOARD */}
+                <div className="space-y-3 mt-8">
+                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2 text-left">Live Queue & Leaderboard</h3>
+                    
+                    {singers.length === 0 ? (
+                        <div className="text-center p-8 border border-dashed border-gray-800 rounded-2xl bg-black/50">
+                            <p className="text-gray-500 text-sm font-bold tracking-widest uppercase">No singers added yet.</p>
+                            <p className="text-gray-600 text-[10px] mt-2">Users can join this session from the Live tab.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {singers.map((singer, index) => (
+                                <div key={singer.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between shadow-lg transition-transform hover:scale-[1.01]">
+                                    <div className="flex items-center gap-4">
+                                        {/* Dynamic Medals for Top 3 */}
+                                        <div className={`font-['Bebas_Neue'] text-3xl w-6 text-center ${index === 0 ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]' : index === 1 ? 'text-gray-300 drop-shadow-[0_0_8px_rgba(209,213,219,0.8)]' : index === 2 ? 'text-amber-600 drop-shadow-[0_0_8px_rgba(217,119,6,0.8)]' : 'text-gray-600'}`}>
+                                            {index + 1}
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-lg leading-tight">{singer.name}</h4>
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{singer.status}</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="font-['Bebas_Neue'] text-3xl text-[#00f5ff] drop-shadow-[0_0_5px_rgba(0,245,255,0.8)]">{singer.total_points}</span>
+                                        <span className="block text-[10px] uppercase text-gray-500 font-bold tracking-widest">Pts</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
             </div>

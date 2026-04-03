@@ -18,6 +18,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     // Queue State
     const [singers, setSingers] = useState([])
 
+    // Session Settings State
+    const [votingStyle, setVotingStyle] = useState('normal')
+    const [votingIcon, setVotingIcon] = useState('star')
+    const [supervotes, setSupervotes] = useState(1)
+
     // 1. THE PERSISTENCE CHECK
     useEffect(() => {
         const checkExistingSession = async () => {
@@ -53,7 +58,15 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             })
             .subscribe()
 
-        return () => supabase.removeChannel(singerSub)
+        // THE FIX: Fallback polling every 20 seconds to guarantee updates
+        const pollInterval = setInterval(() => {
+            fetchSingers(activeSession.id)
+        }, 20000)
+
+        return () => {
+            supabase.removeChannel(singerSub)
+            clearInterval(pollInterval)
+        }
     }, [activeSession])
 
     const fetchSingers = async (sessionId) => {
@@ -74,9 +87,9 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             venue_name: venueName,
             mode: mode,
             // NEW SETTINGS ADDED HERE:
-            voting_style: document.getElementById('votingStyleSel').value,
-            voting_icon: document.getElementById('votingIconSel').value,
-            supervotes: parseInt(document.getElementById('supervotesSel').value) || 1
+            voting_style: votingStyle,
+            voting_icon: votingIcon,
+            supervotes: supervotes
         }
 
         const { data, error } = await supabase.from('active_sessions').insert([newSession]).select().single()
@@ -200,12 +213,12 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <input type="text" value={venueName} onChange={e => setVenueName(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none" />
                     </div>
 
-                    <select id="votingStyleSel" defaultValue="normal" className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none text-sm">
+                    <select value={votingStyle} onChange={e => setVotingStyle(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none text-sm">
                         <option value="normal">Normal (1-5)</option>
                         <option value="tap">Tap to Vote (Mash)</option>
                     </select>
                     
-                    <select id="votingIconSel" defaultValue="star" className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none text-sm">
+                    <select value={votingIcon} onChange={e => setVotingIcon(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none text-sm">
                         <option value="star">⭐ Stars</option>
                         <option value="heart">❤️ Hearts</option>
                         <option value="bolt">⚡ Bolts</option>
@@ -214,7 +227,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
                     <div>
                         <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">Supervotes Per User</label>
-                        <input id="supervotesSel" type="number" defaultValue={1} min={1} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none" />
+                        <input type="number" value={supervotes} onChange={e => setSupervotes(parseInt(e.target.value) || 1)} min={1} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 focus:border-[#00f5ff] outline-none" />
                     </div>
 
                     <button onClick={handleStartSession} className="w-full bg-[#00f5ff] text-black font-bold uppercase tracking-widest py-4 rounded-xl mt-4 hover:bg-[#00d5dd] shadow-[0_0_20px_rgba(0,245,255,0.4)] transition-all">
@@ -306,6 +319,15 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                                     {isActive && <span className="text-[9px] bg-[#ff2d78] text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-widest animate-pulse">● LIVE</span>}
                                                 </div>
                                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Score: {singer.total_points}</span>
+                                                
+                                                {/* DISPLAY IMPORTED SETLIST */}
+                                                {singer.setlist && singer.setlist.length > 0 && (
+                                                    <div className="mt-1.5 flex flex-col gap-0.5">
+                                                        {singer.setlist.map((song, idx) => (
+                                                            <span key={idx} className="text-[10px] text-gray-400 truncate"><span className="text-[#00f5ff]">🎵</span> {song}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 

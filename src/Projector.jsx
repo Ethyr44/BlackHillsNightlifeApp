@@ -66,9 +66,19 @@ export default function Projector() {
             })
             .subscribe()
 
+        // THE FIX: Fallback polling every 20 seconds to guarantee updates
+        const pollInterval = setInterval(() => {
+            supabase.from('session_singers')
+                .select('*')
+                .eq('session_id', sessionId)
+                .order('total_points', { ascending: false })
+                .then(({ data }) => { if (data) setSingers(data) })
+        }, 20000)
+
         return () => {
             supabase.removeChannel(queueSub)
             supabase.removeChannel(sessionSub)
+            clearInterval(pollInterval)
         }
     }, [])
 

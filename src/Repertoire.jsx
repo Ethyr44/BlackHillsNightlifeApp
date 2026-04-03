@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function Repertoire({ userId, isOwner, canSuggest }) {
+export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTrigger }) {
   const [songs, setSongs] = useState([])
   const [activeSetlist, setActiveSetlist] = useState([]) 
   
@@ -22,11 +22,9 @@ export default function Repertoire({ userId, isOwner, canSuggest }) {
   useEffect(() => {
     fetchSonglist()
     fetchProfileSetlist()
-    
-    // Listen for updates from Setlist.jsx
-    window.addEventListener('setlistUpdated', fetchProfileSetlist)
-    return () => window.removeEventListener('setlistUpdated', fetchProfileSetlist)
-  }, [userId])
+
+    // Updates from Setlist.jsx via parent trigger
+  }, [userId, trigger])
 
   // Auto-Search (400ms Debounce)
   useEffect(() => {
@@ -91,7 +89,7 @@ export default function Repertoire({ userId, isOwner, canSuggest }) {
     const { error } = await supabase.from('profiles').update({ active_setlist: newArray }).eq('id', userId)
     if (!error) {
       setActiveSetlist(newArray)
-      window.dispatchEvent(new Event('setlistUpdated')) // Tells Setlist.jsx to reload
+      if (setTrigger) setTrigger(prev => prev + 1) // Tells Setlist.jsx to reload
     }
   }
 

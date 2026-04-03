@@ -32,6 +32,8 @@ export default function Profile({ session }) {
   const [reqVenue, setReqVenue] = useState('')
   const [reqDate, setReqDate] = useState('')
 
+  const [setlistTrigger, setSetlistTrigger] = useState(0)
+
   useEffect(() => {
     fetchProfileData()
   }, [session])
@@ -204,8 +206,8 @@ export default function Profile({ session }) {
 
         {showKaraokeFeatures && (
             <>
-              <Setlist session={session} />
-              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} />
+              <Setlist session={session} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
             </>
         )}
       </div>

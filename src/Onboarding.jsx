@@ -54,7 +54,7 @@ export default function Onboarding({ session, onComplete }) {
       pref_genres: prefs.genres, 
       pref_events: prefs.events,
       onboarding_complete: true,
-      updated_at: new Date()
+      updated_at: new Date().toISOString()
     }
 
     const { error } = await supabase.from('profiles').upsert(payload)

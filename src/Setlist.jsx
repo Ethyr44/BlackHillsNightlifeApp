@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function Setlist({ session }) {
+export default function Setlist({ session, isOwner = true }) {
   const [setlistIds, setSetlistIds] = useState([])
   const [setlistSongs, setSetlistSongs] = useState([])
 
   const fetchProfileSetlist = async () => {
-    const { data } = await supabase.from('profiles').select('active_setlist').eq('id', session.user.id).single()
+    // Safely grab the ID from whoever's session we passed in
+    const targetId = session?.user?.id
+    if (!targetId) return
+
+    const { data } = await supabase.from('profiles').select('active_setlist').eq('id', targetId).single()
     if (data && data.active_setlist) {
       setSetlistIds(data.active_setlist)
     }
@@ -37,11 +41,13 @@ export default function Setlist({ session }) {
   }, [setlistIds])
 
   const handleRemove = async (indexToRemove) => {
+    if (!isOwner) return // Safety lock
+    
     const newArray = setlistIds.filter((_, index) => index !== indexToRemove)
     const { error } = await supabase.from('profiles').update({ active_setlist: newArray }).eq('id', session.user.id)
     if (!error) {
       setSetlistIds(newArray)
-      window.dispatchEvent(new Event('setlistUpdated')) // Tell Repertoire we removed it
+      window.dispatchEvent(new Event('setlistUpdated')) 
     }
   }
 
@@ -50,7 +56,7 @@ export default function Setlist({ session }) {
       <div className="bg-black border-b border-gray-800 px-6 py-4 flex justify-between items-center">
         <div>
           <h3 className="text-3xl font-['Bebas_Neue'] text-purple-400 tracking-wider flex items-center gap-2">
-            <span>📋</span> Tonight's Setlist
+            <span>📋</span> {isOwner ? "Tonight's Setlist" : "Current Setlist"}
           </h3>
           <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Ready for KSocial Sync</p>
         </div>
@@ -62,7 +68,7 @@ export default function Setlist({ session }) {
       <div className="p-6">
         {setlistSongs.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-gray-700 rounded-xl bg-black/50">
-            <p className="text-gray-500 italic text-sm">Your setlist is empty. Search your Songlist below to add up to 7 songs.</p>
+            <p className="text-gray-500 italic text-sm">{isOwner ? "Your setlist is empty. Search your Songlist below to add up to 7 songs." : "This singer hasn't added any songs to their setlist yet."}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -75,7 +81,8 @@ export default function Setlist({ session }) {
                     <p className="text-gray-400 text-xs uppercase tracking-widest truncate">{song.Artist}</p>
                   </div>
                 </div>
-                <button onClick={() => handleRemove(index)} className="text-gray-600 hover:text-red-500 font-bold px-3 transition-colors text-lg">✕</button>
+                {/* Only render the remove button if they own this profile */}
+                {isOwner && <button onClick={() => handleRemove(index)} className="text-gray-600 hover:text-red-500 font-bold px-3 transition-colors text-lg">✕</button>}
               </div>
             ))}
           </div>

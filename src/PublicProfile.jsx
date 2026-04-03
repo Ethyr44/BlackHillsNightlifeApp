@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import Setlist from './Setlist'
+import Repertoire from './Repertoire'
 
 const GRADIENTS = {
   'deep-space': 'bg-gradient-to-b from-slate-900 via-[#090812] to-black',
@@ -10,20 +12,22 @@ const GRADIENTS = {
   'abyss': 'bg-black'
 }
 
-export default function PublicProfile({ entity, onClose, currentUser, forceAccess }) {
-  const [accessLevel, setAccessLevel] = useState('public') 
+export default function PublicProfile({ entity, onClose, currentUser }) {
   const [followersCount, setFollowersCount] = useState(0)
-  const [isConnection, setIsConnection] = useState(false) // Tracks if we already follow/friend them
+  const [isConnection, setIsConnection] = useState(false) 
   const [isLoading, setIsLoading] = useState(true)
   const [currentSlide, setCurrentSlide] = useState(0)
   const [recentPost, setRecentPost] = useState(null)
+  const [setlistTrigger, setSetlistTrigger] = useState(0)
 
   const isPage = 'page_type' in entity
-  const isAdmin = currentUser?.account_type === 'Admin'
 
   const dynamicPrimary = entity.primary_color || (isPage ? '#00f5ff' : '#3b82f6')
   const dynamicSecondary = entity.secondary_color || (isPage ? '#b347ff' : '#9333ea')
   const dynamicAccent = entity.accent_color || (isPage ? '#ff2d78' : '#10b981')
+
+  // Check if they are a Singer, Host, or Admin so we can display their Songbook
+  const showKaraokeFeatures = !isPage && ['Singer', 'Host', 'Admin'].includes(entity.account_type)
 
   useEffect(() => {
     async function fetchProfileData() {
@@ -44,11 +48,8 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
 
       setIsConnection(!!existingConnection)
 
-      // 3. Set Access Levels based on REAL data
-      if (isPage) {
-          setAccessLevel('public')
-      } else {
-          // Fetch User's Actual Recent Post
+      // 3. Fetch User's Actual Recent Post
+      if (!isPage) {
           const { data: posts } = await supabase.from('posts')
             .select('*')
             .or(`author_id.eq.${entity.id},user_id.eq.${entity.id}`)
@@ -56,18 +57,11 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
             .limit(1)
           
           if (posts && posts.length > 0) setRecentPost(posts[0])
-
-          // The Real Privacy Lock
-          if (isAdmin || forceAccess || (existingConnection && existingConnection.status === 'friend')) {
-              setAccessLevel('friend')
-          } else {
-              setAccessLevel('public')
-          }
       }
       setIsLoading(false)
     }
     fetchProfileData()
-  }, [entity.id, currentUser.id, isPage, isAdmin, forceAccess])
+  }, [entity.id, currentUser.id, isPage])
 
   useEffect(() => {
     if (entity?.slideshow_urls && entity.slideshow_urls.length > 1) {
@@ -76,35 +70,29 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
     }
   }, [entity?.slideshow_urls])
 
-  // THE FIX: Smart Toggle that handles both Follows and Unfollows
   const handleConnectionToggle = async () => {
       const statusType = isPage ? 'following' : 'friend'
 
       if (isConnection) {
-          // Unfollow / Remove Friend
           await supabase.from('connections').delete()
               .eq('follower_id', currentUser.id)
               .eq('following_id', entity.id)
           
           setFollowersCount(prev => Math.max(0, prev - 1))
           setIsConnection(false)
-          if (!isPage && !isAdmin && !forceAccess) setAccessLevel('public')
       } else {
-          // Follow / Add Friend
           await supabase.from('connections').insert({ 
               follower_id: currentUser.id, 
               following_id: entity.id, 
               status: statusType 
           })
           
-          // THE NEW TRIGGER (Only give points for following a Page/Venue, not a user)
           if (isPage) {
              await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'follow_venue' })
           }
           
           setFollowersCount(prev => prev + 1)
           setIsConnection(true)
-          if (!isPage) setAccessLevel('friend')
       }
   }
 
@@ -119,6 +107,7 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
       <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-8">
         <button onClick={onClose} className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2">← Back to Directory</button>
 
+        {/* PROFILE HEADER (Identical to Profile.jsx) */}
         <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-2 border-2 transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
           {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
               entity.slideshow_urls.map((url, idx) => (
@@ -137,12 +126,27 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
               {!isPage && entity.zodiac_sign && <span className="text-2xl" title={entity.zodiac_sign}>{entity.zodiac_sign.split(' ')[0]}</span>}
           </h2>
           
-          <p className="text-sm text-gray-300 uppercase tracking-widest font-bold mb-6 z-10 relative drop-shadow-md">
-              {isPage ? `Official ${entity.page_type}` : (entity.full_name || "BHNL Member")}
-          </p>
+          {/* Status / Account Type Block */}
+          {isPage ? (
+              <p className="text-sm text-gray-300 uppercase tracking-widest font-bold mb-6 z-10 relative drop-shadow-md">
+                  Official {entity.page_type}
+              </p>
+          ) : (
+              <>
+                  <div className="bg-black/50 border border-white/10 px-4 py-1 rounded-full relative z-10 backdrop-blur-md mt-1 mb-4">
+                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{entity.account_type || 'Regular'} Account</span>
+                  </div>
 
-          {/* THE FIX: Added League Points for all non-page users */}
-          <div className="flex gap-4 sm:gap-6 pt-4 border-t border-white/10 w-full justify-center relative z-10">
+                  <div className="bg-black/50 border border-white/10 px-4 py-3 rounded-xl w-full max-w-sm relative z-10 backdrop-blur-md">
+                      <p className="text-gray-200 text-xs sm:text-sm italic font-medium break-words">
+                        {recentPost ? `"${recentPost.content}"` : "No status set."}
+                      </p>
+                  </div>
+              </>
+          )}
+
+          {/* Points / Followers Row */}
+          <div className="flex gap-4 sm:gap-6 pt-4 mt-6 border-t border-white/10 w-full justify-center relative z-10">
             <div className="text-center">
               <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicPrimary}` }}>{followersCount}</span>
               <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">{isPage ? 'Followers' : 'Friends'}</span>
@@ -161,13 +165,12 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
             )}
           </div>
 
-          {/* DYNAMIC SMART BUTTON */}
           <button onClick={handleConnectionToggle} className={`mt-6 px-8 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all relative z-10 ${isConnection ? 'bg-transparent border border-white/30 text-gray-300 hover:text-white hover:border-red-500 hover:bg-red-500/20' : 'text-white'}`} style={!isConnection ? { background: `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})`, boxShadow: `0 0 20px ${dynamicSecondary}66` } : {}}>
               {isConnection ? (isPage ? '✓ Following' : '✓ Friends') : (isPage ? `+ Follow ${entity.page_type}` : '+ Add Friend')}
           </button>
         </div>
 
-        {/* ... The rest of the page layout remains exactly the same! ... */}
+        {/* VENUE / PAGE DETAILS */}
         {isPage && (
             <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicSecondary, boxShadow: `0 0 25px ${dynamicSecondary}33, inset 0 0 10px ${dynamicSecondary}22` }}>
                 <h3 className="text-2xl font-['Bebas_Neue'] tracking-widest mb-6 text-white" style={{ textShadow: `0 0 15px ${dynamicSecondary}` }}>About this {entity.page_type}</h3>
@@ -178,33 +181,35 @@ export default function PublicProfile({ entity, onClose, currentUser, forceAcces
             </div>
         )}
 
+        {/* USER DETAILS */}
         {!isPage && (
+            <div className="space-y-6 animate-fade-in">
+                <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicAccent, boxShadow: `0 0 25px ${dynamicAccent}33, inset 0 0 10px ${dynamicAccent}22` }}>
+                    <h3 className="text-2xl font-['Bebas_Neue'] tracking-widest mb-6 text-white flex items-center gap-3" style={{ textShadow: `0 0 15px ${dynamicAccent}` }}>
+                        <span>👤</span> User Details
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 relative z-10">
+                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
+                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Full Name</span>
+                            <p className="text-sm text-white">{entity.full_name || "Not provided"}</p>
+                        </div>
+                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
+                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Current Check-In</span>
+                            <p className="text-sm text-gray-500 italic">Not checked in anywhere.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* KARAOKE FEATURES (Setlist & Repertoire) */}
+        {showKaraokeFeatures && (
             <>
-              {accessLevel === 'friend' ? (
-                  <div className="space-y-6 animate-fade-in">
-                      <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicAccent, boxShadow: `0 0 25px ${dynamicAccent}33, inset 0 0 10px ${dynamicAccent}22` }}>
-                          <h3 className="text-2xl font-['Bebas_Neue'] tracking-widest mb-6 text-white flex items-center gap-3" style={{ textShadow: `0 0 15px ${dynamicAccent}` }}>
-                              <span>🤝</span> Verified Friend Details
-                          </h3>
-                          <div className="grid grid-cols-2 gap-4 relative z-10">
-                              <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
-                                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Full Name</span>
-                                  <p className="text-sm text-white">{entity.full_name || "Hidden"}</p>
-                              </div>
-                              <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
-                                  <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Current Check-In</span>
-                                  <p className="text-sm text-gray-500 italic">Not checked in anywhere.</p>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              ) : (
-                  <div className="text-center p-10 bg-[#090812]/80 border-2 border-gray-800 rounded-3xl relative z-10">
-                      <div className="text-4xl mb-3 opacity-50">🔒</div>
-                      <p className="text-gray-400 font-bold tracking-widest uppercase text-sm mb-2">Private Profile</p>
-                      <p className="text-gray-500 text-[10px] uppercase tracking-widest">Add as a friend to view setlists and details.</p>
-                  </div>
-              )}
+              {/* We pass a "mock" session to Setlist, and flag isOwner to false so they can't delete songs */}
+              <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
+              
+              {/* We pass the entity.id to Repertoire, and flag isOwner to false */}
+              <Repertoire userId={entity.id} isOwner={false} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
             </>
         )}
       </div>

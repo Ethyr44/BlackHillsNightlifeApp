@@ -4,17 +4,23 @@ import { supabase } from './supabaseClient'
 export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [session, setSession] = useState(null)
     const [singers, setSingers] = useState([])
-    const [votedFor, setVotedFor] = useState({}) // Tracks normal votes to prevent double-voting
+    const [votedFor, setVotedFor] = useState({}) 
     const [isLoading, setIsLoading] = useState(true)
 
     // 1. INITIAL FETCH & REALTIME LISTENER
     useEffect(() => {
         const fetchSessionData = async () => {
-            const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).single()
-            if (sessData) setSession(sessData)
-
-            fetchSingers()
-            setIsLoading(false)
+            const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).maybeSingle()
+            
+            if (sessData) {
+                setSession(sessData)
+                fetchSingers()
+                setIsLoading(false)
+            } else {
+                // THE FIX: The session was deleted! Clear the ghost session and kick them out.
+                alert("This session has ended or is no longer available.")
+                onExit()
+            }
         }
 
         const fetchSingers = async () => {
@@ -28,7 +34,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
         fetchSessionData()
 
-        // Realtime Listener!
+        // Realtime Listener for the Queue
         const singerSub = supabase.channel('user-realtime-queue')
             .on('postgres', {
                 event: '*',
@@ -40,7 +46,28 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             })
             .subscribe()
 
-        return () => supabase.removeChannel(singerSub)
+        // THE FIX: Auto-Kick Listener (Watches if the DJ ends the session!)
+        const sessionSub = supabase.channel('user-session-watch')
+            .on('postgres', {
+                event: 'DELETE',
+                schema: 'public',
+                table: 'active_sessions',
+                filter: `id=eq.${sessionId}`
+            }, () => {
+                alert("The DJ has ended this session.")
+                onExit() 
+            })
+            .subscribe()
+
+        const pollInterval = setInterval(() => {
+            fetchSingers()
+        }, 20000)
+
+        return () => {
+            supabase.removeChannel(singerSub)
+            supabase.removeChannel(sessionSub)
+            clearInterval(pollInterval)
+        }
     }, [sessionId])
 
     // 2. THE VOTING LOGIC
@@ -49,36 +76,25 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             return alert("You have already voted for this singer's current performance!")
         }
 
-        // Send the vote securely to the database
         await supabase.rpc('cast_ksocial_vote', { target_singer_id: singerId, points_to_add: points })
 
-        // If normal mode, lock them out from voting again for this singer
         if (session.voting_style === 'normal') {
             setVotedFor(prev => ({ ...prev, [singerId]: true }))
-        }
-        
-        // Give a little visual feedback
-        const btn = document.getElementById(`vote-btn-${points}`)
-        if (btn) {
-            btn.classList.add('scale-125', 'brightness-150')
-            setTimeout(() => btn.classList.remove('scale-125', 'brightness-150'), 200)
         }
     }
 
     // 3. JOIN THE QUEUE (WITH AUTO-IMPORT)
     const handleJoinQueue = async () => {
-        // Check if they are already in the queue
         const existing = singers.find(s => s.bhnl_id === currentUser.id)
         if (existing) return alert("You are already in the queue!")
 
-        // Attempt to fetch the user's saved repertoire from BHNL
         let userSetlist = []
         try {
             const { data: rep } = await supabase.from('repertoire').select('song_title, artist').eq('user_id', currentUser.id)
             if (rep && rep.length > 0) {
                 userSetlist = rep.map(r => `${r.song_title} by ${r.artist}`)
             }
-        } catch (err) { console.log("No repertoire found, proceeding with empty setlist.") }
+        } catch (err) { console.log("No repertoire found.") }
 
         const newSinger = {
             session_id: sessionId,
@@ -86,7 +102,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             name: currentUser.username,
             total_points: 0,
             status: 'waiting',
-            setlist: userSetlist // Attach the auto-imported songs!
+            setlist: userSetlist
         }
 
         await supabase.from('session_singers').insert([newSinger])
@@ -95,10 +111,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
     if (isLoading || !session) return <div className="flex justify-center py-20"><div className="w-12 h-12 border-4 border-[#00f5ff] border-t-transparent rounded-full animate-spin"></div></div>
 
-    // Find who is currently singing
     const activeSinger = singers.find(s => s.status === 'singing')
-    
-    // Icon mapping
     const icons = { 'star': '⭐', 'heart': '❤️', 'bolt': '⚡', 'thumb': '👍' }
     const displayIcon = icons[session.voting_icon] || '⭐'
 
@@ -132,8 +145,11 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                                 {[1, 2, 3, 4, 5].map(pts => (
                                     <button 
                                         key={pts} 
-                                        id={`vote-btn-${pts}`}
-                                        onClick={() => handleVote(activeSinger.id, pts)}
+                                        onClick={(e) => {
+                                            handleVote(activeSinger.id, pts);
+                                            e.currentTarget.classList.add('scale-110', 'brightness-150');
+                                            setTimeout(() => e.currentTarget?.classList.remove('scale-110', 'brightness-150'), 200);
+                                        }}
                                         disabled={votedFor[activeSinger.id]}
                                         className={`w-12 h-14 sm:w-16 sm:h-16 rounded-2xl flex flex-col items-center justify-center border-2 transition-all ${votedFor[activeSinger.id] ? 'bg-gray-800 border-gray-700 opacity-50 cursor-not-allowed' : 'bg-[#00f5ff]/10 border-[#00f5ff] hover:bg-[#00f5ff] hover:text-black shadow-[0_0_15px_rgba(0,245,255,0.3)]'}`}
                                     >
@@ -143,11 +159,13 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                                 ))}
                             </div>
                         ) : (
-                            // TAP TO VOTE (MASH MODE)
                             <button 
-                                id="vote-btn-1"
-                                onClick={() => handleVote(activeSinger.id, 1)}
-                                className="w-32 h-32 rounded-full bg-[#ff2d78] border-4 border-white text-5xl flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(255,45,120,0.6)] hover:scale-95 active:scale-90 transition-transform select-none"
+                                onClick={(e) => {
+                                    handleVote(activeSinger.id, 1);
+                                    e.currentTarget.classList.add('scale-95');
+                                    setTimeout(() => e.currentTarget?.classList.remove('scale-95'), 100);
+                                }}
+                                className="w-32 h-32 rounded-full bg-[#ff2d78] border-4 border-white text-5xl flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(255,45,120,0.6)] transition-transform select-none"
                             >
                                 {displayIcon}
                             </button>

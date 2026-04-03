@@ -18,6 +18,7 @@ const Live = lazy(() => import('./Live'))
 const Shop = lazy(() => import('./Shop'))
 const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./SongBook'))
+const Projector = lazy(() => import('./Projector'))
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -159,7 +160,7 @@ export default function App() {
             const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
             showReward('VibeCode Scanned!', earnedPts)
         }
-        window.history.replaceState({}, document.title, "/")
+        window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
         setViewingEntity({ id: targetId }) 
       }
     }
@@ -302,6 +303,7 @@ export default function App() {
           />
         ) : (
           <Suspense fallback={<SuspenseLoader />}>
+            {activeTab === 'Projector' && <Projector />}
             {activeTab === 'Search' && searchResults && (
               <div className="p-4 mt-4 animate-fade-in">
                 <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>

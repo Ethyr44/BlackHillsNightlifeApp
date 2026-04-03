@@ -8,6 +8,7 @@ export default function Map({ onViewEntity }) {
   const [mapInstance, setMapInstance] = useState(null)
   const markersRef = useRef([])
 
+  /* ❌ Commented out for Advanced Markers / mapId compatibility
   const mapStyle = [
     { elementType: "geometry", stylers: [{ color: "#090812" }] },
     { elementType: "labels.text.stroke", stylers: [{ color: "#090812" }] },
@@ -20,6 +21,7 @@ export default function Map({ onViewEntity }) {
     { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
     { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f1a" }] }
   ]
+  */
 
   useEffect(() => {
     async function init() {
@@ -48,28 +50,44 @@ export default function Map({ onViewEntity }) {
 
       setVenues(processedVenues)
 
-      if (!window.google) {
-        const script = document.createElement('script')
-        script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places`
-        script.async = true
-        script.onload = () => initializeMap(processedVenues)
-        document.body.appendChild(script)
-      } else {
+      // 1. If Google Maps is already fully loaded, just initialize and stop.
+      if (window.google && window.google.maps) {
         initializeMap(processedVenues)
+        return
       }
+
+      // 2. If the script tag is already injecting (from StrictMode), don't add another one!
+      if (document.getElementById('google-maps-script')) {
+        return
+      }
+
+      // THE FIX: The Google Maps script now requires a global callback function to be defined
+      // before it is loaded. This ensures that `window.google.maps` is fully ready.
+      window.initMap = () => initializeMap(processedVenues)
+
+      // 3. Otherwise, create the script safely
+      const script = document.createElement('script')
+      script.id = 'google-maps-script'
+      
+      // CRITICAL: We added the `callback=initMap` parameter.
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
+      script.async = true // Clears the "loaded directly without loading=async" warning
+      script.defer = true
+
+      document.head.appendChild(script)
     }
     init()
   }, [])
 
-  const initializeMap = (venueData) => {
+  const initializeMap = async (venueData) => {
     if (!mapRef.current || !window.google) return
 
     const map = new window.google.maps.Map(mapRef.current, {
       center: { lat: 44.0805, lng: -103.2310 },
       zoom: 13,
-      styles: mapStyle,
       disableDefaultUI: true, 
-      zoomControl: true
+      zoomControl: true,
+      mapId: 'DEMO_MAP_ID'
     })
 
     setMapInstance(map)
@@ -80,36 +98,50 @@ export default function Map({ onViewEntity }) {
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         
-        // 1. Determine the highest priority event for the venue
-        let pinColor = 'http://maps.google.com/mapfiles/ms/icons/white-dot.png' // Default
-        let pinScale = new window.google.maps.Size(32, 32) // Default Size
+        // 1. Build a custom HTML element for the marker
+        const pinDiv = document.createElement('div')
+        
+        let emoji = '🍸' // Default Venue
+        let pinSize = '24px'
+        let dropShadow = 'none'
 
+        // 2. Change the emoji and size based on what's happening!
         if (venue.isLive) {
-            const hasKSocial = venue.hasKSocial
-            const hasKaraoke = venue.hasKaraoke
-
-            if (hasKSocial) {
-                pinColor = 'http://maps.google.com/mapfiles/ms/icons/pink-dot.png'
-                pinScale = new window.google.maps.Size(48, 48) // Make it bigger!
-            } else if (hasKaraoke) {
-                pinColor = 'http://maps.google.com/mapfiles/ms/icons/pink-dot.png'
+            if (venue.hasKSocial) {
+                emoji = '🎤' // Massive KSocial Mic
+                pinSize = '42px'
+                dropShadow = '0 0 15px #ff2d78'
+            } else if (venue.hasKaraoke) {
+                emoji = '🎵' // Standard Karaoke
+                pinSize = '32px'
+                dropShadow = '0 0 10px #b347ff'
             } else {
-                pinColor = 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png' // Standard Live Event
+                emoji = '🔥' // Standard Live Event
+                pinSize = '32px'
+                dropShadow = '0 0 10px #00f5ff'
             }
         }
 
-        // 2. Apply it to the marker
-        const marker = new window.google.maps.Marker({
+        // Apply styles to the div
+        pinDiv.innerHTML = emoji
+        pinDiv.style.fontSize = pinSize
+        pinDiv.style.filter = `drop-shadow(${dropShadow})`
+        pinDiv.style.cursor = 'pointer'
+        pinDiv.style.transition = 'transform 0.2s ease-in-out'
+        
+        // Add a little hover bounce effect
+        pinDiv.onmouseover = () => pinDiv.style.transform = 'scale(1.2)'
+        pinDiv.onmouseout = () => pinDiv.style.transform = 'scale(1)'
+
+        // 3. Apply the custom div to the marker
+        const marker = new window.google.maps.marker.AdvancedMarkerElement({
           position,
           map,
           title: venue.name,
-          icon: {
-              url: pinColor,
-              scaledSize: pinScale
-          }
+          content: pinDiv // <-- WE PASS THE DIV HERE!
         })
 
-        marker.addListener('click', () => {
+        marker.addListener('gmp-click', () => {
           setActiveVenue(venue)
           map.panTo(position)
           map.setZoom(16)

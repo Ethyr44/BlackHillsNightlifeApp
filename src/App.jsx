@@ -212,7 +212,7 @@ export default function App() {
     return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
   }
 
-  const baseTabs = ["FYP", "Profile", "Songbook", "Events", "Leaderboard", "Live", "Shop", "Map", "Settings"]
+  const baseTabs = ["FYP", "Profile", "Songbook", "Leaderboard", "Live", "Shop", "Map", "Settings"]
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
   const SuspenseLoader = () => (

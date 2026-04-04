@@ -31,19 +31,19 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
 
   useEffect(() => {
     async function fetchProfileData() {
-      // 1. Get Total Connections Count
+      // 1. Get Total Connections Count (Using target_id & connection_type)
       const { count } = await supabase.from('connections')
         .select('*', { count: 'exact', head: true })
-        .eq('following_id', entity.id)
-        .eq('status', isPage ? 'following' : 'friend') 
+        .eq('target_id', entity.id) 
+        .eq('connection_type', isPage ? 'following' : 'friend') 
       
       setFollowersCount(count || 0)
 
-      // 2. Check if the Current User is connected to this entity
+      // 2. Check if the Current User is connected (Using target_id)
       const { data: existingConnection } = await supabase.from('connections')
-        .select('id, status')
+        .select('id, connection_type')
         .eq('follower_id', currentUser.id)
-        .eq('following_id', entity.id)
+        .eq('target_id', entity.id)
         .maybeSingle()
 
       setIsConnection(!!existingConnection)
@@ -74,17 +74,19 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
       const statusType = isPage ? 'following' : 'friend'
 
       if (isConnection) {
+          // Unfollow / Remove Friend (Using target_id)
           await supabase.from('connections').delete()
               .eq('follower_id', currentUser.id)
-              .eq('following_id', entity.id)
+              .eq('target_id', entity.id) 
           
           setFollowersCount(prev => Math.max(0, prev - 1))
           setIsConnection(false)
       } else {
+          // Follow / Add Friend (Using target_id & connection_type)
           await supabase.from('connections').insert({ 
               follower_id: currentUser.id, 
-              following_id: entity.id, 
-              status: statusType 
+              target_id: entity.id, 
+              connection_type: statusType 
           })
           
           if (isPage) {

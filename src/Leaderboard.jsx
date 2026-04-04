@@ -3,27 +3,17 @@ import { supabase } from './supabaseClient'
 
 export default function Leaderboard() {
   const [users, setUsers] = useState([])
-  const [timeframe, setTimeframe] = useState('weekly')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function fetchLeaderboard() {
       setLoading(true)
       
-      // Match the active tab to the exact column name in Supabase
-      let column = 'league_all_time'
-      if (timeframe === 'nightly') column = 'league_nightly'
-      if (timeframe === 'weekly') column = 'league_weekly'
-      if (timeframe === 'monthly') column = 'league_monthly'
-      if (timeframe === 'yearly') column = 'league_yearly'
-      if (timeframe === 'all_time') column = 'league_all_time'
-
-      // THE FIX: Removed the 'Singer' restriction so ALL users are pulled
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .order(column, { ascending: false, nullsFirst: false })
-        .limit(100) // Bumped to 100 to ensure everyone fits
+        .order('league_monthly', { ascending: false, nullsFirst: false })
+        .limit(100)
       
       if (!error && data) {
           const realUsers = data.map(u => ({
@@ -31,7 +21,7 @@ export default function Leaderboard() {
               username: u.username,
               account_type: u.account_type,
               profile_pic: u.profile_pic,
-              period_points: u[column] || 0 // Default to 0 points so they still show up
+              period_points: u['league_monthly'] || 0
           }))
           setUsers(realUsers)
       } else {
@@ -40,36 +30,13 @@ export default function Leaderboard() {
       setLoading(false)
     }
     fetchLeaderboard()
-  }, [timeframe])
-
-  const tabs = [
-    { id: 'nightly', label: 'Nightly' },
-    { id: 'weekly', label: 'Weekly' },
-    { id: 'monthly', label: 'Monthly' },
-    { id: 'yearly', label: 'Yearly' },
-    { id: 'all_time', label: 'All-Time' }
-  ]
+  }, [])
 
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 space-y-6 animate-fade-in pb-32">
       <div className="text-center mb-8">
         <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">KSocial Live!</h2>
-        <p className="text-gray-400 font-bold tracking-widest uppercase text-xs mt-2">League Rankings</p>
-      </div>
-
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 justify-center">
-        {tabs.map(tab => (
-          <button 
-            key={tab.id} onClick={() => setTimeframe(tab.id)}
-            className={`px-4 py-2 rounded-full text-xs font-bold tracking-widest uppercase transition-all whitespace-nowrap ${
-              timeframe === tab.id 
-                ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] scale-105' 
-                : 'bg-gray-900 text-gray-500 border border-gray-800 hover:text-gray-300'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+        <p className="text-gray-400 font-bold tracking-widest uppercase text-xs mt-2">Monthly League Rankings</p>
       </div>
 
       <div className="space-y-3 mt-6">

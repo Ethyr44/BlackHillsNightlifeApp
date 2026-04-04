@@ -8,21 +8,6 @@ export default function Map({ onViewEntity }) {
   const [mapInstance, setMapInstance] = useState(null)
   const markersRef = useRef([])
 
-  /* ❌ Commented out for Advanced Markers / mapId compatibility
-  const mapStyle = [
-    { elementType: "geometry", stylers: [{ color: "#090812" }] },
-    { elementType: "labels.text.stroke", stylers: [{ color: "#090812" }] },
-    { elementType: "labels.text.fill", stylers: [{ color: "#8a8a9c" }] },
-    { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
-    { featureType: "poi", elementType: "geometry", stylers: [{ visibility: "off" }] },
-    { featureType: "transit", stylers: [{ visibility: "off" }] },
-    { featureType: "road", elementType: "geometry", stylers: [{ color: "#1a1a2e" }] },
-    { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#21213c" }] },
-    { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-    { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f0f1a" }] }
-  ]
-  */
-
   useEffect(() => {
     async function init() {
       // 1. Fetch Venues
@@ -32,12 +17,11 @@ export default function Map({ onViewEntity }) {
       const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved')
 
       const processedVenues = venueData ? venueData.map(v => {
-         // Determine if an event is happening RIGHT NOW at this venue
          const now = new Date()
          const activeEvents = (eventData || []).filter(e => {
             if (e.venue !== v.name) return false;
             const start = new Date(e.event_date);
-            const end = new Date(start.getTime() + (4 * 60 * 60 * 1000)); // Assume 4 hours if no end time
+            const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
             return now >= start && now <= end;
          })
 
@@ -50,28 +34,21 @@ export default function Map({ onViewEntity }) {
 
       setVenues(processedVenues)
 
-      // 1. If Google Maps is already fully loaded, just initialize and stop.
       if (window.google && window.google.maps) {
         initializeMap(processedVenues)
         return
       }
 
-      // 2. If the script tag is already injecting (from StrictMode), don't add another one!
       if (document.getElementById('google-maps-script')) {
         return
       }
 
-      // THE FIX: The Google Maps script now requires a global callback function to be defined
-      // before it is loaded. This ensures that `window.google.maps` is fully ready.
       window.initMap = () => initializeMap(processedVenues)
 
-      // 3. Otherwise, create the script safely
       const script = document.createElement('script')
       script.id = 'google-maps-script'
-      
-      // CRITICAL: We added the `callback=initMap` parameter.
       script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
-      script.async = true // Clears the "loaded directly without loading=async" warning
+      script.async = true 
       script.defer = true
 
       document.head.appendChild(script)
@@ -98,47 +75,42 @@ export default function Map({ onViewEntity }) {
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         
-        // 1. Build a custom HTML element for the marker
         const pinDiv = document.createElement('div')
         
-        let emoji = '🍸' // Default Venue
+        let emoji = '🍸' 
         let pinSize = '24px'
         let dropShadow = 'none'
 
-        // 2. Change the emoji and size based on what's happening!
         if (venue.isLive) {
             if (venue.hasKSocial) {
-                emoji = '🎤' // Massive KSocial Mic
+                emoji = '🎤' 
                 pinSize = '42px'
                 dropShadow = '0 0 15px #ff2d78'
             } else if (venue.hasKaraoke) {
-                emoji = '🎵' // Standard Karaoke
+                emoji = '🎵' 
                 pinSize = '32px'
                 dropShadow = '0 0 10px #b347ff'
             } else {
-                emoji = '🔥' // Standard Live Event
+                emoji = '🔥' 
                 pinSize = '32px'
                 dropShadow = '0 0 10px #00f5ff'
             }
         }
 
-        // Apply styles to the div
         pinDiv.innerHTML = emoji
         pinDiv.style.fontSize = pinSize
         pinDiv.style.filter = `drop-shadow(${dropShadow})`
         pinDiv.style.cursor = 'pointer'
         pinDiv.style.transition = 'transform 0.2s ease-in-out'
         
-        // Add a little hover bounce effect
         pinDiv.onmouseover = () => pinDiv.style.transform = 'scale(1.2)'
         pinDiv.onmouseout = () => pinDiv.style.transform = 'scale(1)'
 
-        // 3. Apply the custom div to the marker
         const marker = new window.google.maps.marker.AdvancedMarkerElement({
           position,
           map,
           title: venue.name,
-          content: pinDiv // <-- WE PASS THE DIV HERE!
+          content: pinDiv 
         })
 
         marker.addListener('gmp-click', () => {

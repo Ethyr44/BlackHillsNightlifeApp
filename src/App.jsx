@@ -24,7 +24,6 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   
-  // THE FIX: Read the URL to remember the tab on refresh!
   const [activeTab, setActiveTab] = useState(() => {
       const params = new URLSearchParams(window.location.search)
       return params.get('tab') || 'FYP'
@@ -36,8 +35,8 @@ export default function App() {
   const [searchResults, setSearchResults] = useState(null)
   const [showVibeCode, setShowVibeCode] = useState(false)
 
-  const [rewardToast, setRewardToast] = useState(null) // Stores { title, points }
-  const [notificationToast, setNotificationToast] = useState(null) // Fallback for push notifications
+  const [rewardToast, setRewardToast] = useState(null) 
+  const [notificationToast, setNotificationToast] = useState(null) 
   const [showNotifications, setShowNotifications] = useState(false) 
   const [forceFriendView, setForceFriendView] = useState(false)
 
@@ -107,22 +106,19 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return
 
-    // Ask the OS for permission to send notifications
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
         Notification.requestPermission()
     }
 
-    // Open a secure websocket to listen for NEW rows in the 'notifications' table
     const notifSubscription = supabase.channel('realtime-notifs')
       .on('postgres', {
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: `user_id=eq.${currentUser.id}` // ONLY listen to this specific user's alerts
+          filter: `user_id=eq.${currentUser.id}` 
       }, (payload) => {
           const newNotif = payload.new
 
-          // Trigger the OS-level Native Push Notification!
           if ('Notification' in window && Notification.permission === 'granted') {
               new Notification(newNotif.title, {
                   body: newNotif.message,
@@ -130,7 +126,6 @@ export default function App() {
                   vibrate: [200, 100, 200] 
               })
           } else {
-              // Fallback: If they denied OS permissions, show an in-app toast instead
               setNotificationToast(`🔔 ${newNotif.title}: ${newNotif.message}`)
               setTimeout(() => setNotificationToast(null), 5000)
           }
@@ -148,15 +143,14 @@ export default function App() {
       const targetId = params.get('connect')
 
       if (targetId && targetId !== currentUser.id) {
-        const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('following_id', targetId).maybeSingle()
+        const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
 
         if (!existing) {
             await supabase.from('connections').insert([
-                { follower_id: currentUser.id, following_id: targetId, status: 'friend' },
-                { follower_id: targetId, following_id: currentUser.id, status: 'friend' }
+                { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
+                { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
             ])
             
-            // Trigger VibeCode Reward
             const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
             showReward('VibeCode Scanned!', earnedPts)
         }
@@ -303,34 +297,37 @@ export default function App() {
           />
         ) : (
           <Suspense fallback={<SuspenseLoader />}>
-            {activeTab === 'Projector' && <Projector />}
-            {activeTab === 'Search' && searchResults && (
-              <div className="p-4 mt-4 animate-fade-in">
-                <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>
-                {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
-                <div className="space-y-4">
-                  {searchResults.profiles.map(user => (
-                    <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                       <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
-                       <div>
-                         <h4 className="font-bold text-white text-lg">{user.username}</h4>
-                       </div>
-                    </div>
-                  ))}
+            {/* THE FADE WRAPPER */}
+            <div key={activeTab} className="animate-fade-in w-full h-full">
+              {activeTab === 'Projector' && <Projector />}
+              {activeTab === 'Search' && searchResults && (
+                <div className="p-4 mt-4 animate-fade-in">
+                  <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>
+                  {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
+                  <div className="space-y-4">
+                    {searchResults.profiles.map(user => (
+                      <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
+                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
+                         <div>
+                           <h4 className="font-bold text-white text-lg">{user.username}</h4>
+                         </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            
-            {activeTab === 'FYP' && <FYP currentUser={currentUser} />}
-            {activeTab === 'Admin Console' && <AdminPanel session={session} />}
-            {activeTab === 'Profile' && <Profile session={session} />}
-            {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
-            {activeTab === 'Leaderboard' && <Leaderboard />}
-            {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
-            {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
-            {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
-            {activeTab === 'Live' && <Live currentUser={currentUser} />}
-            {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
+              )}
+              
+              {activeTab === 'FYP' && <FYP currentUser={currentUser} />}
+              {activeTab === 'Admin Console' && <AdminPanel session={session} />}
+              {activeTab === 'Profile' && <Profile session={session} />}
+              {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
+              {activeTab === 'Leaderboard' && <Leaderboard />}
+              {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
+              {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
+              {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
+              {activeTab === 'Live' && <Live currentUser={currentUser} />}
+              {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
+            </div>
           </Suspense>
         )}
       </main>
@@ -349,7 +346,6 @@ export default function App() {
         </button>
       )}
 
-      {/* THE SPLASH SCREEN OVERLAY */}
       {showSplash && (
         <SplashScreen 
           username={currentUser?.username}

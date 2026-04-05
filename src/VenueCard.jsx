@@ -22,7 +22,7 @@ export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent
       {/* Info Section */}
       <div className="relative flex-1 flex bg-[#0B0F19] overflow-hidden p-6">
         
-        {/* Background Ambient Glows - Nocturnal Nightlife Vibe */}
+        {/* Background Ambient Glows */}
         <div className="absolute top-[-50%] right-[-10%] w-[350px] h-[350px] bg-purple-600/20 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/30 transition-colors duration-700"></div>
         <div className="absolute bottom-[-30%] right-[20%] w-[200px] h-[200px] bg-blue-600/20 rounded-full blur-2xl pointer-events-none group-hover:bg-blue-500/30 transition-colors duration-700"></div>
         <div className="absolute top-[20%] right-[50%] w-[100px] h-[100px] bg-cyan-500/10 rounded-full blur-xl pointer-events-none"></div>
@@ -42,17 +42,17 @@ export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent
           </div>
         </div>
 
-        {/* Right Side (Days Schedule) */}
-        <div className="relative z-10 flex justify-between items-center w-[65%] pl-6">
+        {/* Right Side (7-Days Schedule) */}
+        <div className="relative z-10 flex justify-between items-center w-[65%] pl-4 pr-1 gap-1">
           {venue.schedule.map((slot, i) => (
             <button 
                 key={i} 
                 onClick={() => onOpenEvent(slot, venue)}
-                className="flex flex-col items-center justify-center gap-3 hover:bg-white/10 p-3 rounded-2xl transition-all w-16"
+                className="flex flex-col items-center justify-center gap-2 hover:bg-white/10 py-2 px-1 rounded-xl transition-all flex-1"
             >
-              <div className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">{slot.day}</div>
-              <div className="text-3xl flex items-center justify-center hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-                {slot.event ? EVENT_EMOJIS[slot.event.event_type] || EVENT_EMOJIS['General'] : <span className="text-gray-700 text-2xl opacity-50">➖</span>}
+              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{slot.day}</div>
+              <div className="text-2xl sm:text-3xl flex items-center justify-center hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
+                {slot.event ? EVENT_EMOJIS[slot.event.event_type] || EVENT_EMOJIS['General'] : <span className="text-gray-700 text-xl opacity-50">➖</span>}
               </div>
             </button>
           ))}

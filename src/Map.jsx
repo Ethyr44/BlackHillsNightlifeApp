@@ -1,6 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 
+// 🟢 FIX 1: Define the Emojis directly inside this file so the compiler never loses the link!
+const MAP_EMOJIS = {
+  'Karaoke': '🎤',
+  'Live Music': '🎵',
+  'Trivia': '❓',
+  'Open Mic': '🎸',
+  'Comedy': '😂',
+  'Drinks': '🍻',
+  'Poker': '♠️',
+  'Specials': '💲',
+  'Featured': '⭐',
+  'Community': '👥',
+  'Ticketed': '🎫',
+  'General': '❗'
+}
+
 export default function Map({ onViewEntity }) {
   const mapRef = useRef(null)
   const [venues, setVenues] = useState([])
@@ -13,23 +29,46 @@ export default function Map({ onViewEntity }) {
       // 1. Fetch Venues
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
-      // 2. Fetch all approved Events
-      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved')
+      // 🟢 FIX 2: Use the exact same "Midnight" query as the FYP to guarantee perfectly synced data!
+      const startOfToday = new Date()
+      startOfToday.setHours(0, 0, 0, 0)
+
+      const { data: eventData } = await supabase.from('events')
+        .select('*')
+        .eq('status', 'approved')
+        .gte('event_date', startOfToday.toISOString())
 
       const processedVenues = venueData ? venueData.map(v => {
          const now = new Date()
-         const activeEvents = (eventData || []).filter(e => {
+         const todayStr = now.toDateString()
+         const todayDayOfWeek = now.getDay()
+
+         // Filter events happening TODAY at this venue
+         const todaysEvents = (eventData || []).filter(e => {
             if (e.venue !== v.name) return false;
-            const start = new Date(e.event_date);
-            const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
-            return now >= start && now <= end;
+            
+            const eDate = new Date(e.event_date);
+            if (e.recurring_weekly) return eDate.getDay() === todayDayOfWeek;
+            return eDate.toDateString() === todayStr;
          })
 
-         const isLive = activeEvents.length > 0;
-         const hasKSocial = isLive && activeEvents.some(e => e.event_type === 'KSocial');
-         const hasKaraoke = isLive && activeEvents.some(e => e.event_type === 'Karaoke');
+         // Check if LIVE right now (within 4 hours of start time)
+         let isLiveNow = false;
+         if (todaysEvents.length > 0) {
+             const activeEvent = todaysEvents[0]
+             const start = new Date(activeEvent.event_date)
+             if (activeEvent.recurring_weekly) {
+                 start.setFullYear(now.getFullYear(), now.getMonth(), now.getDate())
+             }
+             const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
+             if (now >= start && now <= end) isLiveNow = true;
+         }
 
-         return { ...v, isLive, hasKSocial, hasKaraoke }
+         return { 
+             ...v, 
+             isLive: isLiveNow, 
+             eventToday: todaysEvents.length > 0 ? todaysEvents[0] : null 
+         }
       }) : []
 
       setVenues(processedVenues)
@@ -40,6 +79,7 @@ export default function Map({ onViewEntity }) {
       }
 
       if (document.getElementById('google-maps-script')) {
+        if (window.google && window.google.maps) initializeMap(processedVenues)
         return
       }
 
@@ -74,27 +114,16 @@ export default function Map({ onViewEntity }) {
 
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
-        
         const pinDiv = document.createElement('div')
         
-        let emoji = '🍸' 
-        let pinSize = '24px'
+        // 🟢 EMOJI ASSIGNMENT LOGIC
+        let emoji = venue.eventToday ? (MAP_EMOJIS[venue.eventToday.event_type] || '❗') : '📍'
+        let pinSize = venue.eventToday ? '32px' : '24px'
         let dropShadow = 'none'
 
         if (venue.isLive) {
-            if (venue.hasKSocial) {
-                emoji = '🎤' 
-                pinSize = '42px'
-                dropShadow = '0 0 15px #ff2d78'
-            } else if (venue.hasKaraoke) {
-                emoji = '🎵' 
-                pinSize = '32px'
-                dropShadow = '0 0 10px #b347ff'
-            } else {
-                emoji = '🔥' 
-                pinSize = '32px'
-                dropShadow = '0 0 10px #00f5ff'
-            }
+            dropShadow = '0 0 15px #00f5ff'
+            pinSize = '42px'
         }
 
         pinDiv.innerHTML = emoji
@@ -145,7 +174,7 @@ export default function Map({ onViewEntity }) {
         <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
         <div className="flex justify-center gap-4 mt-2">
             <span className="text-[10px] font-bold uppercase tracking-widest text-pink-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_5px_#ff00ff]"></span> Live Karaoke</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 shadow-[0_0_5px_#00f5ff]"></span> Live Event</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff]"></span> Live Event</span>
         </div>
       </div>
 
@@ -177,9 +206,17 @@ export default function Map({ onViewEntity }) {
       {activeVenue && (
         <div className="p-6 rounded-3xl border transition-all animate-fade-in bg-black border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)]">
             <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{activeVenue.name}</h3>
-            <span className="text-blue-400 text-[10px] font-bold uppercase tracking-widest block mb-4">
-                {activeVenue.isKaraoke ? '🎤 KARAOKE LIVE NOW' : activeVenue.isLive ? '🔥 EVENT LIVE NOW' : 'Official BHNL Venue'}
-            </span>
+            
+            {activeVenue.eventToday ? (
+                <div className="mb-4">
+                    <span className="text-cyan-400 text-[10px] font-bold uppercase tracking-widest block mb-1">
+                        {activeVenue.isLive ? '🔥 LIVE NOW:' : '📅 SCHEDULED TODAY:'}
+                    </span>
+                    <span className="text-white text-sm font-bold block">{MAP_EMOJIS[activeVenue.eventToday.event_type] || '❗'} {activeVenue.eventToday.title}</span>
+                </div>
+            ) : (
+                <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest block mb-4">Official BHNL Venue</span>
+            )}
             
             <div className="space-y-3 mb-6 text-sm text-gray-300">
                 <p className="flex items-start gap-3"><span className="text-lg">📍</span> <span>{activeVenue.address}</span></p>

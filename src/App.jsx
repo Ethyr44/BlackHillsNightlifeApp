@@ -212,7 +212,7 @@ export default function App() {
     return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
   }
 
-  const baseTabs = ["FYP", "Profile", "Songbook", "Leaderboard", "Live", "Shop", "Map", "Settings"]
+  const baseTabs = ["FYP", "Profile", "Songbook", "Leagues", "Live", "Settings"]
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
   const SuspenseLoader = () => (
@@ -321,7 +321,7 @@ export default function App() {
               {activeTab === 'Admin Console' && <AdminPanel session={session} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
-              {activeTab === 'Leaderboard' && <Leaderboard />}
+              {activeTab === 'Leagues' && <Leaderboard />}
               {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
               {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
               {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}

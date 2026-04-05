@@ -2,14 +2,37 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import KSocialHost from './KSocialHost'
 import KSocialUser from './KSocialUser'
+import Map from './Map'
+import Shop from './Shop'
 
-export default function Live({ currentUser }) {
+export default function Live({ currentUser, onViewEntity }) {
+    const [activeMiniPage, setActiveMiniPage] = useState('KSocial') // 'KSocial', 'Map', 'Shop'
+
+    // --- EXISTING KSOCIAL STATE ---
     const [activeSessions, setActiveSessions] = useState([])
     const [isScanning, setIsScanning] = useState(false)
-    const [scanComplete, setScanComplete] = useState(false)
-
-    // THE FIX: Remember the Audience Room on refresh!
     const [joinedSessionId, setJoinedSessionId] = useState(() => localStorage.getItem('bhnl_joined_session') || null)
+    const [hostMode, setHostMode] = useState(null) 
+    const [showPinPrompt, setShowPinPrompt] = useState(false)
+    const [pinCode, setPinCode] = useState('')
+    const [existingSession, setExistingSession] = useState(null)
+
+    useEffect(() => {
+        fetchActiveSessions()
+        const sub = supabase.channel('public-sessions').on('postgres', { event: '*', schema: 'public', table: 'active_sessions' }, fetchActiveSessions).subscribe()
+        return () => supabase.removeChannel(sub)
+    }, [])
+
+    useEffect(() => {
+        if (currentUser && currentUser.account_type !== 'Regular') {
+            supabase.from('active_sessions').select('*').eq('host_id', currentUser.id).single().then(({ data }) => setExistingSession(data))
+        }
+    }, [currentUser])
+
+    const fetchActiveSessions = async () => {
+        const { data } = await supabase.from('active_sessions').select('*').eq('is_active', true)
+        if (data) setActiveSessions(data)
+    }
 
     const handleJoin = (sessionId, hostName) => {
         if (window.confirm(`Join ${hostName}'s Session?`)) {
@@ -23,153 +46,114 @@ export default function Live({ currentUser }) {
         setJoinedSessionId(null)
     }
 
-    // KSocial Hosting State
-    const [hostMode, setHostMode] = useState(null) // null, 'casual', or 'league'
-    const [showPinPrompt, setShowPinPrompt] = useState(false)
-    const [pinCode, setPinCode] = useState('')
-    
-    // THE FIX: State to track if they already have a running session
-    const [existingSession, setExistingSession] = useState(null)
-
-    // THE FIX: Check the database on load to see if they are currently hosting
-    useEffect(() => {
-        const checkMySession = async () => {
-            if (!currentUser) return
-            const { data } = await supabase.from('active_sessions')
-                .select('*')
-                .eq('host_id', currentUser.id)
-                .maybeSingle()
-            
-            setExistingSession(data || null)
-        }
-        checkMySession()
-    }, [currentUser, hostMode]) // Re-runs when they close KSocialHost so the button updates
-
-    const scanForSessions = async () => {
-        setIsScanning(true)
-        setScanComplete(false)
-        
-        setTimeout(async () => {
-            const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-            const { data, error } = await supabase.from('active_sessions').select('*').gte('created_at', twelveHoursAgo).order('created_at', { ascending: false })
-
-            if (data) {
-                const uniqueSessions = []
-                const seenHosts = new Set()
-                data.forEach(sess => {
-                    if (!seenHosts.has(sess.host_name)) {
-                        seenHosts.add(sess.host_name)
-                        uniqueSessions.push(sess)
-                    }
-                })
-                setActiveSessions(uniqueSessions)
-            }
-            setIsScanning(false)
-            setScanComplete(true)
-        }, 1500)
-    }
-
     const verifyPin = () => {
-        if (pinCode === '1992') {
-            setShowPinPrompt(false)
+        if (pinCode === '0000') {
             setHostMode('league')
+            setShowPinPrompt(false)
             setPinCode('')
         } else {
-            alert('Incorrect Host PIN.')
+            alert('Incorrect PIN')
             setPinCode('')
         }
-    }
-
-    // If they activated KSocial, completely hijack this view and show the KSocial UI
-    if (hostMode) {
-        return <KSocialHost currentUser={currentUser} mode={hostMode} onExit={() => setHostMode(null)} />
-    }
-
-    // If they joined a session as a user, hijack the view!
-    if (joinedSessionId) {
-        return <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={handleExitAudience} />
     }
 
     return (
-        <div className="p-4 space-y-8 animate-fade-in pb-32">
-            
-            {/* 1. SEEKER SECTION */}
-            <div>
-                <div className="flex justify-between items-end border-b border-gray-800 pb-2 mb-6">
-                    <h2 className="text-4xl font-['Bebas_Neue'] text-blue-400 tracking-wider">LIVE SESSIONS</h2>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Local Network</span>
-                </div>
-
-                <div className="bg-gray-900 border border-gray-800 rounded-3xl p-6 text-center shadow-xl">
-                    <div className={`text-6xl mb-4 ${isScanning ? 'animate-spin' : 'animate-pulse'}`}>📡</div>
-                    <h3 className="text-white font-bold tracking-widest uppercase text-sm mb-2">Find Local DJs</h3>
-                    <p className="text-xs text-gray-400 mb-6">Connect to the venue's Wi-Fi to join the Karaoke queue instantly.</p>
-                    
-                    <button onClick={scanForSessions} disabled={isScanning} className={`w-full py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-all ${isScanning ? 'bg-blue-900/50 text-blue-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]'}`}>
-                        {isScanning ? 'Scanning Network...' : 'Scan for Sessions Near Me'}
+        <div className="max-w-2xl mx-auto animate-fade-in pb-32">
+            {/* THE LIVE HUB HEADER */}
+            <div className="p-4 pt-6 sticky top-[68px] sm:top-[76px] bg-[#030712]/95 backdrop-blur-xl z-40 border-b border-gray-800 shadow-xl">
+                <h2 className="text-5xl font-['Bebas_Neue'] text-white tracking-wider drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                    {activeMiniPage === 'KSocial' && 'KSOCIAL STAGE'}
+                    {activeMiniPage === 'Map' && 'NIGHTLIFE MAP'}
+                    {activeMiniPage === 'Shop' && 'REWARDS SHOP'}
+                </h2>
+                
+                <div className="flex gap-2 mt-4 bg-gray-900 p-1.5 rounded-xl border border-gray-800 shadow-inner">
+                    {['KSocial', 'Map', 'Shop'].map(tab => (
+                    <button 
+                        key={tab} 
+                        onClick={() => setActiveMiniPage(tab)}
+                        className={`flex-1 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
+                            activeMiniPage === tab 
+                            ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                        }`}
+                    >
+                        {tab}
                     </button>
+                    ))}
                 </div>
+            </div>
 
-                {scanComplete && activeSessions.length === 0 && (
-                    <div className="text-center p-6 border border-dashed border-gray-700 rounded-xl mt-4">
-                        <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">No active sessions found.</p>
-                    </div>
-                )}
-
-                {scanComplete && activeSessions.length > 0 && (
-                    <div className="space-y-4 mt-4">
-                        <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-2">Discovered Hosts</h4>
-                        {activeSessions.map(sess => (
-                            <div key={sess.id} className="bg-blue-900/10 border border-blue-500/30 rounded-2xl p-4 flex items-center justify-between shadow-lg hover:border-blue-500/60 transition-colors">
-                                <div>
-                                    <h4 className="font-bold text-white text-lg">{sess.host_name}</h4>
-                                    <p className="text-gray-400 text-xs">📍 {sess.venue_name}</p>
+            {/* MINI-PAGE RENDERING */}
+            <div className="p-4 mt-2">
+                {activeMiniPage === 'Map' && <Map onViewEntity={onViewEntity} />}
+                {activeMiniPage === 'Shop' && <Shop currentUser={currentUser} />}
+                
+                {activeMiniPage === 'KSocial' && (
+                    <div className="space-y-6">
+                        {joinedSessionId ? (
+                            <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={handleExitAudience} />
+                        ) : hostMode || existingSession ? (
+                            <KSocialHost currentUser={currentUser} mode={existingSession ? existingSession.mode : hostMode} onExit={() => {setHostMode(null); setExistingSession(null); fetchActiveSessions()}} />
+                        ) : (
+                            <>
+                                {/* JOIN A SESSION */}
+                                <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 shadow-lg">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">Active Stages</h3>
+                                        <button onClick={fetchActiveSessions} className="text-blue-400 hover:text-white text-xs font-bold uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg transition-colors">↻ Refresh</button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {activeSessions.length === 0 ? (
+                                            <div className="text-center py-8 bg-black/50 rounded-2xl border border-gray-800">
+                                                <div className="text-3xl mb-2 opacity-50">📭</div>
+                                                <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">No active sessions nearby.</p>
+                                            </div>
+                                        ) : (
+                                            activeSessions.map(session => (
+                                                <div key={session.id} className="bg-black/60 p-4 rounded-2xl border border-gray-800 flex justify-between items-center hover:border-blue-500/50 transition-colors group">
+                                                    <div>
+                                                        <h4 className="text-white font-bold text-lg mb-1">{session.session_title}</h4>
+                                                        <p className="text-xs text-gray-500 uppercase tracking-widest font-bold flex items-center gap-2">
+                                                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                                            Hosted by {session.host_name}
+                                                        </p>
+                                                    </div>
+                                                    <button onClick={() => handleJoin(session.id, session.host_name)} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.3)] group-hover:scale-105">
+                                                        Join
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
                                 </div>
-                                <button onClick={() => handleJoin(sess.id, sess.host_name)} className="bg-blue-600 text-white px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest hover:bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]">Join</button>
-                            </div>
-                        ))}
+
+                                {/* HOST CONTROLS */}
+                                {currentUser?.account_type !== 'Regular' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <button onClick={() => setHostMode('casual')} className="bg-[#090812] border border-[#b347ff]/30 hover:border-[#b347ff] p-6 rounded-3xl flex flex-col items-center justify-center text-center transition-all group hover:shadow-[0_0_30px_rgba(179,71,255,0.2)]">
+                                            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎵</div>
+                                            <h3 className="text-2xl font-['Bebas_Neue'] text-[#b347ff] tracking-widest mb-1">Casual Mode</h3>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Standard Queue & Requests</p>
+                                        </button>
+                                        <button onClick={() => setShowPinPrompt(true)} className="bg-[#090812] border border-[#00f5ff]/30 hover:border-[#00f5ff] p-6 rounded-3xl flex flex-col items-center justify-center text-center transition-all group hover:shadow-[0_0_30px_rgba(0,245,255,0.2)]">
+                                            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🏆</div>
+                                            <h3 className="text-2xl font-['Bebas_Neue'] text-[#00f5ff] tracking-widest mb-1">League Mode</h3>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Tournament & Supervotes</p>
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        )}
                     </div>
                 )}
             </div>
 
-            {/* 2. HOSTING SECTION */}
-            <div>
-                <div className="flex justify-between items-end border-b border-gray-800 pb-2 mb-6 mt-10">
-                    <h2 className="text-4xl font-['Bebas_Neue'] text-[#ff2d78] tracking-wider drop-shadow-[0_0_10px_rgba(255,45,120,0.5)]">KSocial HOST</h2>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Broadcaster</span>
-                </div>
-
-                <div className="space-y-4">
-                    {/* THE FIX: Show "Return to Session" OR the Launch buttons */}
-                    {existingSession ? (
-                        <div className="bg-[#ff2d78]/10 border border-[#ff2d78] rounded-2xl p-6 text-center shadow-[0_0_30px_rgba(255,45,120,0.2)] animate-pulse">
-                            <h3 className="text-white font-bold tracking-widest uppercase text-sm mb-1">Session Active</h3>
-                            <p className="text-gray-400 text-[10px] uppercase tracking-widest mb-4">You are currently broadcasting.</p>
-                            <button onClick={() => setHostMode(existingSession.mode)} className="w-full bg-[#ff2d78] hover:bg-[#ff1562] text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-all shadow-[0_0_20px_rgba(255,45,120,0.5)]">
-                                ▶ Return to Dashboard
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <button onClick={() => setHostMode('casual')} className="w-full bg-[#090812] border border-[#ff2d78]/50 text-[#ff2d78] hover:bg-[#ff2d78]/10 py-5 rounded-2xl font-bold uppercase tracking-widest text-sm transition-all flex flex-col items-center justify-center gap-1">
-                                <span className="text-2xl">🎉</span>
-                                Launch Casual Session
-                            </button>
-
-                            <button onClick={() => setShowPinPrompt(true)} className="w-full bg-[#090812] border border-[#00f5ff]/50 text-[#00f5ff] hover:bg-[#00f5ff]/10 py-5 rounded-2xl font-bold uppercase tracking-widest text-sm transition-all flex flex-col items-center justify-center gap-1">
-                                <span className="text-2xl">🏆</span>
-                                Launch League Session
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {/* PIN PROMPT MODAL */}
+            {/* LEAGUE PIN MODAL */}
             {showPinPrompt && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-                    <div className="bg-[#090812] border border-gray-700 rounded-3xl p-8 w-full max-w-sm text-center shadow-[0_0_50px_rgba(0,0,0,0.8)]">
-                        <div className="text-4xl mb-4">🔒</div>
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 border-2 border-[#00f5ff] p-8 rounded-3xl w-full max-w-sm text-center shadow-[0_0_50px_rgba(0,245,255,0.2)] animate-slide-up-fast">
+                        <div className="text-4xl mb-4">🔐</div>
                         <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-[#00f5ff]">League Access</h3>
                         <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest">Enter Host PIN to launch tournament mode.</p>
                         

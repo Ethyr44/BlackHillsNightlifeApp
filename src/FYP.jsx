@@ -37,7 +37,7 @@ export default function FYP({ currentUser, onViewEntity }) {
       {/* MINI-PAGE RENDERING */}
       <div className="p-4 mt-2">
          {activeMiniPage === 'Feed' && <MainFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
-         {activeMiniPage === 'Events' && <EventsFeed currentUser={currentUser} />}
+         {activeMiniPage === 'Events' && <EventsFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
          {activeMiniPage === 'Journal' && <JournalFeed currentUser={currentUser} />}
       </div>
 
@@ -46,7 +46,7 @@ export default function FYP({ currentUser, onViewEntity }) {
 }
 
 /* =========================================
-   1. MAIN FEED (Unchanged)
+   1. MAIN FEED (Mixed Posts & Events)
 ========================================= */
 function MainFeed({ currentUser, onViewEntity }) {
   const [feed, setFeed] = useState([])
@@ -55,6 +55,8 @@ function MainFeed({ currentUser, onViewEntity }) {
   useEffect(() => {
     const fetchLivingFeed = async () => {
       setLoading(true)
+      
+      // 1. Fetch User Posts
       const { data: rawPosts } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(20)
       const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic')
       
@@ -65,7 +67,16 @@ function MainFeed({ currentUser, onViewEntity }) {
               data: { ...post, username: author.username || 'Unknown', profile_pic: author.profile_pic }
           }
       })
-      setFeed(formattedPosts)
+
+      // 2. Fetch Newly Created Events
+      const { data: rawEvents } = await supabase.from('events').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(10)
+      const formattedEvents = (rawEvents || []).map(evt => ({
+          id: `event_${evt.id}`, type: 'event', timestamp: new Date(evt.created_at).getTime(), data: evt
+      }))
+
+      // 3. Combine and Sort
+      const combinedFeed = [...formattedPosts, ...formattedEvents].sort((a, b) => b.timestamp - a.timestamp)
+      setFeed(combinedFeed)
       setLoading(false)
     }
     fetchLivingFeed()
@@ -80,7 +91,38 @@ function MainFeed({ currentUser, onViewEntity }) {
             <p className="text-gray-500 font-bold tracking-widest uppercase text-sm">No recent updates.</p>
           </div>
       ) : (
-          feed.map(item => <FeedPost key={item.id} item={item} currentUser={currentUser} onViewEntity={onViewEntity} />)
+          feed.map(item => {
+              if (item.type === 'post') {
+                  return <FeedPost key={item.id} item={item} currentUser={currentUser} onViewEntity={onViewEntity} />
+              }
+              if (item.type === 'event') {
+                  const evtDate = new Date(item.data.event_date)
+                  const dayString = item.data.recurring_weekly ? `Every ${evtDate.toLocaleDateString('en-US', {weekday: 'long'})}` : evtDate.toLocaleDateString()
+                  
+                  return (
+                      <div key={item.id} className="bg-[#090812]/80 border-2 border-purple-900/30 rounded-3xl p-5 shadow-[0_0_20px_rgba(147,51,234,0.1)] hover:border-purple-500/50 transition-all cursor-pointer" onClick={() => onViewEntity(item.data.venue)}>
+                         <div className="flex items-center gap-3 mb-3">
+                             <div className="text-3xl bg-purple-900/30 p-2 rounded-xl border border-purple-500/30">
+                                 {EVENT_EMOJIS[item.data.event_type] || '🗓️'}
+                             </div>
+                             <div>
+                                 <span className="text-purple-400 font-bold uppercase tracking-widest text-[9px] bg-purple-900/20 px-2 py-1 rounded border border-purple-500/30">New Event Published</span>
+                                 <h4 className="font-bold text-white text-lg leading-tight mt-1">{item.data.title}</h4>
+                             </div>
+                         </div>
+                         <p className="text-gray-300 font-bold text-sm mb-3">
+                             {item.data.event_type} at <span className="text-cyan-400">{item.data.venue}</span> • {dayString}
+                         </p>
+                         {item.data.description && (
+                             <div className="bg-black/50 p-4 rounded-xl border border-gray-800 text-gray-400 text-sm italic">
+                                 {item.data.description}
+                             </div>
+                         )}
+                      </div>
+                  )
+              }
+              return null
+          })
       )}
     </div>
   )
@@ -89,11 +131,10 @@ function MainFeed({ currentUser, onViewEntity }) {
 /* =========================================
    2. EVENTS MINI-PAGE & MODALS
 ========================================= */
-function EventsFeed({ currentUser }) {
+function EventsFeed({ currentUser, onViewEntity }) {
   const [venueLineups, setVenueLineups] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Modal States
   const [selectedVenueInfo, setSelectedVenueInfo] = useState(null)
   const [selectedEventInfo, setSelectedEventInfo] = useState(null)
   const [isEditingEvent, setIsEditingEvent] = useState(false)
@@ -101,35 +142,52 @@ function EventsFeed({ currentUser }) {
   const fetchEvents = async () => {
     setLoading(true)
     const { data: venues } = await supabase.from('pages').select('*').eq('page_type', 'Venue')
-    const { data: upcomingEvents } = await supabase.from('events').select('*').eq('status', 'approved').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true })
+    
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+
+    const { data: upcomingEvents } = await supabase.from('events')
+        .select('*')
+        .eq('status', 'approved')
+        .gte('event_date', startOfToday.toISOString())
+        .order('event_date', { ascending: true })
 
     const days = []
     const today = new Date()
-    for(let i = 0; i < 5; i++) {
+    today.setHours(0,0,0,0) 
+
+    // 🟢 FIX: Loop 7 times instead of 5
+    for(let i = 0; i < 7; i++) {
         const d = new Date(today)
         d.setDate(today.getDate() + i)
-        days.push({ dateString: d.toDateString(), dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase().substring(0,3), rawDate: d })
+        days.push({ dateString: d.toDateString(), dayOfWeek: d.getDay(), dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase().substring(0,3), rawDate: d })
     }
 
     const processedLineups = (venues || []).map(v => {
         let isLiveNow = false
 
         const schedule = days.map(dayObj => {
-            const eventToday = upcomingEvents?.find(e => e.venue === v.name && new Date(e.event_date).toDateString() === dayObj.dateString)
+            const eventToday = upcomingEvents?.find(e => {
+                if (e.venue !== v.name) return false
+                const eDate = new Date(e.event_date)
+                if (e.recurring_weekly) return eDate.getDay() === dayObj.dayOfWeek
+                return eDate.toDateString() === dayObj.dateString
+            })
             
-            // Check if live right now (within 4 hours of start)
             if (eventToday) {
                 const start = new Date(eventToday.event_date)
+                if (eventToday.recurring_weekly) {
+                    start.setFullYear(today.getFullYear(), today.getMonth(), today.getDate())
+                }
                 const end = new Date(start.getTime() + (4 * 60 * 60 * 1000))
-                if (today >= start && today <= end) isLiveNow = true
+                const now = new Date()
+                if (now >= start && now <= end) isLiveNow = true
             }
 
             return { day: dayObj.dayLabel, date: dayObj.rawDate, event: eventToday || null }
         })
 
-        // Placeholder for the requested BHNL Visits stat
         const mockVisits = (v.name.length * 42) % 3000 + 500
-
         return {
             ...v,
             currentTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
@@ -139,7 +197,6 @@ function EventsFeed({ currentUser }) {
         }
     })
 
-    // WE NO LONGER FILTER OUT EMPTY VENUES. WE SHOW THEM ALL.
     setVenueLineups(processedLineups)
     setLoading(false)
   }
@@ -154,26 +211,40 @@ function EventsFeed({ currentUser }) {
   const handleSaveEvent = async (e) => {
       e.preventDefault()
       const fd = new FormData(e.target)
+      
+      const safeDate = new Date(selectedEventInfo.slot.date)
+      safeDate.setHours(12, 0, 0, 0)
+
       const payload = {
           title: fd.get('title'),
           description: fd.get('description'),
           event_type: fd.get('event_type'),
           entertainer: fd.get('entertainer'),
+          recurring_weekly: fd.get('recurring_weekly') === 'on',
           venue: selectedEventInfo.venue.name,
           status: 'approved',
-          event_date: selectedEventInfo.slot.date.toISOString() // Sets it to the day clicked
+          event_date: safeDate.toISOString(),
+          created_by: currentUser.id 
       }
 
+      let dbError = null;
+
       if (selectedEventInfo.slot.event) {
-          // Update existing
-          await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id)
+          const { error } = await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id)
+          dbError = error
       } else {
-          // Create new
-          await supabase.from('events').insert([payload])
+          const { error } = await supabase.from('events').insert([payload])
+          dbError = error
+      }
+
+      if (dbError) {
+          console.error("Database Save Error:", dbError)
+          alert(`Failed to save event! Error: ${dbError.message}`)
+          return;
       }
 
       setSelectedEventInfo(null)
-      fetchEvents() // Refresh the lineup!
+      fetchEvents() 
   }
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
@@ -253,6 +324,12 @@ function EventsFeed({ currentUser }) {
                                 <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Details (Time, Entry, Bio)</label>
                                 <textarea name="description" defaultValue={selectedEventInfo.slot.event?.description || ''} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm h-24 focus:border-blue-500 outline-none resize-none"></textarea>
                             </div>
+                            
+                            <div className="flex items-center gap-3 bg-black/50 border border-gray-700 p-3 rounded-lg mt-2">
+                                <input type="checkbox" name="recurring_weekly" id="recurring" defaultChecked={selectedEventInfo.slot.event?.recurring_weekly || false} className="w-4 h-4 accent-blue-500" />
+                                <label htmlFor="recurring" className="text-xs text-gray-300 font-bold uppercase tracking-widest">Recurring Weekly Event</label>
+                            </div>
+
                             <div className="flex gap-2 pt-4">
                                 <button type="button" onClick={() => setIsEditingEvent(false)} className="px-6 py-3 border border-gray-700 text-gray-400 hover:text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">Cancel</button>
                                 <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-lg">Save Event</button>
@@ -304,7 +381,7 @@ function EventsFeed({ currentUser }) {
 }
 
 /* =========================================
-   3. JOURNAL (Classic Chatroom UI)
+   3. JOURNAL (Unchanged)
 ========================================= */
 function JournalFeed({ currentUser }) {
   const [entries, setEntries] = useState([])
@@ -315,7 +392,6 @@ function JournalFeed({ currentUser }) {
      fetchJournal()
      const sub = supabase.channel('journal-channel')
         .on('postgres', { event: 'INSERT', schema: 'public', table: 'journal' }, payload => {
-            // Because flex-col-reverse places newest at the top of the array visually at the bottom
             setEntries(prev => [payload.new, ...prev])
         }).subscribe()
 
@@ -338,14 +414,10 @@ function JournalFeed({ currentUser }) {
 
   return (
     <div className="animate-fade-in flex flex-col h-[calc(100vh-280px)] min-h-[500px]">
-        
-        {/* CHAT DISPLAY (Auto-scrolls to bottom via flex-col-reverse) */}
         <div className="flex-1 bg-[#090812] border-2 border-gray-800 rounded-t-3xl p-4 overflow-y-auto flex flex-col-reverse hide-scrollbar shadow-inner">
-            {loading ? <div className="text-center text-gray-500 text-xs py-10">Connecting to secure server...</div> : (
+            {loading ? <div className="text-center text-gray-500 text-xs py-10">Decrypting journal...</div> : (
                 entries.map((entry, index) => {
                     const isMine = entry.user_id === currentUser?.id
-                    
-                    // Simple logic to group bubbles from the same "Anonymous" user if they rapid-fire (optional UI polish)
                     const prevEntry = entries[index + 1]
                     const isSameAsPrev = prevEntry && prevEntry.user_id === entry.user_id
 
@@ -367,7 +439,6 @@ function JournalFeed({ currentUser }) {
             )}
         </div>
 
-        {/* INPUT FORM */}
         <form onSubmit={handleSubmit} className="bg-gray-900 p-3 rounded-b-3xl border-2 border-t-0 border-gray-800 flex flex-col gap-2">
             <div className="flex gap-2">
                 <input 
@@ -387,7 +458,6 @@ function JournalFeed({ currentUser }) {
                 <span className={`text-[9px] font-bold uppercase tracking-widest ${text.length === 77 ? 'text-red-500' : 'text-gray-600'}`}>{77 - text.length} / 77</span>
             </div>
         </form>
-
     </div>
   )
 }

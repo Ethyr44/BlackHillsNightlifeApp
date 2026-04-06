@@ -35,7 +35,23 @@ export default function Profile({ session }) {
   const [setlistTrigger, setSetlistTrigger] = useState(0)
 
   useEffect(() => {
+    if (!session) return
+
     fetchProfileData()
+
+    // 🟢 NEW: Listen for live point updates! 
+    const pointListener = supabase.channel('profile-points')
+      .on('postgres', { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'profiles', 
+          filter: `id=eq.${session.user.id}` 
+      }, (payload) => {
+          // Whenever the database points change, instantly update the UI numbers
+          setProfile(payload.new)
+      }).subscribe()
+
+    return () => supabase.removeChannel(pointListener)
   }, [session])
 
   const fetchProfileData = async () => {

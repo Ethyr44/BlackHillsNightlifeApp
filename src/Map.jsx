@@ -64,8 +64,11 @@ export default function Map({ onViewEntity }) {
              if (now >= start && now <= end) isLiveNow = true;
          }
 
+         const mockVisits = (v.name.length * 7) % 40 + 1
+
          return { 
              ...v, 
+             userCount: mockVisits,
              isLive: isLiveNow, 
              eventToday: todaysEvents.length > 0 ? todaysEvents[0] : null 
          }

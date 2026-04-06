@@ -7,17 +7,27 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [votedFor, setVotedFor] = useState({}) 
     const [isLoading, setIsLoading] = useState(true)
 
+    // --- NEW VOTING STATE ---
+    const [superVotesRemaining, setSuperVotesRemaining] = useState(0)
+    const [superVoteActive, setSuperVoteActive] = useState(false)
+    const [selectedStars, setSelectedStars] = useState(0)
+    const [multiStars, setMultiStars] = useState({ performance: 0, wow: 0, originality: 0 })
+
+    // --- NEW JOIN FLOW STATE ---
+    const [showJoinModal, setShowJoinModal] = useState(false)
+    const [singerAlias, setSingerAlias] = useState(currentUser?.username || '')
+    const [prevStatus, setPrevStatus] = useState(null)
+
     // 1. INITIAL FETCH & REALTIME LISTENER
     useEffect(() => {
         const fetchSessionData = async () => {
             const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).maybeSingle()
-            
             if (sessData) {
                 setSession(sessData)
+                setSuperVotesRemaining(sessData.supervotes || 2)
                 fetchSingers()
                 setIsLoading(false)
             } else {
-                // THE FIX: The session was deleted! Clear the ghost session and kick them out.
                 alert("This session has ended or is no longer available.")
                 onExit()
             }
@@ -28,196 +38,244 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 .select('*')
                 .eq('session_id', sessionId)
                 .order('total_points', { ascending: false })
-            
             if (data) setSingers(data)
         }
 
         fetchSessionData()
 
-        // Realtime Listener for the Queue
-        const singerSub = supabase.channel('user-realtime-queue')
-            .on('postgres', {
-                event: '*',
-                schema: 'public',
-                table: 'session_singers',
-                filter: `session_id=eq.${sessionId}`
-            }, () => {
-                fetchSingers()
-            })
+        const singerSub = supabase.channel('user-realtime-stage')
+            .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchSingers)
             .subscribe()
 
-        // THE FIX: Auto-Kick Listener (Watches if the DJ ends the session!)
-        const sessionSub = supabase.channel('user-session-watch')
-            .on('postgres', {
-                event: 'DELETE',
-                schema: 'public',
-                table: 'active_sessions',
-                filter: `id=eq.${sessionId}`
-            }, () => {
-                alert("The DJ has ended this session.")
-                onExit() 
-            })
-            .subscribe()
-
-        const pollInterval = setInterval(() => {
-            fetchSingers()
-        }, 20000)
-
-        return () => {
-            supabase.removeChannel(singerSub)
-            supabase.removeChannel(sessionSub)
-            clearInterval(pollInterval)
-        }
+        return () => supabase.removeChannel(singerSub)
     }, [sessionId])
 
-    // 2. THE VOTING LOGIC
-    const handleVote = async (singerId, points) => {
-        if (session.voting_style === 'normal' && votedFor[singerId]) {
-            return alert("You have already voted for this singer's current performance!")
+    // --- APPROVAL TOAST LISTENER ---
+    const myRecord = singers.find(s => s.bhnl_id === currentUser?.id)
+    const currentStatus = myRecord ? myRecord.status : null
+
+    useEffect(() => {
+        // If my status changed from pending to queued/singing, the Host approved me!
+        if (prevStatus === 'pending' && (currentStatus === 'queued' || currentStatus === 'singing')) {
+            alert("Join Request Approved! You are now in the lineup 🎤")
         }
+        setPrevStatus(currentStatus)
+    }, [currentStatus, prevStatus])
 
-        await supabase.rpc('cast_ksocial_vote', { target_singer_id: singerId, points_to_add: points })
-
-        if (session.voting_style === 'normal') {
-            setVotedFor(prev => ({ ...prev, [singerId]: true }))
-        }
-    }
-
-    // 3. JOIN THE QUEUE (WITH AUTO-IMPORT)
-    const handleJoinQueue = async () => {
-        const existing = singers.find(s => s.bhnl_id === currentUser.id)
-        if (existing) return alert("You are already in the queue!")
-
-        let userSetlist = []
-        try {
-            const { data: rep } = await supabase.from('repertoire').select('song_title, artist').eq('user_id', currentUser.id)
-            if (rep && rep.length > 0) {
-                userSetlist = rep.map(r => `${r.song_title} by ${r.artist}`)
-            }
-        } catch (err) { console.log("No repertoire found.") }
-
-        const newSinger = {
+    // --- JOIN REQUEST SUBMITTER ---
+    const handleRequestJoin = async (e) => {
+        e.preventDefault()
+        if (!singerAlias.trim()) return
+        
+        const { error } = await supabase.from('session_singers').insert([{
             session_id: sessionId,
-            bhnl_id: currentUser.id,
-            name: currentUser.username,
+            name: singerAlias.trim(),
+            status: 'pending',
             total_points: 0,
-            status: 'waiting',
-            setlist: userSetlist
+            bhnl_id: currentUser.id
+        }])
+        
+        // 🟢 FIX: Catch silent errors!
+        if (error) {
+            console.error("Join Request Error:", error)
+            alert(`Failed to send request: ${error.message}`)
+            return
         }
-
-        await supabase.from('session_singers').insert([newSinger])
-        alert("🎤 You have been added to the queue!" + (userSetlist.length > 0 ? `\n(${userSetlist.length} songs imported)` : ""))
+        
+        setShowJoinModal(false)
     }
 
-    if (isLoading || !session) return <div className="flex justify-center py-20"><div className="w-12 h-12 border-4 border-[#00f5ff] border-t-transparent rounded-full animate-spin"></div></div>
+    // --- THE MASTER VOTE SUBMITTER ---
+    const handleSubmitVote = async (singer) => {
+        const lastVoteTime = votedFor[singer.id] || 0
+        if (Date.now() - lastVoteTime < 5000) {
+            alert("Please wait a few seconds before scoring this singer again!")
+            return
+        }
+
+        let pointsToAdd = 0;
+        
+        if (session.voting_style === '1to5') {
+            if (selectedStars === 0) return alert("Please select a star rating first!")
+            pointsToAdd = selectedStars;
+        } else if (session.voting_style === 'multi') {
+            if (multiStars.performance === 0 || multiStars.wow === 0 || multiStars.originality === 0) return alert("Please rate all 3 categories!")
+            pointsToAdd = multiStars.performance + multiStars.wow + multiStars.originality;
+        } else {
+            pointsToAdd = session.vote_value || 10;
+        }
+
+        if (superVoteActive && superVotesRemaining > 0) {
+            pointsToAdd *= 2;
+            setSuperVotesRemaining(prev => prev - 1);
+            setSuperVoteActive(false); 
+        }
+
+        await supabase.from('session_singers').update({ total_points: (singer.total_points || 0) + pointsToAdd }).eq('id', singer.id)
+        if (singer.bhnl_id) await supabase.rpc('add_points', { target_user_id: singer.bhnl_id, league_pts: pointsToAdd, life_pts: 0 })
+        await supabase.rpc('add_points', { target_user_id: currentUser.id, league_pts: 0, life_pts: 2 })
+
+        setSelectedStars(0)
+        setMultiStars({ performance: 0, wow: 0, originality: 0 })
+        setVotedFor(prev => ({ ...prev, [singer.id]: Date.now() }))
+    }
+
+    const StarRow = ({ label, value, onChange }) => (
+        <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl mb-2 border border-gray-800">
+            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{label}</span>
+            <div className="flex gap-2">
+                {[1,2,3,4,5].map(star => (
+                    <button key={star} onClick={() => onChange(star)} className={`text-3xl transition-transform hover:scale-110 ${star <= value ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]' : 'text-gray-700'}`}>
+                        ★
+                    </button>
+                ))}
+            </div>
+        </div>
+    )
+
+    if (isLoading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
     const activeSinger = singers.find(s => s.status === 'singing')
-    const icons = { 'star': '⭐', 'heart': '❤️', 'bolt': '⚡', 'thumb': '👍' }
-    const displayIcon = icons[session.voting_icon] || '⭐'
+    const queue = singers.filter(s => s.status === 'queued')
 
     return (
-        <div className="max-w-xl mx-auto p-4 animate-fade-in pb-32 mt-4 space-y-6">
+        <div className="max-w-md mx-auto space-y-6 animate-fade-in">
             
-            {/* HEADER */}
-            <div className="flex justify-between items-center bg-[#090812] border border-gray-800 p-4 rounded-2xl shadow-lg">
-                <div>
-                    <h2 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{session.session_title}</h2>
-                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Host: {session.host_name}</p>
-                </div>
-                <button onClick={onExit} className="bg-red-900/20 text-red-500 border border-red-500/30 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-colors">
-                    Leave
-                </button>
+            {/* Header */}
+            <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 text-center shadow-[0_0_20px_rgba(59,130,246,0.15)] relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-[#ff2d78]"></div>
+                <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{session.session_title}</h2>
+                <p className="text-blue-400 text-xs font-bold uppercase tracking-widest">Hosted by {session.host_name}</p>
+                <button onClick={onExit} className="absolute top-4 right-4 text-gray-500 hover:text-white bg-black/50 w-8 h-8 rounded-full flex items-center justify-center text-xs">✕</button>
             </div>
 
-            {/* LIVE STAGE (VOTING AREA) */}
-            <div className={`border-2 rounded-3xl p-8 text-center shadow-2xl transition-all duration-500 ${activeSinger ? 'bg-[#090812] border-[#00f5ff] shadow-[0_0_40px_rgba(0,245,255,0.2)]' : 'bg-black/50 border-gray-800'}`}>
-                {activeSinger ? (
-                    <div className="animate-fade-in">
-                        <div className="inline-block bg-[#ff2d78] text-white px-4 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4 animate-pulse">
-                            ● LIVE ON STAGE
-                        </div>
-                        <h3 className="text-5xl font-['Bebas_Neue'] text-white tracking-widest mb-2 drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">{activeSinger.name}</h3>
-                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-8">Score: <span className="text-[#00f5ff] text-lg">{activeSinger.total_points}</span></p>
+            {/* SUPERVOTE TOGGLE BUTTON - NOW ONLY SHOWS IF THERE IS AN ACTIVE SINGER! */}
+            {activeSinger && superVotesRemaining > 0 && session.mode === 'league' && (
+                <div className="flex justify-center animate-fade-in">
+                    <button 
+                        onClick={() => setSuperVoteActive(!superVoteActive)}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs transition-all ${
+                            superVoteActive 
+                            ? 'bg-yellow-500 text-black shadow-[0_0_25px_rgba(234,179,8,0.7)] scale-105' 
+                            : 'bg-gray-900 border border-yellow-500/50 text-yellow-500 hover:bg-gray-800 hover:scale-105'
+                        }`}
+                    >
+                        <span className="text-lg">⭐</span>
+                        {superVoteActive ? 'SUPERVOTE ARMED!' : 'USE SUPERVOTE'} 
+                        <span className="bg-black/50 text-yellow-500 px-2 py-0.5 rounded-md ml-1 border border-yellow-500/30">x{superVotesRemaining}</span>
+                    </button>
+                </div>
+            )}
 
-                        {/* VOTING CONTROLS */}
-                        {session.voting_style === 'normal' ? (
-                            <div className="flex justify-center gap-2 sm:gap-4">
-                                {[1, 2, 3, 4, 5].map(pts => (
-                                    <button 
-                                        key={pts} 
-                                        onClick={(e) => {
-                                            handleVote(activeSinger.id, pts);
-                                            e.currentTarget.classList.add('scale-110', 'brightness-150');
-                                            setTimeout(() => e.currentTarget?.classList.remove('scale-110', 'brightness-150'), 200);
-                                        }}
-                                        disabled={votedFor[activeSinger.id]}
-                                        className={`w-12 h-14 sm:w-16 sm:h-16 rounded-2xl flex flex-col items-center justify-center border-2 transition-all ${votedFor[activeSinger.id] ? 'bg-gray-800 border-gray-700 opacity-50 cursor-not-allowed' : 'bg-[#00f5ff]/10 border-[#00f5ff] hover:bg-[#00f5ff] hover:text-black shadow-[0_0_15px_rgba(0,245,255,0.3)]'}`}
-                                    >
-                                        <span className="text-xl sm:text-2xl mb-1">{displayIcon}</span>
-                                        <span className="text-[10px] sm:text-xs font-bold font-['Bebas_Neue'] text-white">+{pts}</span>
-                                    </button>
-                                ))}
+            {/* ON STAGE NOW */}
+            <div className={`bg-[#090812] border-2 ${activeSinger ? 'border-[#ff2d78] shadow-[0_0_30px_rgba(255,45,120,0.2)]' : 'border-gray-800'} rounded-3xl p-6 relative overflow-hidden transition-all duration-500`}>
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">On Stage Now</h3>
+                    <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[#ff2d78] bg-[#ff2d78]/10 px-2 py-1 rounded border border-[#ff2d78]/30">
+                        <span className="w-2 h-2 rounded-full bg-[#ff2d78] animate-pulse"></span> Live
+                    </span>
+                </div>
+
+                {activeSinger ? (
+                    <div className="text-center animate-fade-in">
+                        <h4 className="text-4xl font-bold text-white mb-6 drop-shadow-md">{activeSinger.name}</h4>
+                        
+                        {session.voting_style === 'multi' ? (
+                            <div className="mb-6">
+                                <StarRow label="Performance" value={multiStars.performance} onChange={val => setMultiStars({...multiStars, performance: val})} />
+                                <StarRow label="Wow Factor" value={multiStars.wow} onChange={val => setMultiStars({...multiStars, wow: val})} />
+                                <StarRow label="Originality" value={multiStars.originality} onChange={val => setMultiStars({...multiStars, originality: val})} />
+                                <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                                    Submit Scores
+                                </button>
+                            </div>
+                        ) : session.voting_style === '1to5' ? (
+                            <div className="mb-6">
+                                <StarRow label="Overall Rating" value={selectedStars} onChange={setSelectedStars} />
+                                <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+                                    Submit Rating
+                                </button>
                             </div>
                         ) : (
                             <button 
-                                onClick={(e) => {
-                                    handleVote(activeSinger.id, 1);
-                                    e.currentTarget.classList.add('scale-95');
-                                    setTimeout(() => e.currentTarget?.classList.remove('scale-95'), 100);
-                                }}
-                                className="w-32 h-32 rounded-full bg-[#ff2d78] border-4 border-white text-5xl flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(255,45,120,0.6)] transition-transform select-none"
+                                onClick={() => handleSubmitVote(activeSinger)} 
+                                className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-[#ff2d78] to-purple-600 flex items-center justify-center text-6xl shadow-[0_0_30px_rgba(255,45,120,0.6)] hover:scale-105 active:scale-95 transition-all mb-6"
                             >
-                                {displayIcon}
+                                {session.voting_icon === 'star' ? '⭐' : session.voting_icon === 'fire' ? '🔥' : '👏'}
                             </button>
                         )}
 
-                        {votedFor[activeSinger.id] && session.voting_style === 'normal' && (
-                            <p className="text-green-400 text-[10px] font-bold uppercase tracking-widest mt-6 animate-fade-in">✓ Vote Cast</p>
-                        )}
+                        <div className="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Current Score</span>
+                            <span className="text-4xl font-['Bebas_Neue'] tracking-widest text-[#00f5ff] drop-shadow-[0_0_10px_rgba(0,245,255,0.5)]">
+                                {activeSinger.total_points}
+                            </span>
+                        </div>
                     </div>
                 ) : (
-                    <div className="py-8 opacity-50">
-                        <div className="text-6xl mb-4">🎤</div>
-                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest mb-2">Stage is Empty</h3>
-                        <p className="text-gray-400 text-xs uppercase tracking-widest font-bold">Waiting for host to start the next singer...</p>
+                    <div className="text-center py-10 opacity-50">
+                        <div className="text-5xl mb-4">🎤</div>
+                        <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Stage is empty</p>
                     </div>
                 )}
             </div>
 
-            {/* QUEUE / LEADERBOARD */}
-            <div>
-                <div className="flex justify-between items-end mb-4 px-2">
-                    <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Live Leaderboard</h3>
-                    <button onClick={handleJoinQueue} className="text-[#00f5ff] text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors">
-                        + Request to Sing
-                    </button>
-                </div>
-                
-                {singers.length === 0 ? (
-                    <div className="text-center p-6 border border-dashed border-gray-800 rounded-xl bg-black/30">
-                        <p className="text-gray-500 text-xs font-bold tracking-widest uppercase">No singers in queue.</p>
-                    </div>
-                ) : (
-                    <div className="space-y-2">
-                        {singers.map((singer, index) => (
-                            <div key={singer.id} className={`bg-gray-900 border ${singer.status === 'singing' ? 'border-[#00f5ff] shadow-[0_0_15px_rgba(0,245,255,0.2)]' : 'border-gray-800'} rounded-xl p-4 flex items-center justify-between`}>
+            {/* UP NEXT QUEUE */}
+            <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6">
+                <h3 className="text-xl font-['Bebas_Neue'] text-gray-400 tracking-widest mb-4">Up Next</h3>
+                <div className="space-y-3 mb-6">
+                    {queue.length === 0 ? (
+                        <p className="text-center text-gray-600 font-bold uppercase tracking-widest text-[10px] py-4">No singers queued</p>
+                    ) : (
+                        queue.map((singer, index) => (
+                            <div key={singer.id} className="bg-black/40 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                    <div className={`font-['Bebas_Neue'] text-3xl w-6 text-center ${index === 0 ? 'text-yellow-400' : index === 1 ? 'text-gray-300' : index === 2 ? 'text-amber-600' : 'text-gray-600'}`}>
-                                        {index + 1}
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-white text-lg leading-tight">{singer.name} {singer.bhnl_id === currentUser.id && <span className="text-gray-500 text-xs">(You)</span>}</h4>
-                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{singer.status}</span>
-                                    </div>
+                                    <div className="font-['Bebas_Neue'] text-2xl w-6 text-center text-gray-600">{index + 1}</div>
+                                    <h4 className="font-bold text-gray-300 text-lg leading-tight">{singer.name} {singer.bhnl_id === currentUser.id && <span className="text-gray-500 text-xs font-sans ml-2">(You)</span>}</h4>
                                 </div>
-                                <div className="text-right">
-                                    <span className={`font-['Bebas_Neue'] text-3xl ${singer.status === 'singing' ? 'text-[#00f5ff] drop-shadow-[0_0_5px_rgba(0,245,255,0.8)]' : 'text-gray-400'}`}>{singer.total_points}</span>
-                                </div>
+                                <span className="text-gray-600 font-['Bebas_Neue'] text-2xl">{singer.total_points}</span>
                             </div>
-                        ))}
+                        ))
+                    )}
+                </div>
+
+                {/* JOIN AS SINGER BUTTON */}
+                {!currentStatus && (
+                    <button onClick={() => setShowJoinModal(true)} className="w-full bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
+                        🎙️ Request to Sing
+                    </button>
+                )}
+                {currentStatus === 'pending' && (
+                    <div className="w-full bg-yellow-900/20 border border-yellow-500/30 text-yellow-500 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest text-center animate-pulse">
+                        ⏳ Request Pending Host Approval...
                     </div>
                 )}
             </div>
+
+            {/* JOIN MODAL */}
+            {showJoinModal && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <form onSubmit={handleRequestJoin} className="bg-gray-900 border-2 border-purple-500/30 p-8 rounded-3xl w-full max-w-sm shadow-[0_0_50px_rgba(147,51,234,0.2)] animate-slide-up-fast">
+                        <div className="text-4xl mb-4 text-center">🎙️</div>
+                        <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-white text-center">Hit the Stage</h3>
+                        <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest text-center">What alias should the host call you?</p>
+                        
+                        <input 
+                            type="text" 
+                            value={singerAlias} 
+                            onChange={e => setSingerAlias(e.target.value)} 
+                            placeholder="Your Stage Name..." 
+                            className="w-full bg-black border border-gray-700 text-white rounded-xl p-4 focus:border-purple-500 outline-none mb-6"
+                            required
+                        />
+
+                        <div className="flex gap-3">
+                            <button type="button" onClick={() => setShowJoinModal(false)} className="flex-1 border border-gray-700 text-gray-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white py-3">Cancel</button>
+                            <button type="submit" className="flex-1 bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)] py-3">Submit Request</button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </div>
     )
 }

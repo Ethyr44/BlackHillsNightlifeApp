@@ -187,7 +187,7 @@ function EventsFeed({ currentUser, onViewEntity }) {
             return { day: dayObj.dayLabel, date: dayObj.rawDate, event: eventToday || null }
         })
 
-        const mockVisits = (v.name.length * 42) % 3000 + 500
+        const mockVisits = (v.name.length * 7) % 40 + 1
         return {
             ...v,
             currentTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),

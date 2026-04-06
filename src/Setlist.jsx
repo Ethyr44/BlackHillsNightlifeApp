@@ -13,6 +13,8 @@ export default function Setlist({ session, isOwner = true }) {
     const { data } = await supabase.from('profiles').select('active_setlist').eq('id', targetId).single()
     if (data && data.active_setlist) {
       setSetlistIds(data.active_setlist)
+    } else {
+      setSetlistIds([]) // 🟢 THE FIX: Clear state if DB is empty
     }
   }
 

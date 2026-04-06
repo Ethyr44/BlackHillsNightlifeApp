@@ -16,7 +16,11 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
 
   const fetchProfileSetlist = async () => {
     const { data } = await supabase.from('profiles').select('active_setlist').eq('id', userId).single()
-    if (data && data.active_setlist) setActiveSetlist(data.active_setlist)
+    if (data && data.active_setlist) {
+        setActiveSetlist(data.active_setlist)
+    } else {
+        setActiveSetlist([]) // 🟢 THE FIX: Clear state if DB is empty
+    }
   }
 
   useEffect(() => {

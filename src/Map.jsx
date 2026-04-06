@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 
-// 🟢 FIX 1: Define the Emojis directly inside this file so the compiler never loses the link!
 const MAP_EMOJIS = {
   'Karaoke': '🎤',
   'Live Music': '🎵',
@@ -22,14 +21,19 @@ export default function Map({ onViewEntity }) {
   const [venues, setVenues] = useState([])
   const [activeVenue, setActiveVenue] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
-  const markersRef = useRef([])
+  
+  // Marker Tracking
+  const venueMarkersRef = useRef([])
+  const userMarkersRef = useRef([]) 
 
+  // 🟢 NEW: Active Users State
+  const [activeUsers, setActiveUsers] = useState([])
+
+  // --- 1. INITIALIZE MAP & FETCH VENUES ---
   useEffect(() => {
     async function init() {
-      // 1. Fetch Venues
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
-      // 🟢 FIX 2: Use the exact same "Midnight" query as the FYP to guarantee perfectly synced data!
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
 
@@ -43,16 +47,13 @@ export default function Map({ onViewEntity }) {
          const todayStr = now.toDateString()
          const todayDayOfWeek = now.getDay()
 
-         // Filter events happening TODAY at this venue
          const todaysEvents = (eventData || []).filter(e => {
             if (e.venue !== v.name) return false;
-            
             const eDate = new Date(e.event_date);
             if (e.recurring_weekly) return eDate.getDay() === todayDayOfWeek;
             return eDate.toDateString() === todayStr;
          })
 
-         // Check if LIVE right now (within 4 hours of start time)
          let isLiveNow = false;
          if (todaysEvents.length > 0) {
              const activeEvent = todaysEvents[0]
@@ -64,14 +65,7 @@ export default function Map({ onViewEntity }) {
              if (now >= start && now <= end) isLiveNow = true;
          }
 
-         const mockVisits = (v.name.length * 7) % 40 + 1
-
-         return { 
-             ...v, 
-             userCount: mockVisits,
-             isLive: isLiveNow, 
-             eventToday: todaysEvents.length > 0 ? todaysEvents[0] : null 
-         }
+         return { ...v, isLive: isLiveNow, eventToday: todaysEvents.length > 0 ? todaysEvents[0] : null }
       }) : []
 
       setVenues(processedVenues)
@@ -99,6 +93,40 @@ export default function Map({ onViewEntity }) {
     init()
   }, [])
 
+  // --- 2. FETCH REAL-TIME USER LOCATIONS ---
+  useEffect(() => {
+      const fetchUsers = async () => {
+          // Only grab users active in the last 2 hours to keep the map clean
+          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+          const { data } = await supabase.from('profiles')
+              .select('id, current_lat, current_lng')
+              .not('current_lat', 'is', null)
+              .gte('last_active', twoHoursAgo)
+          if (data) setActiveUsers(data)
+      }
+      
+      fetchUsers()
+
+      // Listen for people moving around!
+      const sub = supabase.channel('public-users-location')
+          .on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+              setActiveUsers(prev => {
+                  const exists = prev.find(u => u.id === payload.new.id)
+                  if (exists) {
+                      // Update existing user's dot
+                      return prev.map(u => u.id === payload.new.id ? payload.new : u)
+                  } else if (payload.new.current_lat) {
+                      // Add new user's dot
+                      return [...prev, payload.new]
+                  }
+                  return prev
+              })
+          }).subscribe()
+
+      return () => supabase.removeChannel(sub)
+  }, [])
+
+  // --- 3. DRAW VENUE MARKERS ---
   const initializeMap = async (venueData) => {
     if (!mapRef.current || !window.google) return
 
@@ -119,7 +147,6 @@ export default function Map({ onViewEntity }) {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         const pinDiv = document.createElement('div')
         
-        // 🟢 EMOJI ASSIGNMENT LOGIC
         let emoji = venue.eventToday ? (MAP_EMOJIS[venue.eventToday.event_type] || '❗') : '📍'
         let pinSize = venue.eventToday ? '32px' : '24px'
         let dropShadow = 'none'
@@ -151,17 +178,41 @@ export default function Map({ onViewEntity }) {
           map.setZoom(16)
         })
 
-        markersRef.current.push(marker)
+        venueMarkersRef.current.push(marker)
         bounds.extend(position)
       })
 
-      if (venueData.length > 1) {
-          map.fitBounds(bounds)
-      } else {
-          map.setCenter({ lat: parseFloat(venueData[0].lat), lng: parseFloat(venueData[0].lng) })
-      }
+      if (venueData.length > 1) map.fitBounds(bounds)
     }
   }
+
+  // --- 4. DRAW ANONYMOUS USER DOTS ---
+  useEffect(() => {
+      if (!mapInstance || !window.google) return
+
+      // Clear out the old dots before drawing new ones
+      userMarkersRef.current.forEach(marker => { marker.map = null })
+      userMarkersRef.current = []
+
+      // Draw the glowing cyan dots!
+      activeUsers.forEach(user => {
+          if (!user.current_lat || !user.current_lng) return
+
+          const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
+          const dotDiv = document.createElement('div')
+          
+          // Pure CSS Glowing Dot - Completely anonymous, no interaction!
+          dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
+
+          const marker = new window.google.maps.marker.AdvancedMarkerElement({
+              position,
+              map: mapInstance,
+              content: dotDiv
+          })
+
+          userMarkersRef.current.push(marker)
+      })
+  }, [activeUsers, mapInstance])
 
   const handleVenueClick = (venue) => {
       setActiveVenue(venue)
@@ -176,8 +227,7 @@ export default function Map({ onViewEntity }) {
       <div className="text-center mb-6">
         <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
         <div className="flex justify-center gap-4 mt-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-pink-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_5px_#ff00ff]"></span> Live Karaoke</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff]"></span> Live Event</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff] animate-pulse"></span> Active Users</span>
         </div>
       </div>
 
@@ -200,7 +250,7 @@ export default function Map({ onViewEntity }) {
       <div className="relative w-full h-[450px] rounded-3xl overflow-hidden border-2 border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.15)] mb-6 bg-gray-900">
         {!mapInstance && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
-                Initializing Map Matrix...
+                Initializing Radar...
             </div>
         )}
         <div ref={mapRef} className="w-full h-full"></div>

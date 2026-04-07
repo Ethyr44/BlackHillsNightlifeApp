@@ -4,13 +4,14 @@ import ThemeEditorModal from './ThemeEditorModal'
 import Setlist from './Setlist'
 import Repertoire from './Repertoire'
 
+// 🟢 THE FIX: Added transparency (/60) and backdrop-blur to make them see-through!
 const GRADIENTS = {
-  'deep-space': 'bg-gradient-to-b from-slate-900 via-[#090812] to-black',
-  'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812] to-black',
-  'toxic-glow': 'bg-gradient-to-b from-green-900/30 via-[#090812] to-black',
-  'blood-moon': 'bg-gradient-to-b from-red-900/30 via-[#090812] to-black',
-  'golden-hour': 'bg-gradient-to-b from-orange-900/30 via-[#090812] to-black',
-  'abyss': 'bg-black'
+  'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
+  'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812]/60 to-black/60 backdrop-blur-md',
+  'toxic-glow': 'bg-gradient-to-b from-green-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
+  'blood-moon': 'bg-gradient-to-b from-red-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
+  'golden-hour': 'bg-gradient-to-b from-orange-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
+  'abyss': 'bg-black/60 backdrop-blur-md'
 }
 
 export default function Profile({ session }) {

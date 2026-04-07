@@ -1,20 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 
-const MAP_EMOJIS = {
-  'Karaoke': '🎤',
-  'Live Music': '🎵',
-  'Trivia': '❓',
-  'Open Mic': '🎸',
-  'Comedy': '😂',
-  'Drinks': '🍻',
-  'Poker': '♠️',
-  'Specials': '💲',
-  'Featured': '⭐',
-  'Community': '👥',
-  'Ticketed': '🎫',
-  'General': '❗'
-}
+// 🟢 THE DARK MODE MATRIX
+const darkMapStyle = [
+  { elementType: "geometry", stylers: [{ color: "#090812" }] },
+  { elementType: "labels.text.stroke", stylers: [{ color: "#090812" }] },
+  { elementType: "labels.text.fill", stylers: [{ color: "#8b93a5" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#4f5b66" }] },
+  { featureType: "poi", elementType: "labels.text.fill", stylers: [{ color: "#d59563" }] },
+  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#0e131f" }] },
+  { featureType: "poi.park", elementType: "labels.text.fill", stylers: [{ color: "#6b9a76" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#1a1f2b" }] },
+  { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
+  { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
+  { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#2c3441" }] },
+  { featureType: "road.highway", elementType: "geometry.stroke", stylers: [{ color: "#1f2835" }] },
+  { featureType: "road.highway", elementType: "labels.text.fill", stylers: [{ color: "#f3d19c" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#030712" }] },
+  { featureType: "water", elementType: "labels.text.fill", stylers: [{ color: "#515c6d" }] },
+  { featureType: "water", elementType: "labels.text.stroke", stylers: [{ color: "#17263c" }] },
+];
 
 export default function Map({ onViewEntity }) {
   const mapRef = useRef(null)
@@ -22,14 +27,10 @@ export default function Map({ onViewEntity }) {
   const [activeVenue, setActiveVenue] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
   
-  // Marker Tracking
   const venueMarkersRef = useRef([])
   const userMarkersRef = useRef([]) 
-
-  // 🟢 NEW: Active Users State
   const [activeUsers, setActiveUsers] = useState([])
 
-  // --- 1. INITIALIZE MAP & FETCH VENUES ---
   useEffect(() => {
     async function init() {
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
@@ -37,10 +38,7 @@ export default function Map({ onViewEntity }) {
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
 
-      const { data: eventData } = await supabase.from('events')
-        .select('*')
-        .eq('status', 'approved')
-        .gte('event_date', startOfToday.toISOString())
+      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved').gte('event_date', startOfToday.toISOString())
 
       const processedVenues = venueData ? venueData.map(v => {
          const now = new Date()
@@ -75,28 +73,22 @@ export default function Map({ onViewEntity }) {
         return
       }
 
-      if (document.getElementById('google-maps-script')) {
-        if (window.google && window.google.maps) initializeMap(processedVenues)
-        return
-      }
-
       window.initMap = () => initializeMap(processedVenues)
 
-      const script = document.createElement('script')
-      script.id = 'google-maps-script'
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
-      script.async = true 
-      script.defer = true
-
-      document.head.appendChild(script)
+      if (!document.getElementById('google-maps-script')) {
+          const script = document.createElement('script')
+          script.id = 'google-maps-script'
+          script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
+          script.async = true 
+          script.defer = true
+          document.head.appendChild(script)
+      }
     }
     init()
   }, [])
 
-  // --- 2. FETCH REAL-TIME USER LOCATIONS ---
   useEffect(() => {
       const fetchUsers = async () => {
-          // Only grab users active in the last 2 hours to keep the map clean
           const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
           const { data } = await supabase.from('profiles')
               .select('id, current_lat, current_lng')
@@ -107,18 +99,12 @@ export default function Map({ onViewEntity }) {
       
       fetchUsers()
 
-      // Listen for people moving around!
       const sub = supabase.channel('public-users-location')
           .on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
               setActiveUsers(prev => {
                   const exists = prev.find(u => u.id === payload.new.id)
-                  if (exists) {
-                      // Update existing user's dot
-                      return prev.map(u => u.id === payload.new.id ? payload.new : u)
-                  } else if (payload.new.current_lat) {
-                      // Add new user's dot
-                      return [...prev, payload.new]
-                  }
+                  if (exists) return prev.map(u => u.id === payload.new.id ? payload.new : u)
+                  else if (payload.new.current_lat) return [...prev, payload.new]
                   return prev
               })
           }).subscribe()
@@ -126,7 +112,6 @@ export default function Map({ onViewEntity }) {
       return () => supabase.removeChannel(sub)
   }, [])
 
-  // --- 3. DRAW VENUE MARKERS ---
   const initializeMap = async (venueData) => {
     if (!mapRef.current || !window.google) return
 
@@ -135,7 +120,8 @@ export default function Map({ onViewEntity }) {
       zoom: 13,
       disableDefaultUI: true, 
       zoomControl: true,
-      mapId: 'DEMO_MAP_ID'
+      mapId: 'DEMO_MAP_ID',
+      styles: darkMapStyle // 🟢 APPLIES THE DARK MODE MATRIX
     })
 
     setMapInstance(map)
@@ -145,33 +131,27 @@ export default function Map({ onViewEntity }) {
 
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
-        const pinDiv = document.createElement('div')
+        const dotDiv = document.createElement('div')
         
-        let emoji = venue.eventToday ? (MAP_EMOJIS[venue.eventToday.event_type] || '❗') : '📍'
-        let pinSize = venue.eventToday ? '32px' : '24px'
-        let dropShadow = 'none'
+        // 🟢 DYNAMIC GLOWING VENUE DOTS
+        let dotColor = 'bg-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.8)]' 
+        let dotSize = 'w-4 h-4'
+        let animation = ''
 
-        if (venue.isLive) {
-            dropShadow = '0 0 15px #00f5ff'
-            pinSize = '42px'
+        if (venue.eventToday) {
+            dotColor = 'bg-[#ff2d78] shadow-[0_0_20px_rgba(255,45,120,0.9)]'
+            if (venue.isLive) {
+                dotSize = 'w-5 h-5'
+                animation = 'animate-pulse'
+            }
         }
 
-        pinDiv.innerHTML = emoji
-        pinDiv.style.fontSize = pinSize
-        pinDiv.style.filter = `drop-shadow(${dropShadow})`
-        pinDiv.style.cursor = 'pointer'
-        pinDiv.style.transition = 'transform 0.2s ease-in-out'
-        
-        pinDiv.onmouseover = () => pinDiv.style.transform = 'scale(1.2)'
-        pinDiv.onmouseout = () => pinDiv.style.transform = 'scale(1)'
+        dotDiv.innerHTML = `<div class="${dotSize} ${dotColor} ${animation} rounded-full border-2 border-white transition-transform duration-300"></div>`
+        dotDiv.style.cursor = 'pointer'
+        dotDiv.onmouseover = () => dotDiv.children[0].style.transform = 'scale(1.3)'
+        dotDiv.onmouseout = () => dotDiv.children[0].style.transform = 'scale(1)'
 
-        const marker = new window.google.maps.marker.AdvancedMarkerElement({
-          position,
-          map,
-          title: venue.name,
-          content: pinDiv 
-        })
-
+        const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map, title: venue.name, content: dotDiv })
         marker.addListener('gmp-click', () => {
           setActiveVenue(venue)
           map.panTo(position)
@@ -186,30 +166,22 @@ export default function Map({ onViewEntity }) {
     }
   }
 
-  // --- 4. DRAW ANONYMOUS USER DOTS ---
   useEffect(() => {
       if (!mapInstance || !window.google) return
 
-      // Clear out the old dots before drawing new ones
       userMarkersRef.current.forEach(marker => { marker.map = null })
       userMarkersRef.current = []
 
-      // Draw the glowing cyan dots!
       activeUsers.forEach(user => {
           if (!user.current_lat || !user.current_lng) return
 
           const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
           const dotDiv = document.createElement('div')
           
-          // Pure CSS Glowing Dot - Completely anonymous, no interaction!
+          // 🟢 CYAN USER DOTS
           dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
 
-          const marker = new window.google.maps.marker.AdvancedMarkerElement({
-              position,
-              map: mapInstance,
-              content: dotDiv
-          })
-
+          const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
           userMarkersRef.current.push(marker)
       })
   }, [activeUsers, mapInstance])
@@ -227,7 +199,9 @@ export default function Map({ onViewEntity }) {
       <div className="text-center mb-6">
         <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
         <div className="flex justify-center gap-4 mt-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff] animate-pulse"></span> Active Users</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-[#ff2d78] flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff2d78] shadow-[0_0_5px_#ff2d78] animate-pulse"></span> Active Event</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_#a855f7]"></span> Venue</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff]"></span> User</span>
         </div>
       </div>
 
@@ -247,13 +221,13 @@ export default function Map({ onViewEntity }) {
         ))}
       </div>
 
-      <div className="relative w-full h-[450px] rounded-3xl overflow-hidden border-2 border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.15)] mb-6 bg-gray-900">
+      <div className="relative w-full h-[450px] rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]">
         {!mapInstance && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
+            <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
                 Initializing Radar...
             </div>
         )}
-        <div ref={mapRef} className="w-full h-full"></div>
+        <div ref={mapRef} className="w-full h-full mix-blend-screen"></div>
       </div>
 
       {activeVenue && (
@@ -262,19 +236,18 @@ export default function Map({ onViewEntity }) {
             
             {activeVenue.eventToday ? (
                 <div className="mb-4">
-                    <span className="text-cyan-400 text-[10px] font-bold uppercase tracking-widest block mb-1">
+                    <span className="text-[#ff2d78] text-[10px] font-bold uppercase tracking-widest block mb-1">
                         {activeVenue.isLive ? '🔥 LIVE NOW:' : '📅 SCHEDULED TODAY:'}
                     </span>
-                    <span className="text-white text-sm font-bold block">{MAP_EMOJIS[activeVenue.eventToday.event_type] || '❗'} {activeVenue.eventToday.title}</span>
+                    <span className="text-white text-sm font-bold block">{activeVenue.eventToday.title}</span>
                 </div>
             ) : (
-                <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest block mb-4">Official BHNL Venue</span>
+                <span className="text-purple-400 text-[10px] font-bold uppercase tracking-widest block mb-4">Official BHNL Venue</span>
             )}
             
             <div className="space-y-3 mb-6 text-sm text-gray-300">
                 <p className="flex items-start gap-3"><span className="text-lg">📍</span> <span>{activeVenue.address}</span></p>
                 {activeVenue.cost && <p className="flex items-center gap-3"><span className="text-lg">💵</span> <span>Price Guide: {activeVenue.cost}</span></p>}
-                {activeVenue.phone && <p className="flex items-center gap-3"><span className="text-lg">📞</span> <span>{activeVenue.phone}</span></p>}
             </div>
 
             <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(59,130,246,0.4)]">

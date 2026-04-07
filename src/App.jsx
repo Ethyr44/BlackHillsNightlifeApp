@@ -24,6 +24,35 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   
+  // 🟢 GLOBAL RADAR SWEEP: Updates GPS every 60 seconds if enabled
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const pingLocation = () => {
+      const isEnabled = localStorage.getItem('bhnl_location_enabled') === 'true';
+      if (isEnabled && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+             const { latitude, longitude } = position.coords;
+             await supabase.from('profiles').update({ 
+                 current_lat: latitude, 
+                 current_lng: longitude,
+                 last_active: new Date().toISOString()
+             }).eq('id', currentUser.id);
+          },
+          (err) => console.error("Radar Sweep Error:", err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+    };
+
+    // Ping once immediately, then start the 60-second loop
+    pingLocation();
+    const intervalId = setInterval(pingLocation, 60000);
+    
+    return () => clearInterval(intervalId);
+  }, [currentUser]);
+  
   const [activeTab, setActiveTab] = useState(() => {
       const params = new URLSearchParams(window.location.search)
       return params.get('tab') || 'FYP'

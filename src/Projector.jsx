@@ -73,7 +73,7 @@ export default function Projector() {
                 .eq('session_id', sessionId)
                 .order('total_points', { ascending: false })
                 .then(({ data }) => { if (data) setSingers(data) })
-        }, 20000)
+        }, 4000)
 
         return () => {
             supabase.removeChannel(queueSub)

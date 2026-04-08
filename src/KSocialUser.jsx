@@ -7,19 +7,25 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [votedFor, setVotedFor] = useState({}) 
     const [isLoading, setIsLoading] = useState(true)
 
-    // --- NEW VOTING STATE ---
     const [superVotesRemaining, setSuperVotesRemaining] = useState(0)
     const [superVoteActive, setSuperVoteActive] = useState(false)
     const [selectedStars, setSelectedStars] = useState(0)
     const [multiStars, setMultiStars] = useState({ performance: 0, wow: 0, originality: 0 })
 
-    // --- NEW JOIN FLOW STATE ---
     const [showJoinModal, setShowJoinModal] = useState(false)
     const [singerAlias, setSingerAlias] = useState(currentUser?.username || '')
     const [prevStatus, setPrevStatus] = useState(null)
 
-    // 1. INITIAL FETCH & REALTIME LISTENER
+    // 1. INITIAL FETCH & 4-SECOND POLLING
     useEffect(() => {
+        const fetchSingers = async () => {
+            const { data } = await supabase.from('session_singers')
+                .select('*')
+                .eq('session_id', sessionId)
+                .order('total_points', { ascending: false })
+            if (data) setSingers(data)
+        }
+
         const fetchSessionData = async () => {
             const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).maybeSingle()
             if (sessData) {
@@ -33,36 +39,33 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             }
         }
 
-        const fetchSingers = async () => {
-            const { data } = await supabase.from('session_singers')
-                .select('*')
-                .eq('session_id', sessionId)
-                .order('total_points', { ascending: false })
-            if (data) setSingers(data)
-        }
-
         fetchSessionData()
 
         const singerSub = supabase.channel('user-realtime-stage')
             .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchSingers)
             .subscribe()
 
-        return () => supabase.removeChannel(singerSub)
+        // 🟢 THE BULLETPROOF POLLING FALLBACK
+        const pollInterval = setInterval(() => {
+            fetchSingers()
+        }, 4000)
+
+        return () => {
+            supabase.removeChannel(singerSub)
+            clearInterval(pollInterval)
+        }
     }, [sessionId])
 
-    // --- APPROVAL TOAST LISTENER ---
     const myRecord = singers.find(s => s.bhnl_id === currentUser?.id)
     const currentStatus = myRecord ? myRecord.status : null
 
     useEffect(() => {
-        // If my status changed from pending to queued/singing, the Host approved me!
         if (prevStatus === 'pending' && (currentStatus === 'queued' || currentStatus === 'singing')) {
             alert("Join Request Approved! You are now in the lineup 🎤")
         }
         setPrevStatus(currentStatus)
     }, [currentStatus, prevStatus])
 
-    // --- JOIN REQUEST SUBMITTER ---
     const handleRequestJoin = async (e) => {
         e.preventDefault()
         if (!singerAlias.trim()) return
@@ -75,9 +78,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             bhnl_id: currentUser.id
         }])
         
-        // 🟢 FIX: Catch silent errors!
         if (error) {
-            console.error("Join Request Error:", error)
             alert(`Failed to send request: ${error.message}`)
             return
         }
@@ -85,7 +86,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         setShowJoinModal(false)
     }
 
-    // --- THE MASTER VOTE SUBMITTER ---
     const handleSubmitVote = async (singer) => {
         const lastVoteTime = votedFor[singer.id] || 0
         if (Date.now() - lastVoteTime < 5000) {
@@ -141,7 +141,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     return (
         <div className="max-w-md mx-auto space-y-6 animate-fade-in">
             
-            {/* Header */}
             <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 text-center shadow-[0_0_20px_rgba(59,130,246,0.15)] relative overflow-hidden">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-[#ff2d78]"></div>
                 <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{session.session_title}</h2>
@@ -149,7 +148,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 <button onClick={onExit} className="absolute top-4 right-4 text-gray-500 hover:text-white bg-black/50 w-8 h-8 rounded-full flex items-center justify-center text-xs">✕</button>
             </div>
 
-            {/* SUPERVOTE TOGGLE BUTTON - NOW ONLY SHOWS IF THERE IS AN ACTIVE SINGER! */}
             {activeSinger && superVotesRemaining > 0 && session.mode === 'league' && (
                 <div className="flex justify-center animate-fade-in">
                     <button 
@@ -167,7 +165,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 </div>
             )}
 
-            {/* ON STAGE NOW */}
             <div className={`bg-[#090812] border-2 ${activeSinger ? 'border-[#ff2d78] shadow-[0_0_30px_rgba(255,45,120,0.2)]' : 'border-gray-800'} rounded-3xl p-6 relative overflow-hidden transition-all duration-500`}>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">On Stage Now</h3>
@@ -220,7 +217,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 )}
             </div>
 
-            {/* UP NEXT QUEUE */}
             <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6">
                 <h3 className="text-xl font-['Bebas_Neue'] text-gray-400 tracking-widest mb-4">Up Next</h3>
                 <div className="space-y-3 mb-6">
@@ -239,7 +235,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                     )}
                 </div>
 
-                {/* JOIN AS SINGER BUTTON */}
                 {!currentStatus && (
                     <button onClick={() => setShowJoinModal(true)} className="w-full bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
                         🎙️ Request to Sing
@@ -252,7 +247,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 )}
             </div>
 
-            {/* JOIN MODAL */}
             {showJoinModal && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <form onSubmit={handleRequestJoin} className="bg-gray-900 border-2 border-purple-500/30 p-8 rounded-3xl w-full max-w-sm shadow-[0_0_50px_rgba(147,51,234,0.2)] animate-slide-up-fast">

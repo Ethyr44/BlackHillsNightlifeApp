@@ -10,7 +10,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [showQR, setShowQR] = useState(false)
     const [showSettingsModal, setShowSettingsModal] = useState(false)
     
-    // 🟢 NEW: State for the Pop-up Request Alert!
     const [incomingRequest, setIncomingRequest] = useState(null)
 
     const [sessionTitle, setSessionTitle] = useState('KSocial LIVE!')
@@ -23,7 +22,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     const [singers, setSingers] = useState([])
 
-    // 1. INITIAL LOAD
     useEffect(() => {
         const checkExistingSession = async () => {
             const { data } = await supabase.from('active_sessions').select('*').eq('host_id', currentUser.id).maybeSingle()
@@ -39,7 +37,16 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         checkExistingSession()
     }, [currentUser])
 
-    // 2. THE REAL-TIME LISTENER (Upgraded for Pop-ups)
+    const fetchSingers = async (sessionId) => {
+        const { data, error } = await supabase.from('session_singers').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
+        if (error) {
+            console.error("Fetch Error:", error)
+            alert(`Failed to load singers: ${error.message}`)
+        }
+        if (data) setSingers(data)
+    }
+
+    // 🟢 THE SILENT 4-SECOND REFRESH LOOP & REALTIME LISTENER
     useEffect(() => {
         if (!activeSession) return;
 
@@ -47,7 +54,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
         const sub = supabase.channel(`host-realtime-${activeSession.id}`)
             .on('postgres', { event: 'INSERT', schema: 'public', table: 'session_singers', filter: `session_id=eq.${activeSession.id}` }, (payload) => {
-                // 🟢 TRIGGER THE POP-UP IF IT'S A NEW PENDING REQUEST!
                 if (payload.new.status === 'pending') {
                     setIncomingRequest(payload.new)
                 }
@@ -61,17 +67,16 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             })
             .subscribe()
 
-        return () => supabase.removeChannel(sub)
-    }, [activeSession?.id])
+        // 🟢 THE BULLETPROOF POLLING FALLBACK
+        const pollInterval = setInterval(() => {
+            fetchSingers(activeSession.id)
+        }, 4000)
 
-    const fetchSingers = async (sessionId) => {
-        const { data, error } = await supabase.from('session_singers').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
-        if (error) {
-            console.error("Fetch Error:", error)
-            alert(`Failed to load singers: ${error.message}`)
+        return () => {
+            supabase.removeChannel(sub)
+            clearInterval(pollInterval)
         }
-        if (data) setSingers(data)
-    }
+    }, [activeSession?.id])
 
     const endSession = async () => {
         if(window.confirm("Are you sure you want to completely end this session? All scores will be finalized.")) {
@@ -126,7 +131,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         setIsLoading(false)
     }
 
-    // 🟢 ADDED STRICT ERROR CATCHING TO QUICK-ADD!
+    // 🟢 INSTANT LOCAL REFRESH ADDED
     const handleAddSinger = async (e) => {
         e.preventDefault()
         const fd = new FormData(e.target)
@@ -141,10 +146,10 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         }])
         
         if (error) {
-            console.error("Database Insert Error:", error)
             alert(`Database Error! Supabase says: ${error.message}`)
         } else {
             e.target.reset()
+            fetchSingers(activeSession.id) // INSTANT REFRESH
         }
     }
 
@@ -155,26 +160,28 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             await supabase.from('session_singers').update({ status: 'queued' }).eq('session_id', activeSession.id).eq('status', 'singing')
             await supabase.from('session_singers').update({ status: 'singing' }).eq('id', singer.id)
         }
+        fetchSingers(activeSession.id) // INSTANT REFRESH
     }
 
     const handleDeleteSinger = async (id, name, skipConfirm = false) => {
         if(skipConfirm || window.confirm(`Remove ${name} from the lineup?`)) {
             await supabase.from('session_singers').delete().eq('id', id)
+            fetchSingers(activeSession.id) // INSTANT REFRESH
         }
     }
 
     const handleApproveSinger = async (id) => {
         await supabase.from('session_singers').update({ status: 'queued' }).eq('id', id)
+        fetchSingers(activeSession.id) // INSTANT REFRESH
     }
 
-    // --- MODAL POP-UP ACTIONS ---
     const handleModalApprove = async () => {
         await handleApproveSinger(incomingRequest.id)
         setIncomingRequest(null)
     }
 
     const handleModalDeny = async () => {
-        await handleDeleteSinger(incomingRequest.id, incomingRequest.name, true) // true = skips the "Are you sure?" prompt
+        await handleDeleteSinger(incomingRequest.id, incomingRequest.name, true) 
         setIncomingRequest(null)
     }
 
@@ -252,7 +259,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         return (
             <div className="space-y-6 animate-fade-in relative">
                 
-                {/* 🟢 THE NEW POP-UP APPROVAL MODAL! */}
                 {incomingRequest && (
                     <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
                         <div className="bg-[#1a0f00] border-4 border-yellow-500 p-8 rounded-3xl w-full max-w-sm text-center shadow-[0_0_50px_rgba(234,179,8,0.5)] animate-slide-up-fast">
@@ -273,7 +279,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     </div>
                 )}
 
-                {/* THE HOST COMMAND CENTER */}
                 <div className="bg-[#090812] border-2 border-[#ff2d78]/30 rounded-3xl p-6 shadow-[0_0_30px_rgba(255,45,120,0.15)] relative overflow-hidden">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-[#ff2d78]"></div>
                     
@@ -297,7 +302,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         </button>
                         <button onClick={() => fetchSingers(activeSession.id)} className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
                             <span className="text-xl">🔄</span>
-                            <span className="text-[9px] font-bold uppercase tracking-widest">Update Stage</span>
+                            <span className="text-[9px] font-bold uppercase tracking-widest">Force Sync</span>
                         </button>
                         <button onClick={() => setShowSettingsModal(true)} className="bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all sm:col-span-1 col-span-2">
                             <span className="text-xl">⚙️</span>
@@ -310,7 +315,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     </div>
                 </div>
 
-                {/* MODALS */}
                 {showQR && (
                     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                         <div className="bg-white p-8 rounded-3xl w-full max-w-sm text-center animate-slide-up-fast">
@@ -360,7 +364,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     </div>
                 )}
 
-                {/* Stage Management Panel */}
                 <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-xl font-['Bebas_Neue'] text-blue-400 tracking-widest">Stage Management</h3>
@@ -374,7 +377,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <button type="submit" className="bg-gray-800 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-700 transition-colors">Add</button>
                     </form>
 
-                    {/* BACKUP PENDING LIST (If host clicked outside modal or has multiple pending) */}
                     {pendingQueue.length > 0 && !incomingRequest && (
                         <div className="mb-4 space-y-2">
                             {pendingQueue.map(singer => (

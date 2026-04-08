@@ -47,7 +47,8 @@ export default function Live({ currentUser, onViewEntity }) {
     }
 
     const verifyPin = () => {
-        if (pinCode === '0000') {
+        // 🟢 THE FIX: Updated Host PIN to 1144
+        if (pinCode === '1144') {
             setHostMode('league')
             setShowPinPrompt(false)
             setPinCode('')
@@ -101,12 +102,12 @@ export default function Live({ currentUser, onViewEntity }) {
                                 <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 shadow-lg">
                                     <div className="flex justify-between items-center mb-6">
                                         <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">Active Stages</h3>
-                                        <button onClick={fetchActiveSessions} className="text-blue-400 hover:text-white text-xs font-bold uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg transition-colors">↻ Refresh</button>
+                                        <button onClick={fetchActiveSessions} className="text-blue-400 hover:text-white text-xs font-bold uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg transition-colors">🔄 Refresh</button>
                                     </div>
                                     <div className="space-y-3">
                                         {activeSessions.length === 0 ? (
                                             <div className="text-center py-8 bg-black/50 rounded-2xl border border-gray-800">
-                                                <div className="text-3xl mb-2 opacity-50">📭</div>
+                                                <div className="text-3xl mb-2 opacity-50">🎤</div>
                                                 <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">No active sessions nearby.</p>
                                             </div>
                                         ) : (
@@ -132,7 +133,7 @@ export default function Live({ currentUser, onViewEntity }) {
                                 {currentUser?.account_type !== 'Regular' && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         <button onClick={() => setHostMode('casual')} className="bg-[#090812] border border-[#b347ff]/30 hover:border-[#b347ff] p-6 rounded-3xl flex flex-col items-center justify-center text-center transition-all group hover:shadow-[0_0_30px_rgba(179,71,255,0.2)]">
-                                            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎵</div>
+                                            <div className="text-5xl mb-3 group-hover:scale-110 transition-transform">🎭</div>
                                             <h3 className="text-2xl font-['Bebas_Neue'] text-[#b347ff] tracking-widest mb-1">Casual Mode</h3>
                                             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Standard Queue & Requests</p>
                                         </button>
@@ -153,7 +154,7 @@ export default function Live({ currentUser, onViewEntity }) {
             {showPinPrompt && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-gray-900 border-2 border-[#00f5ff] p-8 rounded-3xl w-full max-w-sm text-center shadow-[0_0_50px_rgba(0,245,255,0.2)] animate-slide-up-fast">
-                        <div className="text-4xl mb-4">🔐</div>
+                        <div className="text-4xl mb-4">🔒</div>
                         <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-[#00f5ff]">League Access</h3>
                         <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest">Enter Host PIN to launch tournament mode.</p>
                         

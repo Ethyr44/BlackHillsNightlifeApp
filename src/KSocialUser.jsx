@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient'
 export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [session, setSession] = useState(null)
     const [singers, setSingers] = useState([])
-    const [votedFor, setVotedFor] = useState({}) 
+    const [votedFor, setVotedFor] = useState({}) // 🟢 Now acts as a permanent lock for each performance
     const [isLoading, setIsLoading] = useState(true)
 
     const [superVotesRemaining, setSuperVotesRemaining] = useState(0)
@@ -16,7 +16,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [singerAlias, setSingerAlias] = useState(currentUser?.username || '')
     const [prevStatus, setPrevStatus] = useState(null)
 
-    // 1. INITIAL FETCH & 4-SECOND POLLING
     useEffect(() => {
         const fetchSingers = async () => {
             const { data } = await supabase.from('session_singers')
@@ -45,7 +44,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchSingers)
             .subscribe()
 
-        // 🟢 THE BULLETPROOF POLLING FALLBACK
         const pollInterval = setInterval(() => {
             fetchSingers()
         }, 4000)
@@ -87,9 +85,9 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     }
 
     const handleSubmitVote = async (singer) => {
-        const lastVoteTime = votedFor[singer.id] || 0
-        if (Date.now() - lastVoteTime < 5000) {
-            alert("Please wait a few seconds before scoring this singer again!")
+        // 🟢 STRICT ONE-VOTE LOCK
+        if (votedFor[singer.id]) {
+            alert("You have already voted for this performance!")
             return
         }
 
@@ -117,7 +115,9 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
         setSelectedStars(0)
         setMultiStars({ performance: 0, wow: 0, originality: 0 })
-        setVotedFor(prev => ({ ...prev, [singer.id]: Date.now() }))
+        
+        // 🟢 LOCK THE USER OUT OF VOTING AGAIN FOR THIS SPECIFIC PERFORMANCE
+        setVotedFor(prev => ({ ...prev, [singer.id]: true }))
     }
 
     const StarRow = ({ label, value, onChange }) => (
@@ -138,6 +138,10 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const activeSinger = singers.find(s => s.status === 'singing')
     const queue = singers.filter(s => s.status === 'queued')
 
+    // 🟢 IDENTIFY IF THE CURRENT USER IS THE ONE ON STAGE, AND IF THEY ALREADY VOTED
+    const isMe = activeSinger?.bhnl_id === currentUser?.id
+    const hasVoted = activeSinger ? votedFor[activeSinger.id] : false
+
     return (
         <div className="max-w-md mx-auto space-y-6 animate-fade-in">
             
@@ -148,7 +152,8 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 <button onClick={onExit} className="absolute top-4 right-4 text-gray-500 hover:text-white bg-black/50 w-8 h-8 rounded-full flex items-center justify-center text-xs">✕</button>
             </div>
 
-            {activeSinger && superVotesRemaining > 0 && session.mode === 'league' && (
+            {/* 🟢 HIDE SUPERVOTE IF IT'S THEMSELVES OR THEY ALREADY VOTED */}
+            {activeSinger && superVotesRemaining > 0 && session.mode === 'league' && !isMe && !hasVoted && (
                 <div className="flex justify-center animate-fade-in">
                     <button 
                         onClick={() => setSuperVoteActive(!superVoteActive)}
@@ -177,32 +182,48 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                     <div className="text-center animate-fade-in">
                         <h4 className="text-4xl font-bold text-white mb-6 drop-shadow-md">{activeSinger.name}</h4>
                         
-                        {session.voting_style === 'multi' ? (
-                            <div className="mb-6">
-                                <StarRow label="Performance" value={multiStars.performance} onChange={val => setMultiStars({...multiStars, performance: val})} />
-                                <StarRow label="Wow Factor" value={multiStars.wow} onChange={val => setMultiStars({...multiStars, wow: val})} />
-                                <StarRow label="Originality" value={multiStars.originality} onChange={val => setMultiStars({...multiStars, originality: val})} />
-                                <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]">
-                                    Submit Scores
-                                </button>
+                        {/* 🟢 DYNAMIC VOTING UI: Check if it's the singer, or if they already voted! */}
+                        {isMe ? (
+                            <div className="py-8 text-center animate-pulse border border-[#ff2d78]/50 bg-[#ff2d78]/10 rounded-2xl mb-6">
+                                <div className="text-6xl mb-4">🎤</div>
+                                <h4 className="text-3xl font-['Bebas_Neue'] text-[#ff2d78] tracking-widest">You're Up Now!</h4>
+                                <p className="text-[#ff2d78] text-xs font-bold uppercase tracking-widest mt-2">Knock 'em dead!</p>
                             </div>
-                        ) : session.voting_style === '1to5' ? (
-                            <div className="mb-6">
-                                <StarRow label="Overall Rating" value={selectedStars} onChange={setSelectedStars} />
-                                <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)]">
-                                    Submit Rating
-                                </button>
+                        ) : hasVoted ? (
+                            <div className="py-8 text-center animate-fade-in border border-[#00f5ff]/30 bg-[#00f5ff]/10 rounded-2xl mb-6">
+                                <div className="text-5xl mb-4 drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]">✅</div>
+                                <h4 className="text-2xl font-['Bebas_Neue'] text-[#00f5ff] tracking-widest">Vote Submitted!</h4>
+                                <p className="text-cyan-400 text-xs font-bold uppercase tracking-widest mt-2">Waiting for next singer...</p>
                             </div>
                         ) : (
-                            <button 
-                                onClick={() => handleSubmitVote(activeSinger)} 
-                                className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-[#ff2d78] to-purple-600 flex items-center justify-center text-6xl shadow-[0_0_30px_rgba(255,45,120,0.6)] hover:scale-105 active:scale-95 transition-all mb-6"
-                            >
-                                {session.voting_icon === 'star' ? '⭐' : session.voting_icon === 'fire' ? '🔥' : '👏'}
-                            </button>
+                            /* NORMAL VOTING CONTROLS */
+                            session.voting_style === 'multi' ? (
+                                <div className="mb-6">
+                                    <StarRow label="Performance" value={multiStars.performance} onChange={val => setMultiStars({...multiStars, performance: val})} />
+                                    <StarRow label="Wow Factor" value={multiStars.wow} onChange={val => setMultiStars({...multiStars, wow: val})} />
+                                    <StarRow label="Originality" value={multiStars.originality} onChange={val => setMultiStars({...multiStars, originality: val})} />
+                                    <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.4)]">
+                                        Submit Scores
+                                    </button>
+                                </div>
+                            ) : session.voting_style === '1to5' ? (
+                                <div className="mb-6">
+                                    <StarRow label="Overall Rating" value={selectedStars} onChange={setSelectedStars} />
+                                    <button onClick={() => handleSubmitVote(activeSinger)} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-sm uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+                                        Submit Rating
+                                    </button>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => handleSubmitVote(activeSinger)} 
+                                    className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-[#ff2d78] to-purple-600 flex items-center justify-center text-6xl shadow-[0_0_30px_rgba(255,45,120,0.6)] hover:scale-105 active:scale-95 transition-all mb-6"
+                                >
+                                    {session.voting_icon === 'star' ? '⭐' : session.voting_icon === 'fire' ? '🔥' : '👏'}
+                                </button>
+                            )
                         )}
 
-                        <div className="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                        <div className="bg-black/50 p-4 rounded-2xl border border-gray-800 mt-4">
                             <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Current Score</span>
                             <span className="text-4xl font-['Bebas_Neue'] tracking-widest text-[#00f5ff] drop-shadow-[0_0_10px_rgba(0,245,255,0.5)]">
                                 {activeSinger.total_points}

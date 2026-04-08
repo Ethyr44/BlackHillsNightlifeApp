@@ -193,13 +193,45 @@ export default function App() {
   // Helpers
   const checkDailyBonus = async (userProfile) => {
       if (!userProfile) return
-      const today = new Date().toDateString()
+      const today = new Date()
+      const todayString = today.toDateString()
       const lastClaim = userProfile.last_bonus_claim ? new Date(userProfile.last_bonus_claim).toDateString() : null
 
-      if (today !== lastClaim) {
+      if (todayString !== lastClaim) {
+          // 1. Trigger the Daily Points
           const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
+
+          // 2. 🟢 THE NEW EVENT MATCHING RADAR 🟢
+          if (userProfile.pref_events && userProfile.pref_events.length > 0) {
+              // Fetch all approved events
+              const { data: allEvents } = await supabase.from('events').select('*').eq('status', 'approved')
+              
+              if (allEvents) {
+                  // Filter down to events happening EXACTLY today (explicit date OR recurring day of week)
+                  const dayOfWeek = today.getDay()
+                  const activeToday = allEvents.filter(e => {
+                      const eDate = new Date(e.event_date)
+                      if (e.recurring_weekly) return eDate.getDay() === dayOfWeek
+                      return eDate.toDateString() === todayString
+                  })
+
+                  // Cross-reference today's active events with the user's preferences
+                  const matchedEvents = activeToday.filter(e => userProfile.pref_events.includes(e.event_type))
+
+                  if (matchedEvents.length > 0) {
+                      // Grab the unique event types they matched with (e.g., "Karaoke & Trivia")
+                      const matchNames = [...new Set(matchedEvents.map(m => m.event_type))].join(' & ')
+                      
+                      // Drop the alert straight into their notification inbox!
+                      await supabase.from('notifications').insert([{
+                          user_id: userProfile.id,
+                          content: `🎉 Heads up! There are ${matchedEvents.length} ${matchNames} events happening tonight in the Black Hills! Check the Lineup.`
+                      }])
+                  }
+              }
+          }
       }
   }
 

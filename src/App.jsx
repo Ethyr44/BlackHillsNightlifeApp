@@ -17,7 +17,7 @@ const Map = lazy(() => import('./Map'))
 const Live = lazy(() => import('./Live'))
 const Shop = lazy(() => import('./Shop'))
 const Settings = lazy(() => import('./Settings'))
-const SongBook = lazy(() => import('./SongBook'))
+const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 
 export default function App() {

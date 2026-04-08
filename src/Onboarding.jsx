@@ -14,6 +14,11 @@ export default function Onboarding({ session, onComplete }) {
   const [zodiac, setZodiac] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // 🟢 NEW: Security states for Host/Admin PIN
+  const [showPinModal, setShowPinModal] = useState(false)
+  const [pendingRole, setPendingRole] = useState('')
+  const [pinCode, setPinCode] = useState('')
+
   // Dynamic Options State
   const [options, setOptions] = useState({ venues: [], genres: [], events: [] })
   const [prefs, setPrefs] = useState({ venues: [], genres: [], events: [] })
@@ -41,6 +46,28 @@ export default function Onboarding({ session, onComplete }) {
     })
   }
 
+  // 🟢 NEW: Role selection logic with PIN gate
+  const handleRoleSelect = (type) => {
+      if (type === 'Host' || type === 'Admin') {
+          setPendingRole(type)
+          setShowPinModal(true)
+      } else {
+          setAccountType(type)
+      }
+  }
+
+  // 🟢 NEW: Verify the PIN before assigning restricted roles
+  const verifyPin = () => {
+      if (pinCode === '1144') {
+          setAccountType(pendingRole)
+          setShowPinModal(false)
+          setPinCode('')
+      } else {
+          alert('Incorrect PIN. Access denied.')
+          setPinCode('')
+      }
+  }
+
   const handleFinish = async () => {
     if (!username.trim()) return alert("Your stage name is required!")
     
@@ -60,12 +87,10 @@ export default function Onboarding({ session, onComplete }) {
     const { error } = await supabase.from('profiles').upsert(payload)
     
     if (error) {
-      // THE FIX: Intercept the "Duplicate Username" error specifically
       if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
           alert(`Bummer! The stage name "${username.trim()}" is already taken. Please choose another one!`)
-          setStep(1) // Kick them back to Step 1 to fix it
+          setStep(1)
       } else {
-          // If it's a different error, show the normal alert
           alert(`Error saving profile: ${error.message}`)
       }
       setSaving(false)
@@ -118,10 +143,12 @@ export default function Onboarding({ session, onComplete }) {
           <div className="animate-fade-in text-center">
             <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-wider mb-2">Your Role</h2>
             <div className="space-y-3 mb-8 mt-6">
-                {['Singer', 'Host', 'Regular'].map(type => (
-                    <button key={type} onClick={() => setAccountType(type)} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === type ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
+                {/* 🟢 THE FIX: Added Admin and wired them all to handleRoleSelect */}
+                {['Singer', 'Host', 'Admin', 'Regular'].map(type => (
+                    <button key={type} onClick={() => handleRoleSelect(type)} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === type ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
                         {type === 'Singer' && '🎤 Karaoke Singer'}
                         {type === 'Host' && '🎛️ Event Host / DJ'}
+                        {type === 'Admin' && '👑 System Admin'}
                         {type === 'Regular' && '🍻 Here for the Vibes (Regular)'}
                     </button>
                 ))}
@@ -190,6 +217,31 @@ export default function Onboarding({ session, onComplete }) {
         )}
 
       </div>
+
+      {/* 🟢 NEW: THE SECURITY PIN MODAL */}
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-gray-900 border-2 border-red-500/50 p-8 rounded-3xl w-full max-w-sm text-center shadow-[0_0_50px_rgba(239,68,68,0.2)] animate-slide-up-fast">
+                <div className="text-4xl mb-4">🔒</div>
+                <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-red-400">Restricted Access</h3>
+                <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest">Enter the security PIN to register as {pendingRole}.</p>
+                
+                <input 
+                    type="password" 
+                    value={pinCode} 
+                    onChange={e => setPinCode(e.target.value)} 
+                    placeholder="****" 
+                    className="w-full bg-black border border-gray-700 text-white text-center text-2xl tracking-[1em] rounded-xl p-4 focus:border-red-500 outline-none mb-6 font-mono"
+                    maxLength={4}
+                />
+
+                <div className="flex gap-3">
+                    <button onClick={() => {setShowPinModal(false); setPinCode('');}} className="flex-1 border border-gray-700 text-gray-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white py-3 transition-colors">Cancel</button>
+                    <button onClick={verifyPin} className="flex-1 bg-red-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.4)] py-3 transition-all">Unlock Role</button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   )
 }

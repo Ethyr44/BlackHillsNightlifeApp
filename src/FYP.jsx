@@ -156,7 +156,6 @@ function EventsFeed({ currentUser, onViewEntity }) {
     const today = new Date()
     today.setHours(0,0,0,0) 
 
-    // 🟢 FIX: Loop 7 times instead of 5
     for(let i = 0; i < 7; i++) {
         const d = new Date(today)
         d.setDate(today.getDate() + i)
@@ -165,6 +164,7 @@ function EventsFeed({ currentUser, onViewEntity }) {
 
     const processedLineups = (venues || []).map(v => {
         let isLiveNow = false
+        let hasAnyEvent = false // 🟢 TRACK IF THEY HAVE EVENTS
 
         const schedule = days.map(dayObj => {
             const eventToday = upcomingEvents?.find(e => {
@@ -175,6 +175,7 @@ function EventsFeed({ currentUser, onViewEntity }) {
             })
             
             if (eventToday) {
+                hasAnyEvent = true // 🟢 FLAG ACTIVE VENUES
                 const start = new Date(eventToday.event_date)
                 if (eventToday.recurring_weekly) {
                     start.setFullYear(today.getFullYear(), today.getMonth(), today.getDate())
@@ -193,8 +194,19 @@ function EventsFeed({ currentUser, onViewEntity }) {
             currentTime: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
             userCount: mockVisits,
             isLive: isLiveNow,
-            schedule: schedule
+            schedule: schedule,
+            hasAnyEvent // Add the flag to the venue object
         }
+    })
+
+    // 🟢 THE DOUBLE-SORT LOGIC
+    processedLineups.sort((a, b) => {
+        // Rule 1: Venues with events float to the top
+        if (a.hasAnyEvent && !b.hasAnyEvent) return -1;
+        if (!a.hasAnyEvent && b.hasAnyEvent) return 1;
+
+        // Rule 2: Alphabetical sort for ties
+        return a.name.localeCompare(b.name);
     })
 
     setVenueLineups(processedLineups)

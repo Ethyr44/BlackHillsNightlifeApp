@@ -1,23 +1,5 @@
 @import "tailwindcss";
 
-/* 1. Import the new highly readable "Inter" font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-/* 2. Configure Tailwind v4 to use Inter as the default font */
-@theme {
-  --font-sans: 'Inter', sans-serif;
-}
-
-/* 3. Apply Base Typography & Colors */
-@layer base {
-  body {
-    font-weight: 500; 
-    letter-spacing: 0.01em; 
-    background-color: #030712; 
-    color: #e5e7eb;
-  }
-}
-
 /* MOBILE SCREEN OVERFLOW FIX */
 html, body, #root {
   width: 100%;
@@ -44,6 +26,12 @@ html, body, #root {
   transition: all 0.2s;
 }
 .song-item:hover { border-color: rgba(0, 245, 255, 0.4); }
+
+/* CUSTOM FONTS & BACKGROUNDS */
+body {
+  background-color: #030712; 
+  color: #e5e7eb;
+}
 
 /* SPLASH SCREEN ANIMATIONS */
 @keyframes slide-up-reveal {

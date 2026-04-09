@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* 1. Import the Inter font directly from Google */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* 2. Pure CSS Font Application (No Tailwind config needed) */
+body {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.01em;
+  background-color: #030712;
+  color: #e5e7eb;
+}
+
 /* MOBILE SCREEN OVERFLOW FIX */
 html, body, #root {
   width: 100%;
@@ -26,12 +38,6 @@ html, body, #root {
   transition: all 0.2s;
 }
 .song-item:hover { border-color: rgba(0, 245, 255, 0.4); }
-
-/* CUSTOM FONTS & BACKGROUNDS */
-body {
-  background-color: #030712; 
-  color: #e5e7eb;
-}
 
 /* SPLASH SCREEN ANIMATIONS */
 @keyframes slide-up-reveal {

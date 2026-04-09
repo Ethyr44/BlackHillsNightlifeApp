@@ -1,7 +1,7 @@
 /* 1. Import the new highly readable "Inter" font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* 2. Import Tailwind (Version 4 Syntax) */
+/* 2. Import Tailwind */
 @import "tailwindcss";
 
 /* 3. Apply the Font Globally */

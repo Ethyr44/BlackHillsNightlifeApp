@@ -1,16 +1,16 @@
-@import "tailwindcss";
-/* 1. Import the new highly readable "Inter" font from Google */
+/* 1. Import the new highly readable "Inter" font */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* 2. Apply it globally to the entire app */
-@layer base {
-  body {
-    font-family: 'Inter', sans-serif;
-    /* This automatically makes ALL standard text in your app a bit thicker! */
-    font-weight: 500; 
-    /* Adds a tiny bit of breathing room between letters for better dark-mode legibility */
-    letter-spacing: 0.01em; 
-  }
+/* 2. Import Tailwind (Version 4 Syntax) */
+@import "tailwindcss";
+
+/* 3. Apply the Font Globally */
+body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500; 
+  letter-spacing: 0.01em; 
+  background-color: #030712; 
+  color: #e5e7eb;
 }
 
 /* MOBILE SCREEN OVERFLOW FIX */
@@ -39,12 +39,6 @@ html, body, #root {
   transition: all 0.2s;
 }
 .song-item:hover { border-color: rgba(0, 245, 255, 0.4); }
-
-/* CUSTOM BACKGROUNDS */
-body {
-  background-color: #030712; 
-  color: #e5e7eb;
-}
 
 /* SPLASH SCREEN ANIMATIONS */
 @keyframes slide-up-reveal {

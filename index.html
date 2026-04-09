@@ -1,16 +1,28 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
-    
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍸</text></svg>">
+/* 1. Import the new highly readable "Inter" font from Google */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Black Hills Nightlife</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
-</html>
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Apply it globally to the entire app */
+@layer base {
+  body {
+    font-family: 'Inter', sans-serif;
+    
+    /* This automatically makes ALL standard text in your app a bit thicker! */
+    font-weight: 500; 
+    
+    /* Adds a tiny bit of breathing room between letters for better dark-mode legibility */
+    letter-spacing: 0.01em; 
+  }
+}
+
+/* (Leave any custom scrollbar or hide-scrollbar CSS you already had down here!) */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

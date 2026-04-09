@@ -24,9 +24,9 @@ export default function Settings({ currentUser, setCurrentUser }) {
   const [editName, setEditName] = useState(currentUser?.username || '')
   const [updateStatus, setUpdateStatus] = useState('')
 
-  // Check if they already allowed location in a previous session
+  // Pull existing preferences from LocalStorage
   const [locationEnabled, setLocationEnabled] = useState(() => localStorage.getItem('bhnl_location_enabled') === 'true')
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('bhnl_notifications_enabled') === 'true')
 
   const handleSaveName = async () => {
       setUpdateStatus('Saving...')
@@ -47,27 +47,14 @@ export default function Settings({ currentUser, setCurrentUser }) {
       }
   }
 
-  // 🟢 THE NEW LOCATION ENGINE
   const handleLocationToggle = () => {
       if (!locationEnabled) {
-          // User is turning it ON: Ask for GPS Permission
-          if (!navigator.geolocation) {
-              alert("Location services are not supported by your browser.")
-              return
-          }
+          if (!navigator.geolocation) return alert("Location services are not supported by your browser.")
 
           navigator.geolocation.getCurrentPosition(
               async (position) => {
                   const { latitude, longitude } = position.coords
-                  
-                  // 1. Save to Supabase
-                  await supabase.from('profiles').update({ 
-                      current_lat: latitude, 
-                      current_lng: longitude,
-                      last_active: new Date().toISOString()
-                  }).eq('id', currentUser.id)
-
-                  // 2. Update UI & LocalStorage
+                  await supabase.from('profiles').update({ current_lat: latitude, current_lng: longitude, last_active: new Date().toISOString() }).eq('id', currentUser.id)
                   setLocationEnabled(true)
                   localStorage.setItem('bhnl_location_enabled', 'true')
                   alert("Location linked! You are now visible on the BHNL Map.")
@@ -79,11 +66,38 @@ export default function Settings({ currentUser, setCurrentUser }) {
               { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           )
       } else {
-          // User is turning it OFF: Remove them from the map!
           supabase.from('profiles').update({ current_lat: null, current_lng: null }).eq('id', currentUser.id).then(() => {
               setLocationEnabled(false)
               localStorage.setItem('bhnl_location_enabled', 'false')
           })
+      }
+  }
+
+  // 🟢 THE NEW NOTIFICATION ENGINE
+  const handleNotificationToggle = async () => {
+      if (!notificationsEnabled) {
+          // User wants them ON
+          if (!('Notification' in window)) {
+              alert("Push notifications are not supported by this browser.")
+              return
+          }
+          
+          // Request permission from the OS/Browser
+          const permission = await Notification.requestPermission()
+          
+          if (permission === 'granted') {
+              setNotificationsEnabled(true)
+              localStorage.setItem('bhnl_notifications_enabled', 'true')
+              alert("Push notifications enabled! You will now receive background alerts.")
+          } else {
+              alert("Permission denied. You may need to manually enable notifications for this site in your browser settings.")
+              setNotificationsEnabled(false)
+              localStorage.setItem('bhnl_notifications_enabled', 'false')
+          }
+      } else {
+          // User wants them OFF
+          setNotificationsEnabled(false)
+          localStorage.setItem('bhnl_notifications_enabled', 'false')
       }
   }
 
@@ -123,7 +137,6 @@ export default function Settings({ currentUser, setCurrentUser }) {
                           <h4 className="text-sm font-bold text-white mb-1">Location Services</h4>
                           <p className="text-[10px] text-gray-500 uppercase tracking-widest leading-snug">Allow BHNL to find nearby venues and events.</p>
                       </div>
-                      {/* 🟢 WIRE UP THE TOGGLE HERE */}
                       <CustomSwitch 
                          id="loc-switch" 
                          checked={locationEnabled} 
@@ -136,10 +149,11 @@ export default function Settings({ currentUser, setCurrentUser }) {
                           <h4 className="text-sm font-bold text-white mb-1">Push Notifications</h4>
                           <p className="text-[10px] text-gray-500 uppercase tracking-widest leading-snug">Get alerted when your turn is up on stage.</p>
                       </div>
+                      {/* 🟢 WIRE UP THE NOTIFICATION TOGGLE */}
                       <CustomSwitch 
                          id="notif-switch" 
                          checked={notificationsEnabled} 
-                         onChange={() => setNotificationsEnabled(!notificationsEnabled)} 
+                         onChange={handleNotificationToggle} 
                       />
                   </div>
               </div>

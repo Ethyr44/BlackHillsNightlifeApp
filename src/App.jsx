@@ -139,6 +139,13 @@ export default function App() {
         Notification.requestPermission()
     }
 
+    // 5. Active Native Push Notifications (Supabase Realtime)
+  useEffect(() => {
+    if (!currentUser) return
+
+    // Note: We removed the auto-request window.Notification prompt here!
+    // The user will now be prompted cleanly when they flip the switch in Settings.
+
     const notifSubscription = supabase.channel('realtime-notifs')
       .on('postgres', {
           event: 'INSERT',
@@ -147,15 +154,20 @@ export default function App() {
           filter: `user_id=eq.${currentUser.id}` 
       }, (payload) => {
           const newNotif = payload.new
+          
+          // Check the toggle switch memory
+          const pushEnabled = localStorage.getItem('bhnl_notifications_enabled') === 'true'
 
-          if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(newNotif.title, {
-                  body: newNotif.message,
+          // Only fire the OS notification if they turned the switch ON
+          if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification('BHNL Alert', {
+                  body: newNotif.content,
                   icon: '/vite.svg', 
                   vibrate: [200, 100, 200] 
               })
           } else {
-              setNotificationToast(`🔔 ${newNotif.title}: ${newNotif.message}`)
+              // If switch is off (or permissions denied), just show the in-app blue toast
+              setNotificationToast(`🔔 Alert: ${newNotif.content}`)
               setTimeout(() => setNotificationToast(null), 5000)
           }
       })

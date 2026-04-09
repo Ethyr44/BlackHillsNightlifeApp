@@ -135,17 +135,6 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return
 
-    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-        Notification.requestPermission()
-    }
-
-    // 5. Active Native Push Notifications (Supabase Realtime)
-  useEffect(() => {
-    if (!currentUser) return
-
-    // Note: We removed the auto-request window.Notification prompt here!
-    // The user will now be prompted cleanly when they flip the switch in Settings.
-
     const notifSubscription = supabase.channel('realtime-notifs')
       .on('postgres', {
           event: 'INSERT',

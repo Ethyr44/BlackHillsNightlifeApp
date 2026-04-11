@@ -47,6 +47,24 @@ export default function AdminEconomy() {
       setEditLeagueScore(u.league_monthly || 0);
   }
 
+  // 🟢 THE FIX: Correctly targets all rows and explicitly handles errors
+  const resetMonthlyLeaderboard = async () => {
+      if(window.confirm(`Are you SURE you want to reset the Monthly Leaderboard to zero for everyone?`)) {
+          const { error } = await supabase
+              .from('profiles')
+              .update({ league_monthly: 0 })
+              .not('id', 'is', null) 
+          
+          if(!error) {
+              alert(`Success: Monthly Leaderboard has been reset.`)
+              if (searchUser) searchForUser() // Refresh the user search list to show zeros
+          } else {
+              console.error("Leaderboard Reset Error:", error)
+              alert(`Action Failed: ${error.message} (You may need to update your RLS Policies for the profiles table)`)
+          }
+      }
+  }
+
   return (
     <div className="space-y-8 animate-fade-in">
         
@@ -72,6 +90,15 @@ export default function AdminEconomy() {
                 </div>
             ))}
         </div>
+      </div>
+
+      {/* 🟢 THE FIX: Only one Season Reset Button */}
+      <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
+         <h3 className="text-2xl font-['Bebas_Neue'] text-red-400 mb-4 tracking-wider">Season Resets</h3>
+         <p className="text-xs text-gray-400 mb-6">Manually clear the active leaderboard. This action cannot be undone.</p>
+         <button onClick={resetMonthlyLeaderboard} className="w-full bg-red-900/20 border border-red-500/50 text-red-400 py-4 rounded-xl uppercase font-bold text-sm hover:bg-red-500 hover:text-white transition-all">
+             Reset Monthly Leaderboard to 0
+         </button>
       </div>
 
       {/* USER BANK EDITOR */}

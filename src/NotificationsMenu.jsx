@@ -30,7 +30,7 @@ export default function NotificationsMenu({ userId, onClose }) {
                     notifications.map(n => (
                         <div key={n.id} className="p-4 border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors">
                             <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{n.title}</h4>
-                            <p className="text-sm text-gray-300 mt-1">{n.message}</p>
+                            <p className="text-sm text-gray-300 mt-1">{n.content}</p>
                             <span className="text-[9px] text-gray-600 mt-2 block">{new Date(n.created_at).toLocaleDateString()}</span>
                         </div>
                     ))

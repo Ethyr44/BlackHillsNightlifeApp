@@ -166,8 +166,7 @@ export default function App() {
   }, [currentUser])
 
   // 6. 2-Way VibeCode Connection Interceptor
-  useEffect(() => {
-    const handleVibeScan = async () => {
+  const handleVibeScan = async () => {
       if (!currentUser) return
       const params = new URLSearchParams(window.location.search)
       const targetId = params.get('connect')
@@ -183,6 +182,12 @@ export default function App() {
             
             const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
             showReward('VibeCode Scanned!', earnedPts)
+
+            // 🟢 NEW: Send Notifications to BOTH users
+            await supabase.from('notifications').insert([
+                { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
+                { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
+            ])
         }
         window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
         setViewingEntity({ id: targetId }) 
@@ -204,13 +209,18 @@ export default function App() {
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
 
-          // 2. 🟢 THE NEW EVENT MATCHING RADAR 🟢
+          // 🟢 NEW: Send the Notification to the UI
+          await supabase.from('notifications').insert([{
+              user_id: userProfile.id,
+              title: 'Daily Login',
+              content: `You received ${earnedPts || 50} Lifestyle Points for your daily check-in!`
+          }])
+
+          // 2. THE EVENT MATCHING RADAR
           if (userProfile.pref_events && userProfile.pref_events.length > 0) {
-              // Fetch all approved events
               const { data: allEvents } = await supabase.from('events').select('*').eq('status', 'approved')
               
               if (allEvents) {
-                  // Filter down to events happening EXACTLY today (explicit date OR recurring day of week)
                   const dayOfWeek = today.getDay()
                   const activeToday = allEvents.filter(e => {
                       const eDate = new Date(e.event_date)
@@ -218,16 +228,14 @@ export default function App() {
                       return eDate.toDateString() === todayString
                   })
 
-                  // Cross-reference today's active events with the user's preferences
                   const matchedEvents = activeToday.filter(e => userProfile.pref_events.includes(e.event_type))
 
                   if (matchedEvents.length > 0) {
-                      // Grab the unique event types they matched with (e.g., "Karaoke & Trivia")
                       const matchNames = [...new Set(matchedEvents.map(m => m.event_type))].join(' & ')
                       
-                      // Drop the alert straight into their notification inbox!
                       await supabase.from('notifications').insert([{
                           user_id: userProfile.id,
+                          title: 'Suggested Events',
                           content: `🎉 Heads up! There are ${matchedEvents.length} ${matchNames} events happening tonight in the Black Hills! Check the Lineup.`
                       }])
                   }

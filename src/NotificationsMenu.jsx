@@ -12,7 +12,18 @@ export default function NotificationsMenu({ userId, onClose }) {
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(10)
-            if (data) setNotifications(data)
+            
+            if (data) {
+                setNotifications(data)
+                
+                // Mark all fetched notifications as read in the database
+                const unreadIds = data.filter(n => !n.is_read).map(n => n.id)
+                if (unreadIds.length > 0) {
+                    await supabase.from('notifications')
+                        .update({ is_read: true })
+                        .in('id', unreadIds)
+                }
+            }
         }
         fetchNotifs()
     }, [userId])
@@ -28,10 +39,13 @@ export default function NotificationsMenu({ userId, onClose }) {
                     <p className="p-6 text-center text-xs font-bold uppercase tracking-widest text-gray-500">No new notifications</p>
                 ) : (
                     notifications.map(n => (
-                        <div key={n.id} className="p-4 border-b border-gray-800/50 hover:bg-gray-800/50 transition-colors">
-                            <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{n.title}</h4>
+                        <div key={n.id} className={`p-4 border-b border-gray-800/50 transition-colors ${n.is_read ? 'bg-transparent' : 'bg-blue-900/20'}`}>
+                            <div className="flex justify-between items-start mb-1">
+                                <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{n.title}</h4>
+                                {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>}
+                            </div>
                             <p className="text-sm text-gray-300 mt-1">{n.content}</p>
-                            <span className="text-[9px] text-gray-600 mt-2 block">{new Date(n.created_at).toLocaleDateString()}</span>
+                            <span className="text-[9px] text-gray-600 mt-2 block">{new Date(n.created_at).toLocaleDateString()} at {new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
                     ))
                 )}

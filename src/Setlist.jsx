@@ -32,10 +32,13 @@ export default function Setlist({ session, isOwner = true }) {
         setSetlistSongs([])
         return
       }
-      const { data } = await supabase.from('songs').select('*').in('Id', setlistIds)
+      
+      // 🟢 THE FIX: Lowercase 'id' in the .in() query
+      const { data } = await supabase.from('songs').select('*').in('id', setlistIds)
+      
       if (data) {
-        // Maintain the exact order the user intended
-        const orderedSongs = setlistIds.map(id => data.find(song => song.Id === id)).filter(Boolean)
+        // Map the details to the exact order of the IDs in the setlist array
+        const orderedSongs = setlistIds.map(id => data.find(s => s.id === id)).filter(Boolean)
         setSetlistSongs(orderedSongs)
       }
     }
@@ -43,31 +46,24 @@ export default function Setlist({ session, isOwner = true }) {
   }, [setlistIds])
 
   const handleRemove = async (indexToRemove) => {
-    if (!isOwner) return // Safety lock
+    const updatedIds = setlistIds.filter((_, idx) => idx !== indexToRemove)
     
-    const newArray = setlistIds.filter((_, index) => index !== indexToRemove)
-    const { error } = await supabase.from('profiles').update({ active_setlist: newArray }).eq('id', session.user.id)
+    // Update Database
+    const { error } = await supabase.from('profiles').update({ active_setlist: updatedIds }).eq('id', session.user.id)
+    
     if (!error) {
-      setSetlistIds(newArray)
-      window.dispatchEvent(new Event('setlistUpdated')) 
+      setSetlistIds(updatedIds)
+      // Tell other components (like Repertoire) to refresh
+      window.dispatchEvent(new Event('setlistUpdated'))
     }
   }
 
   return (
-    <div className="mt-8 bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg animate-fade-in">
-      <div className="bg-black border-b border-gray-800 px-6 py-4 flex justify-between items-center">
-        <div>
-          <h3 className="text-3xl font-['Bebas_Neue'] text-purple-400 tracking-wider flex items-center gap-2">
-            <span>📋</span> {isOwner ? "Tonight's Setlist" : "Current Setlist"}
-          </h3>
-          <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Ready for KSocial Sync</p>
-        </div>
-        <div className={`font-['Bebas_Neue'] text-3xl ${setlistIds.length === 7 ? 'text-red-500' : 'text-purple-400'}`}>
-          {setlistIds.length} <span className="text-gray-600 text-lg">/ 7</span>
-        </div>
-      </div>
+    <div className="bg-gray-900 border-2 border-purple-500/30 rounded-3xl p-6 relative overflow-hidden transition-all duration-300 shadow-[0_0_20px_rgba(168,85,247,0.15)]">
+        <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-6 text-purple-400" style={{ textShadow: `0 0 15px rgba(168,85,247,0.5)` }}>
+            {isOwner ? "My Active Setlist" : "Current Setlist"}
+        </h3>
 
-      <div className="p-6">
         {setlistSongs.length === 0 ? (
           <div className="text-center py-6 border border-dashed border-gray-700 rounded-xl bg-black/50">
             <p className="text-gray-500 italic text-sm">{isOwner ? "Your setlist is empty. Search your Songlist below to add up to 7 songs." : "This singer hasn't added any songs to their setlist yet."}</p>
@@ -75,21 +71,21 @@ export default function Setlist({ session, isOwner = true }) {
         ) : (
           <div className="space-y-2">
             {setlistSongs.map((song, index) => (
-              <div key={`${song.Id}-${index}`} className="flex items-center justify-between bg-black p-3 rounded-xl border border-purple-500/30 hover:border-purple-500 transition-colors">
+              // 🟢 THE FIX: Lowercase 'id', 'title', and 'artist' in the render block
+              <div key={`${song.id}-${index}`} className="flex items-center justify-between bg-black p-3 rounded-xl border border-purple-500/30 hover:border-purple-500 transition-colors">
                 <div className="flex items-center gap-4 truncate pr-4">
                   <span className="font-['Bebas_Neue'] text-2xl text-purple-600 w-4">{index + 1}</span>
                   <div className="truncate">
-                    <p className="text-white font-bold leading-tight truncate">{song.Title}</p>
-                    <p className="text-gray-400 text-xs uppercase tracking-widest truncate">{song.Artist}</p>
+                    <p className="text-white font-bold leading-tight truncate">{song.title}</p>
+                    <p className="text-gray-400 text-xs uppercase tracking-widest truncate">{song.artist}</p>
                   </div>
                 </div>
                 {/* Only render the remove button if they own this profile */}
-                {isOwner && <button onClick={() => handleRemove(index)} className="text-gray-600 hover:text-red-500 font-bold px-3 transition-colors text-lg">✕</button>}
+                {isOwner && <button onClick={() => handleRemove(index)} className="text-gray-600 hover:text-red-500 font-bold px-3 py-1 text-sm transition-colors">✕</button>}
               </div>
             ))}
           </div>
         )}
-      </div>
     </div>
   )
 }

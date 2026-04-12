@@ -40,7 +40,8 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
         return
       }
       setLoading(true)
-      const { data, error } = await supabase.from('songs').select('*').or(`Title.ilike.%${q}%,Artist.ilike.%${q}%`).limit(20)
+      // 🟢 THE FIX: Lowercase columns in the query
+      const { data, error } = await supabase.from('songs').select('*').or(`title.ilike.%${q}%,artist.ilike.%${q}%`).limit(20)
       if (!error && data) setSearchResults(data)
       setLoading(false)
     }, 400)
@@ -51,7 +52,8 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
   const fetchSonglist = async () => {
     const { data, error } = await supabase
       .from('user_songs')
-      .select('*, songs("Id", "Title", "Artist")')
+      // 🟢 THE FIX: Lowercase columns in the join
+      .select('*, songs(id, title, artist)')
       .eq('user_id', userId)
       .order('id', { ascending: false }) // Sorts safely by internal ID instead of guessing the date column
 
@@ -145,34 +147,36 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
           <div className="bg-blue-900/10 border border-blue-500/30 p-4 rounded-xl space-y-2 max-h-80 overflow-y-auto custom-scrollbar mb-8">
             <h4 className="text-blue-400 text-xs font-bold uppercase tracking-widest mb-3">Catalog Results</h4>
             {searchResults.map(song => {
-              const inSetlist = activeSetlist.includes(song.Id);
+              // 🟢 THE FIX: Lowercase 'id'
+              const inSetlist = activeSetlist.includes(song.id);
               return (
-                <div key={song.Id} className="bg-black p-3 rounded border border-gray-800">
+                <div key={song.id} className="bg-black p-3 rounded border border-gray-800">
                   <div className="flex justify-between items-center">
                     <div className="truncate pr-4">
-                      <p className="text-white font-bold leading-tight">{song.Title}</p>
-                      <p className="text-gray-500 text-xs uppercase tracking-widest">{song.Artist}</p>
+                      {/* 🟢 THE FIX: Lowercase 'title' and 'artist' */}
+                      <p className="text-white font-bold leading-tight">{song.title}</p>
+                      <p className="text-gray-500 text-xs uppercase tracking-widest">{song.artist}</p>
                     </div>
                     {isOwner ? (
-                      <button onClick={() => setTaggingSongId(taggingSongId === song.Id ? null : song.Id)} className="bg-blue-600/20 text-blue-400 border border-blue-500/50 hover:bg-blue-600 hover:text-white px-3 py-1 rounded text-xs font-bold shrink-0 transition-colors">
-                        {taggingSongId === song.Id ? 'Cancel' : '+ Add'}
+                      <button onClick={() => setTaggingSongId(taggingSongId === song.id ? null : song.id)} className="bg-blue-600/20 text-blue-400 border border-blue-500/50 hover:bg-blue-600 hover:text-white px-3 py-1 rounded text-xs font-bold shrink-0 transition-colors">
+                        {taggingSongId === song.id ? 'Cancel' : '+ Add'}
                       </button>
                     ) : (
-                      <button onClick={() => handleAddSongToBook(song.Id, 'Requested')} className="bg-pink-600/20 text-pink-400 border border-pink-500/50 hover:bg-pink-600 hover:text-white px-3 py-1 rounded text-xs font-bold shrink-0 transition-colors">
+                      <button onClick={() => handleAddSongToBook(song.id, 'Requested')} className="bg-pink-600/20 text-pink-400 border border-pink-500/50 hover:bg-pink-600 hover:text-white px-3 py-1 rounded text-xs font-bold shrink-0 transition-colors">
                         Request
                       </button>
                     )}
                   </div>
 
                   {/* Inline Tagging Menu */}
-                  {taggingSongId === song.Id && isOwner && (
+                  {taggingSongId === song.id && isOwner && (
                     <div className="mt-3 pt-3 border-t border-gray-800 flex flex-wrap gap-2 animate-fade-in">
-                      <button onClick={() => toggleSetlist(song.Id)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest transition-colors ${inSetlist ? 'bg-red-900/20 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-black' : 'bg-green-900/20 text-green-400 border border-green-500/50 hover:bg-green-500 hover:text-black'}`}>
+                      <button onClick={() => toggleSetlist(song.id)} className={`flex items-center gap-1 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest transition-colors ${inSetlist ? 'bg-red-900/20 text-red-500 border border-red-500/50 hover:bg-red-500 hover:text-black' : 'bg-green-900/20 text-green-400 border border-green-500/50 hover:bg-green-500 hover:text-black'}`}>
                         {inSetlist ? '✕ Remove Setlist' : '📋 Add Setlist'}
                       </button>
-                      <button onClick={() => {handleAddSongToBook(song.Id, 'Fave'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-yellow-900/20 text-yellow-500 border border-yellow-500/50 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-colors">🌟 Fave</button>
-                      <button onClick={() => {handleAddSongToBook(song.Id, 'To Sing'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-purple-900/20 text-purple-400 border border-purple-500/50 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-purple-500 hover:text-black transition-colors">🎤 To Sing</button>
-                      <button onClick={() => {handleAddSongToBook(song.Id, 'Sung'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-gray-800 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-gray-600 transition-colors">🕒 Sung</button>
+                      <button onClick={() => {handleAddSongToBook(song.id, 'Fave'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-yellow-900/20 text-yellow-500 border border-yellow-500/50 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-colors">🌟 Fave</button>
+                      <button onClick={() => {handleAddSongToBook(song.id, 'To Sing'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-purple-900/20 text-purple-400 border border-purple-500/50 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-purple-500 hover:text-black transition-colors">🎤 To Sing</button>
+                      <button onClick={() => {handleAddSongToBook(song.id, 'Sung'); setSearchQuery(''); setSearchResults([]);}} className="flex items-center gap-1 bg-gray-800 text-gray-300 border border-gray-600 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-gray-600 transition-colors">🕒 Sung</button>
                     </div>
                   )}
                 </div>
@@ -203,9 +207,11 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
                     <div className="truncate pr-4">
                       <div className="flex items-center gap-2">
                         {inSetlist && <span className="text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded uppercase font-black tracking-widest">Setlist</span>}
-                        <p className="text-white font-bold text-lg leading-tight truncate">{songData?.Title || "Unknown Track"}</p>
+                        {/* 🟢 THE FIX: Lowercase 'title' */}
+                        <p className="text-white font-bold text-lg leading-tight truncate">{songData?.title || "Unknown Track"}</p>
                       </div>
-                      <p className="text-gray-400 text-xs uppercase tracking-widest mt-1">{songData?.Artist || "Unknown Artist"}</p>
+                      {/* 🟢 THE FIX: Lowercase 'artist' */}
+                      <p className="text-gray-400 text-xs uppercase tracking-widest mt-1">{songData?.artist || "Unknown Artist"}</p>
                     </div>
                     
                     <div className="flex items-center gap-4 shrink-0 pl-2">

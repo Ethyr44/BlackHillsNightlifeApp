@@ -7,7 +7,7 @@ import VibeCode from './VibeCode'
 import NotificationsMenu from './NotificationsMenu'
 import SplashScreen from './SplashScreen' 
 
-// Code Splitting: These only download when the user clicks the tab
+// Code Splitting
 const FYP = lazy(() => import('./FYP'))
 const Profile = lazy(() => import('./Profile'))
 const Leaderboard = lazy(() => import('./Leaderboard'))
@@ -24,7 +24,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   
-  // 🟢 GLOBAL RADAR SWEEP: Updates GPS every 60 seconds if enabled
+  // 🟢 GLOBAL RADAR SWEEP
   useEffect(() => {
     if (!currentUser) return;
 
@@ -46,7 +46,6 @@ export default function App() {
       }
     };
 
-    // Ping once immediately, then start the 60-second loop
     pingLocation();
     const intervalId = setInterval(pingLocation, 60000);
     
@@ -76,7 +75,7 @@ export default function App() {
       }
   }
 
-  // 1. The Once-Per-Time-Block Splash Screen Logic
+  // 1. Splash Screen
   useEffect(() => {
       const hour = new Date().getHours()
       const date = new Date().toDateString()
@@ -144,10 +143,8 @@ export default function App() {
       }, (payload) => {
           const newNotif = payload.new
           
-          // Check the toggle switch memory
           const pushEnabled = localStorage.getItem('bhnl_notifications_enabled') === 'true'
 
-          // Only fire the OS notification if they turned the switch ON
           if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
               new Notification('BHNL Alert', {
                   body: newNotif.content,
@@ -155,7 +152,6 @@ export default function App() {
                   vibrate: [200, 100, 200] 
               })
           } else {
-              // If switch is off (or permissions denied), just show the in-app blue toast
               setNotificationToast(`🔔 Alert: ${newNotif.content}`)
               setTimeout(() => setNotificationToast(null), 5000)
           }
@@ -168,34 +164,33 @@ export default function App() {
   // 6. 2-Way VibeCode Connection Interceptor
   useEffect(() => {
     const handleVibeScan = async () => {
-        if (!currentUser) return
-        const params = new URLSearchParams(window.location.search)
-        const targetId = params.get('connect')
+      if (!currentUser) return
+      const params = new URLSearchParams(window.location.search)
+      const targetId = params.get('connect')
 
-        if (targetId && targetId !== currentUser.id) {
-          const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
+      if (targetId && targetId !== currentUser.id) {
+        const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
 
-          if (!existing) {
-              await supabase.from('connections').insert([
-                  { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
-                  { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
-              ])
-              
-              const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
-              showReward('VibeCode Scanned!', earnedPts)
+        if (!existing) {
+            await supabase.from('connections').insert([
+                { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
+                { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
+            ])
+            
+            const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
+            showReward('VibeCode Scanned!', earnedPts)
 
-              // 🟢 NEW: Send Notifications to BOTH users
-              await supabase.from('notifications').insert([
-                  { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
-                  { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
-              ])
-          }
-          window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
-          setViewingEntity({ id: targetId }) 
+            await supabase.from('notifications').insert([
+                { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
+                { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
+            ])
         }
+        window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
+        setViewingEntity({ id: targetId }) 
       }
-      handleVibeScan()
-    }, [currentUser])
+    }
+    handleVibeScan()
+  }, [currentUser, activeTab])
 
   // Helpers
   const checkDailyBonus = async (userProfile) => {
@@ -205,19 +200,16 @@ export default function App() {
       const lastClaim = userProfile.last_bonus_claim ? new Date(userProfile.last_bonus_claim).toDateString() : null
 
       if (todayString !== lastClaim) {
-          // 1. Trigger the Daily Points
           const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
 
-          // 🟢 NEW: Send the Notification to the UI
           await supabase.from('notifications').insert([{
               user_id: userProfile.id,
               title: 'Daily Login',
               content: `You received ${earnedPts || 50} Lifestyle Points for your daily check-in!`
           }])
 
-          // 2. THE EVENT MATCHING RADAR
           if (userProfile.pref_events && userProfile.pref_events.length > 0) {
               const { data: allEvents } = await supabase.from('events').select('*').eq('status', 'approved')
               
@@ -368,7 +360,6 @@ export default function App() {
           />
         ) : (
           <Suspense fallback={<SuspenseLoader />}>
-            {/* THE FADE WRAPPER */}
             <div key={activeTab} className="animate-fade-in w-full h-full">
               {activeTab === 'Projector' && <Projector />}
               {activeTab === 'Search' && searchResults && (

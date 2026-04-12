@@ -166,35 +166,36 @@ export default function App() {
   }, [currentUser])
 
   // 6. 2-Way VibeCode Connection Interceptor
-  const handleVibeScan = async () => {
-      if (!currentUser) return
-      const params = new URLSearchParams(window.location.search)
-      const targetId = params.get('connect')
+  useEffect(() => {
+    const handleVibeScan = async () => {
+        if (!currentUser) return
+        const params = new URLSearchParams(window.location.search)
+        const targetId = params.get('connect')
 
-      if (targetId && targetId !== currentUser.id) {
-        const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
+        if (targetId && targetId !== currentUser.id) {
+          const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
 
-        if (!existing) {
-            await supabase.from('connections').insert([
-                { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
-                { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
-            ])
-            
-            const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
-            showReward('VibeCode Scanned!', earnedPts)
+          if (!existing) {
+              await supabase.from('connections').insert([
+                  { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
+                  { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
+              ])
+              
+              const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
+              showReward('VibeCode Scanned!', earnedPts)
 
-            // 🟢 NEW: Send Notifications to BOTH users
-            await supabase.from('notifications').insert([
-                { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
-                { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
-            ])
+              // 🟢 NEW: Send Notifications to BOTH users
+              await supabase.from('notifications').insert([
+                  { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
+                  { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
+              ])
+          }
+          window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
+          setViewingEntity({ id: targetId }) 
         }
-        window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
-        setViewingEntity({ id: targetId }) 
       }
-    }
-    handleVibeScan()
-  }, [currentUser])
+      handleVibeScan()
+    }, [currentUser])
 
   // Helpers
   const checkDailyBonus = async (userProfile) => {

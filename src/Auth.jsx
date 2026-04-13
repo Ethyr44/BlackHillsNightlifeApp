@@ -6,6 +6,9 @@ export default function Auth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLogin, setIsLogin] = useState(true)
+  
+  // NEW: Terms and Agreements State
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   // THE URL INTERCEPTOR (Keeps KSocial handoff working)
   useEffect(() => {
@@ -16,6 +19,12 @@ export default function Auth() {
 
   const handleEmailAuth = async (e) => {
     e.preventDefault()
+    
+    // Safety check for new registrations
+    if (!isLogin && !agreedToTerms) {
+        return alert("You must agree to the Terms of Service and Privacy Policy to create an account.")
+    }
+
     setLoading(true)
     try {
       if (isLogin) {
@@ -52,13 +61,15 @@ export default function Auth() {
   }
 
   const handleGoogleLogin = async () => {
+    // Note: OAuth providers handle their own terms, but standard practice 
+    // applies your app's ToS automatically upon platform entry.
     const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' })
     if (error) alert(error.message)
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 animate-fade-in">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-['Bebas_Neue'] text-blue-600 tracking-wider">Black Hills Nightlife</h1>
           <p className="text-gray-500 mt-2 font-medium">
@@ -71,7 +82,7 @@ export default function Auth() {
             <label className="block text-sm font-bold uppercase tracking-widest text-gray-500 mb-1">Email</label>
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900"
               placeholder="you@example.com"
             />
           </div>
@@ -79,13 +90,33 @@ export default function Auth() {
             <label className="block text-sm font-bold uppercase tracking-widest text-gray-500 mb-1">Password</label>
             <input
               type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-900"
               placeholder="••••••••"
             />
           </div>
+
+          {/* NEW: Explicit Terms of Service Checkbox (Only on Sign Up) */}
+          {!isLogin && (
+             <div className="flex items-start gap-3 mt-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <input 
+                    type="checkbox" 
+                    id="terms" 
+                    checked={agreedToTerms} 
+                    onChange={(e) => setAgreedToTerms(e.target.checked)} 
+                    className="mt-1 w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="terms" className="text-xs text-gray-600 leading-tight">
+                    I agree to the <a href="#" className="text-blue-600 font-bold hover:underline">Terms of Service</a> and <a href="#" className="text-blue-600 font-bold hover:underline">Privacy Policy</a>. I understand that BHNL is a platform for nightlife networking and entertainment.
+                </label>
+             </div>
+          )}
           
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 uppercase tracking-widest shadow-md transition-all">
-            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
+          <button 
+            type="submit" 
+            disabled={loading || (!isLogin && !agreedToTerms)} 
+            className="w-full mt-4 bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest shadow-md transition-all"
+          >
+            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 

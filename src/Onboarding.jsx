@@ -10,14 +10,18 @@ const ZODIAC_SIGNS = [
 export default function Onboarding({ session, onComplete }) {
   const [step, setStep] = useState(1)
   const [username, setUsername] = useState('')
-  const [accountType, setAccountType] = useState('Singer')
+  const [accountType, setAccountType] = useState('Regular') // Default is now Regular
   const [zodiac, setZodiac] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // 🟢 NEW: Security states for Host/Admin PIN
+  // Security states for Host/Admin PIN
   const [showPinModal, setShowPinModal] = useState(false)
   const [pendingRole, setPendingRole] = useState('')
   const [pinCode, setPinCode] = useState('')
+
+  // Final Vibe Check Agreements
+  const [agreeAge, setAgreeAge] = useState(false)
+  const [agreeRespect, setAgreeRespect] = useState(false)
 
   // Dynamic Options State
   const [options, setOptions] = useState({ venues: [], genres: [], events: [] })
@@ -46,7 +50,7 @@ export default function Onboarding({ session, onComplete }) {
     })
   }
 
-  // 🟢 NEW: Role selection logic with PIN gate
+  // Role selection logic with PIN gate
   const handleRoleSelect = (type) => {
       if (type === 'Host' || type === 'Admin') {
           setPendingRole(type)
@@ -56,7 +60,7 @@ export default function Onboarding({ session, onComplete }) {
       }
   }
 
-  // 🟢 NEW: Verify the PIN before assigning restricted roles
+  // Verify the PIN before assigning restricted roles
   const verifyPin = () => {
       if (pinCode === '1144') {
           setAccountType(pendingRole)
@@ -70,6 +74,7 @@ export default function Onboarding({ session, onComplete }) {
 
   const handleFinish = async () => {
     if (!username.trim()) return alert("Your stage name is required!")
+    if (!agreeAge || !agreeRespect) return alert("You must agree to the community guidelines to enter.")
     
     setSaving(true)
     const payload = {
@@ -124,15 +129,16 @@ export default function Onboarding({ session, onComplete }) {
 
       <div className="bg-[#090812]/90 border border-gray-800 rounded-3xl p-8 w-full max-w-md relative z-10 shadow-[0_0_40px_rgba(59,130,246,0.1)] backdrop-blur-xl max-h-[90vh] overflow-y-auto custom-scrollbar">
         
-        <div className="flex justify-center gap-2 mb-8">
-            {[1, 2, 3, 4, 5, 6].map(num => (
-                <div key={num} className={`h-1.5 rounded-full transition-all duration-300 ${step >= num ? 'w-6 bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]' : 'w-3 bg-gray-800'}`}></div>
+        <div className="flex justify-center gap-1.5 mb-8">
+            {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                <div key={num} className={`h-1.5 rounded-full transition-all duration-300 ${step >= num ? 'w-6 bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)]' : 'w-2.5 bg-gray-800'}`}></div>
             ))}
         </div>
 
         {step === 1 && (
           <div className="animate-fade-in text-center">
-            <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-wider mb-2">Welcome to BHNL</h2>
+            {/* UPDATED: Welcome Text */}
+            <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-wider mb-2">Welcome to Black Hills Nightlife</h2>
             <p className="text-gray-400 text-sm mb-8">What should the crowd call you?</p>
             <input type="text" placeholder="Enter Stage Name" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-black/50 border border-gray-700 text-white rounded-xl p-4 text-center text-lg focus:border-blue-500 outline-none mb-6" />
             <button onClick={() => username.trim() ? setStep(2) : alert("Please enter a name!")} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-sm transition-colors shadow-[0_0_15px_rgba(59,130,246,0.4)]">Continue</button>
@@ -141,17 +147,19 @@ export default function Onboarding({ session, onComplete }) {
 
         {step === 2 && (
           <div className="animate-fade-in text-center">
-            <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-wider mb-2">Your Role</h2>
+            {/* UPDATED: Role Text */}
+            <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-wider mb-2">Select Account Type</h2>
             <div className="space-y-3 mb-8 mt-6">
-                {/* 🟢 THE FIX: Added Admin and wired them all to handleRoleSelect */}
-                {['Singer', 'Host', 'Admin', 'Regular'].map(type => (
-                    <button key={type} onClick={() => handleRoleSelect(type)} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === type ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
-                        {type === 'Singer' && '🎤 Karaoke Singer'}
-                        {type === 'Host' && '🎛️ Event Host / DJ'}
-                        {type === 'Admin' && '👑 System Admin'}
-                        {type === 'Regular' && '🍻 Here for the Vibes (Regular)'}
-                    </button>
-                ))}
+                {/* UPDATED: Buttons to reflect merged 'Regular' role */}
+                <button onClick={() => handleRoleSelect('Regular')} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === 'Regular' ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
+                    🍻 Regular (User & Singer)
+                </button>
+                <button onClick={() => handleRoleSelect('Host')} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === 'Host' ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
+                    🎛️ Event Host / DJ
+                </button>
+                <button onClick={() => handleRoleSelect('Admin')} className={`w-full p-4 rounded-xl border text-left font-bold transition-all ${accountType === 'Admin' ? 'bg-blue-600/20 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-black/50 border-gray-800 text-gray-400 hover:border-gray-600'}`}>
+                    👑 System Admin
+                </button>
             </div>
             <div className="flex gap-3">
                 <button onClick={() => setStep(1)} className="px-6 py-4 rounded-xl border border-gray-800 text-gray-400 hover:text-white font-bold uppercase text-xs transition-colors">Back</button>
@@ -162,7 +170,7 @@ export default function Onboarding({ session, onComplete }) {
 
         {step === 3 && (
           <div className="animate-fade-in text-center">
-            <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-wider">Where do you hang?</h2>
+            <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-wider">What are your favorite spots??</h2>
             {renderGrid('venues', options.venues)}
             <div className="flex gap-3 mt-8">
                 <button onClick={() => setStep(2)} className="px-6 py-4 rounded-xl border border-gray-800 text-gray-400 hover:text-white font-bold uppercase text-xs transition-colors">Back</button>
@@ -184,7 +192,7 @@ export default function Onboarding({ session, onComplete }) {
 
         {step === 5 && (
           <div className="animate-fade-in text-center">
-            <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-wider">What's the plan?</h2>
+            <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-wider">What kind of Events are you into?</h2>
             {renderGrid('events', options.events)}
             <div className="flex gap-3 mt-8">
                 <button onClick={() => setStep(4)} className="px-6 py-4 rounded-xl border border-gray-800 text-gray-400 hover:text-white font-bold uppercase text-xs transition-colors">Back</button>
@@ -195,7 +203,7 @@ export default function Onboarding({ session, onComplete }) {
 
         {step === 6 && (
           <div className="animate-fade-in text-center">
-            <h2 className="text-4xl font-['Bebas_Neue'] text-purple-400 tracking-wider mb-2" style={{ textShadow: '0 0 15px rgba(168,85,247,0.5)' }}>Your Sign</h2>
+            <h2 className="text-4xl font-['Bebas_Neue'] text-purple-400 tracking-wider mb-2" style={{ textShadow: '0 0 15px rgba(168,85,247,0.5)' }}>What's Your Sign</h2>
             <div className="grid grid-cols-2 gap-2 mb-8 mt-6 max-h-40 overflow-y-auto custom-scrollbar">
                 {ZODIAC_SIGNS.map(sign => (
                     <button 
@@ -209,8 +217,48 @@ export default function Onboarding({ session, onComplete }) {
             </div>
             <div className="flex gap-3">
                 <button onClick={() => setStep(5)} disabled={saving} className="px-6 py-4 rounded-xl border border-gray-800 text-gray-400 hover:text-white font-bold uppercase text-xs transition-colors">Back</button>
-                <button onClick={handleFinish} disabled={saving} className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-sm transition-colors shadow-[0_0_20px_rgba(168,85,247,0.4)]">
-                    {saving ? 'Saving...' : 'Enter Platform'}
+                <button onClick={() => setStep(7)} disabled={saving} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-sm transition-colors shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+                    Continue
+                </button>
+            </div>
+          </div>
+        )}
+
+        {step === 7 && (
+          <div className="animate-fade-in text-center">
+            <h2 className="text-4xl font-['Bebas_Neue'] text-green-400 tracking-wider mb-2" style={{ textShadow: '0 0 15px rgba(74,222,128,0.5)' }}>The Vibe Check</h2>
+            <p className="text-gray-400 text-sm mb-6">In order to proceed, you must agree to the Terms and Agreements.</p>
+            
+            <div className="space-y-4 mb-8 text-left bg-black/40 p-5 rounded-2xl border border-gray-800">
+                <label className="flex items-start gap-4 cursor-pointer group">
+                    <div className="relative flex items-center justify-center mt-1">
+                        <input type="checkbox" checked={agreeAge} onChange={e => setAgreeAge(e.target.checked)} className="peer appearance-none w-5 h-5 border-2 border-gray-600 rounded checked:bg-green-500 checked:border-green-500 transition-all" />
+                        <span className="absolute text-white opacity-0 peer-checked:opacity-100 pointer-events-none text-sm font-bold">✓</span>
+                    </div>
+                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors leading-snug">
+                        I confirm that I am at least <strong>21 years of age</strong>
+                    </span>
+                </label>
+
+                <label className="flex items-start gap-4 cursor-pointer group">
+                    <div className="relative flex items-center justify-center mt-1">
+                        <input type="checkbox" checked={agreeRespect} onChange={e => setAgreeRespect(e.target.checked)} className="peer appearance-none w-5 h-5 border-2 border-gray-600 rounded checked:bg-green-500 checked:border-green-500 transition-all" />
+                        <span className="absolute text-white opacity-0 peer-checked:opacity-100 pointer-events-none text-sm font-bold">✓</span>
+                    </div>
+                    <span className="text-sm text-gray-300 group-hover:text-white transition-colors leading-snug">
+                        I promise to treat the venues, the entertainers, the staff, and my fellow app users with <strong>absolute respect</strong>.
+                    </span>
+                </label>
+            </div>
+
+            <div className="flex gap-3">
+                <button onClick={() => setStep(6)} disabled={saving} className="px-6 py-4 rounded-xl border border-gray-800 text-gray-400 hover:text-white font-bold uppercase text-xs transition-colors">Back</button>
+                <button 
+                    onClick={handleFinish} 
+                    disabled={saving || !agreeAge || !agreeRespect} 
+                    className="flex-1 bg-gradient-to-r from-green-600 to-emerald-500 hover:from-green-500 hover:to-emerald-400 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-sm transition-colors shadow-[0_0_20px_rgba(16,185,129,0.4)] disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed"
+                >
+                    {saving ? 'Encrypting Identity...' : 'Enter Platform'}
                 </button>
             </div>
           </div>
@@ -218,7 +266,7 @@ export default function Onboarding({ session, onComplete }) {
 
       </div>
 
-      {/* 🟢 NEW: THE SECURITY PIN MODAL */}
+      {/* THE SECURITY PIN MODAL */}
       {showPinModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-gray-900 border-2 border-red-500/50 p-8 rounded-3xl w-full max-w-sm text-center shadow-[0_0_50px_rgba(239,68,68,0.2)] animate-slide-up-fast">

@@ -47,6 +47,34 @@ export default function Settings({ currentUser, setCurrentUser }) {
       }
   }
 
+  // 🟢 NEW: Secure Account Deletion
+  const handleDeleteAccount = async () => {
+      // 1st Safety Check
+      const confirm1 = window.confirm("Are you absolutely sure you want to delete your account? This will permanently erase your profile, points, and vault.")
+      if (!confirm1) return
+
+      // 2nd Safety Check
+      const confirm2 = window.confirm("FINAL WARNING: This action cannot be undone. Are you sure you want to proceed?")
+      if (!confirm2) return
+
+      setUpdateStatus('Deleting account...')
+      
+      try {
+          // Call the secure Database Function we created
+          const { error } = await supabase.rpc('delete_user')
+          if (error) throw error
+
+          // Wipe local memory and log out
+          localStorage.removeItem('bhnl_location_enabled')
+          localStorage.removeItem('bhnl_notifications_enabled')
+          await supabase.auth.signOut()
+          window.location.href = '/' 
+      } catch (err) {
+          alert(`Error deleting account: ${err.message}`)
+          setUpdateStatus('')
+      }
+  }
+
   const handleLocationToggle = () => {
       if (!locationEnabled) {
           if (!navigator.geolocation) return alert("Location services are not supported by your browser.")
@@ -73,16 +101,13 @@ export default function Settings({ currentUser, setCurrentUser }) {
       }
   }
 
-  // 🟢 THE NEW NOTIFICATION ENGINE
   const handleNotificationToggle = async () => {
       if (!notificationsEnabled) {
-          // User wants them ON
           if (!('Notification' in window)) {
               alert("Push notifications are not supported by this browser.")
               return
           }
           
-          // Request permission from the OS/Browser
           const permission = await Notification.requestPermission()
           
           if (permission === 'granted') {
@@ -95,7 +120,6 @@ export default function Settings({ currentUser, setCurrentUser }) {
               localStorage.setItem('bhnl_notifications_enabled', 'false')
           }
       } else {
-          // User wants them OFF
           setNotificationsEnabled(false)
           localStorage.setItem('bhnl_notifications_enabled', 'false')
       }
@@ -149,7 +173,6 @@ export default function Settings({ currentUser, setCurrentUser }) {
                           <h4 className="text-sm font-bold text-white mb-1">Push Notifications</h4>
                           <p className="text-[10px] text-gray-500 uppercase tracking-widest leading-snug">Get alerted when your turn is up on stage.</p>
                       </div>
-                      {/* 🟢 WIRE UP THE NOTIFICATION TOGGLE */}
                       <CustomSwitch 
                          id="notif-switch" 
                          checked={notificationsEnabled} 
@@ -169,6 +192,13 @@ export default function Settings({ currentUser, setCurrentUser }) {
               <button onClick={handleSignOut} className="w-full bg-red-900/20 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/50 font-bold uppercase tracking-widest text-sm py-4 rounded-xl transition-all shadow-[0_0_15px_rgba(239,68,68,0.2)]">
                  Sign Out
               </button>
+
+              {/* 🟢 NEW: Discreet but clear Delete Account Button */}
+              <div className="mt-6 text-center">
+                  <button onClick={handleDeleteAccount} className="text-[10px] font-bold uppercase tracking-widest text-gray-600 hover:text-red-500 transition-colors underline decoration-gray-600 hover:decoration-red-500 underline-offset-4">
+                      Permanently Delete Account
+                  </button>
+              </div>
           </div>
 
       </div>

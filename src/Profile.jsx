@@ -40,7 +40,11 @@ export default function Profile({ session }) {
     const { data: pData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (pData) setProfile(pData)
 
-    const { count } = await supabase.from('connections').select('*', { count: 'exact', head: true }).eq('following_id', session.user.id).eq('status', 'friend')
+    // Uses the corrected 'target_id' column from our earlier database fix
+    const { count } = await supabase.from('connections')
+        .select('*', { count: 'exact', head: true })
+        .eq('target_id', session.user.id)
+        .eq('connection_type', 'friend')
     setFriendsCount(count || 0)
 
     const { data: postData } = await supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false })
@@ -59,7 +63,9 @@ export default function Profile({ session }) {
   const latestPost = posts.length > 0 ? posts[0] : null
   const gradientClass = profile.bg_gradient ? GRADIENTS[profile.bg_gradient] : GRADIENTS['deep-space']
   const dynamicSecondary = profile.secondary_color || '#9333ea'
-  const showKaraokeFeatures = ['Singer', 'Host', 'Admin'].includes(profile.account_type)
+  
+  // 🟢 THE FIX: 'Regular' is explicitly added to the allowed account types!
+  const showKaraokeFeatures = ['Regular', 'Singer', 'Host', 'Admin'].includes(profile.account_type)
 
   return (
     <>
@@ -87,6 +93,7 @@ export default function Profile({ session }) {
             </div>
         </div>
 
+        {/* KARAOKE FEATURES */}
         {showKaraokeFeatures && (
             <>
               <Setlist session={session} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />

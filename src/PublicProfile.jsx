@@ -3,7 +3,6 @@ import { supabase } from './supabaseClient'
 import Setlist from './Setlist'
 import Repertoire from './Repertoire'
 
-// 🟢 THE FIX: Added transparency (/60) and backdrop-blur to make them see-through!
 const GRADIENTS = {
   'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
   'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812]/60 to-black/60 backdrop-blur-md',
@@ -27,12 +26,11 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
   const dynamicSecondary = entity.secondary_color || (isPage ? '#b347ff' : '#9333ea')
   const dynamicAccent = entity.accent_color || (isPage ? '#ff2d78' : '#10b981')
 
-  // 🟢 THE FIX: Changed 'Singer' to 'Regular' so standard users still get their karaoke features shown
-  const showKaraokeFeatures = !isPage && ['Regular', 'Host', 'Admin'].includes(entity.account_type)
+  // 🟢 THE FIX: Allow 'Regular' users to show their karaoke catalogs to the public!
+  const showKaraokeFeatures = !isPage && ['Regular', 'Singer', 'Host', 'Admin'].includes(entity.account_type)
 
   useEffect(() => {
     async function fetchProfileData() {
-      // 1. Get Total Connections Count (Using target_id & connection_type)
       const { count } = await supabase.from('connections')
         .select('*', { count: 'exact', head: true })
         .eq('target_id', entity.id) 
@@ -40,7 +38,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
       
       setFollowersCount(count || 0)
 
-      // 2. Check if the Current User is connected (Using target_id)
       const { data: existingConnection } = await supabase.from('connections')
         .select('id, connection_type')
         .eq('follower_id', currentUser.id)
@@ -49,7 +46,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
 
       setIsConnection(!!existingConnection)
 
-      // 3. Fetch User's Actual Recent Post
       if (!isPage) {
           const { data: posts } = await supabase.from('posts')
             .select('*')
@@ -75,14 +71,12 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
       const statusType = isPage ? 'following' : 'friend'
       
       if (isConnection) {
-          // Unfollow / Remove Friend (Using target_id)
           await supabase.from('connections').delete()
               .eq('follower_id', currentUser.id)
               .eq('target_id', entity.id)
           setFollowersCount(prev => Math.max(0, prev - 1))
           setIsConnection(false)
       } else {
-          // Follow / Add Friend (Using target_id & connection_type)
           await supabase.from('connections').insert({
               follower_id: currentUser.id,
               target_id: entity.id,
@@ -103,7 +97,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
 
   return (
     <>
-      {/* Dynamic Background Image OR Gradient */}
       {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
           entity.slideshow_urls.map((url, idx) => (
              <div key={idx} className={`fixed inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out z-0 pointer-events-none opacity-30 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`} style={{ backgroundImage: `url(${url})` }}></div>
@@ -117,7 +110,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
             ← Back to Directory
         </button>
 
-        {/* 1. VISUAL IDENTITY CARD */}
         <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-8 border-2 shadow-2xl transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
             <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
             
@@ -159,7 +151,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
             </button>
         </div>
 
-        {/* 2. VENUE SPECIFIC DETAILS (If applicable) */}
         {isPage && (
             <div className="space-y-6 mb-8">
                 <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
@@ -177,7 +168,6 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
             </div>
         )}
 
-        {/* 3. USER SPECIFIC DETAILS (If applicable) */}
         {!isPage && (
             <div className="space-y-6 mb-8">
                 <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
@@ -197,13 +187,10 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
             </div>
         )}
 
-        {/* KARAOKE FEATURES (Setlist & Repertoire) */}
+        {/* KARAOKE FEATURES */}
         {showKaraokeFeatures && (
             <>
-              {/* We pass a "mock" session to Setlist, and flag isOwner to false so they can't delete songs */}
               <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
-              
-              {/* We pass the entity.id to Repertoire, and flag isOwner to false */}
               <Repertoire userId={entity.id} isOwner={false} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
             </>
         )}

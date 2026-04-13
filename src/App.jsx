@@ -7,6 +7,9 @@ import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
 import TopNav from './TopNav'
 
+// 🟢 THE NEW BACKGROUND
+import Moonshower from './backgrounds/Moonshower'
+
 // Code Splitting
 const FYP = lazy(() => import('./FYP'))
 const Profile = lazy(() => import('./Profile'))
@@ -243,8 +246,11 @@ export default function App() {
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
   return (
-    <div className="min-h-screen bg-[#030712] text-gray-200 font-['DM_Sans'] pb-20 relative">
+    <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
       
+      {/* 🟢 THE GLOBAL BACKGROUND PATTERN 🟢 */}
+      <Moonshower />
+
       {/* 🎁 REWARD TOASTS 🎁 */}
       {rewardToast && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
@@ -280,7 +286,7 @@ export default function App() {
           viewingEntity={viewingEntity}
       />
 
-      <main className="max-w-2xl mx-auto">
+      <main className="max-w-2xl mx-auto relative z-10">
         {viewingEntity ? (
           <PublicProfile entity={viewingEntity} onClose={() => { setViewingEntity(null); setForceFriendView(false); }} currentUser={currentUser} forceAccess={forceFriendView ? 'friend' : null} />
         ) : (
@@ -294,7 +300,7 @@ export default function App() {
                   <div className="space-y-4">
                     {searchResults.profiles.map(user => (
                       <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         {/* 🟢 THE FIX: Hardcoded shapes replaced with bottts */}
+                         {/* 🤖 THE FIX: Hardcoded shapes replaced with bottts */}
                          <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>

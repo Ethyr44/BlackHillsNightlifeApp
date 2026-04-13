@@ -1,15 +1,22 @@
-@import "tailwindcss";
-
-/* 1. Import the Inter font directly from Google */
+/* 1. Import the font FIRST (Strict CSS Requirement) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* 2. Pure CSS Font Application (No Tailwind config needed) */
-body {
-  font-family: 'Inter', sans-serif !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.01em;
-  background-color: #030712;
-  color: #e5e7eb;
+/* 2. Then import Tailwind */
+@import "tailwindcss";
+
+/* 3. Configure Tailwind v4 to use Inter as the default font */
+@theme {
+  --font-sans: 'Inter', sans-serif;
+}
+
+/* 4. Apply Base Typography & Colors */
+@layer base {
+  body {
+    font-weight: 500; 
+    letter-spacing: 0.01em; 
+    background-color: transparent; /* 🟢 Changed from #030712 */
+    color: #e5e7eb;
+  }
 }
 
 /* MOBILE SCREEN OVERFLOW FIX */

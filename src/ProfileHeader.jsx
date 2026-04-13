@@ -29,7 +29,7 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-[#090812] via-[#090812]/50 to-transparent"></div>
 
-      <img src={profile.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${profile.username}`} 
+      <img src={profile.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}`} 
            className="w-36 h-36 rounded-full border-4 bg-black z-10 object-cover shadow-2xl relative" 
            style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
       

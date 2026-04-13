@@ -294,7 +294,8 @@ export default function App() {
                   <div className="space-y-4">
                     {searchResults.profiles.map(user => (
                       <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
+                         {/* 🟢 THE FIX: Hardcoded shapes replaced with bottts */}
+                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>
                     ))}

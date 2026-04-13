@@ -121,7 +121,7 @@ export default function Map({ onViewEntity }) {
       disableDefaultUI: true, 
       zoomControl: true,
       mapId: 'DEMO_MAP_ID',
-      styles: darkMapStyle // 🟢 APPLIES THE DARK MODE MATRIX
+      styles: darkMapStyle 
     })
 
     setMapInstance(map)
@@ -221,7 +221,8 @@ export default function Map({ onViewEntity }) {
         ))}
       </div>
 
-      <div className="relative w-full h-[450px] rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]">
+      {/* 🟢 THE ONLY CHANGE: Height is now dynamic based on screen size instead of fixed at 450px */}
+      <div className="relative w-full h-[calc(100vh-280px)] min-h-[450px] rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]">
         {!mapInstance && (
             <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
                 Initializing Radar...

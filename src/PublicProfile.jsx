@@ -27,8 +27,8 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
   const dynamicSecondary = entity.secondary_color || (isPage ? '#b347ff' : '#9333ea')
   const dynamicAccent = entity.accent_color || (isPage ? '#ff2d78' : '#10b981')
 
-  // Check if they are a Singer, Host, or Admin so we can display their Songbook
-  const showKaraokeFeatures = !isPage && ['Singer', 'Host', 'Admin'].includes(entity.account_type)
+  // 🟢 THE FIX: Changed 'Singer' to 'Regular' so standard users still get their karaoke features shown
+  const showKaraokeFeatures = !isPage && ['Regular', 'Host', 'Admin'].includes(entity.account_type)
 
   useEffect(() => {
     async function fetchProfileData() {
@@ -73,124 +73,116 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
 
   const handleConnectionToggle = async () => {
       const statusType = isPage ? 'following' : 'friend'
-
+      
       if (isConnection) {
           // Unfollow / Remove Friend (Using target_id)
           await supabase.from('connections').delete()
               .eq('follower_id', currentUser.id)
-              .eq('target_id', entity.id) 
-          
+              .eq('target_id', entity.id)
           setFollowersCount(prev => Math.max(0, prev - 1))
           setIsConnection(false)
       } else {
           // Follow / Add Friend (Using target_id & connection_type)
-          await supabase.from('connections').insert({ 
-              follower_id: currentUser.id, 
-              target_id: entity.id, 
-              connection_type: statusType 
+          await supabase.from('connections').insert({
+              follower_id: currentUser.id,
+              target_id: entity.id,
+              connection_type: statusType
           })
           
           if (isPage) {
-             await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'follow_venue' })
+              await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'follow_venue' })
           }
-          
           setFollowersCount(prev => prev + 1)
           setIsConnection(true)
       }
   }
 
-  if (isLoading) return <div className="flex justify-center py-20"><div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
+  if (isLoading) return <div className="p-10 text-center text-blue-400 font-bold uppercase tracking-widest animate-pulse">Decrypting Identity...</div>
 
   const gradientClass = entity.bg_gradient ? GRADIENTS[entity.bg_gradient] : GRADIENTS['deep-space']
 
   return (
     <>
-      <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
+      {/* Dynamic Background Image OR Gradient */}
+      {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
+          entity.slideshow_urls.map((url, idx) => (
+             <div key={idx} className={`fixed inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out z-0 pointer-events-none opacity-30 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`} style={{ backgroundImage: `url(${url})` }}></div>
+          ))
+      ) : (
+          <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
+      )}
       
-      <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-8">
-        <button onClick={onClose} className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2">← Back to Directory</button>
+      <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32">
+        <button onClick={onClose} className="mb-4 bg-gray-900/80 border border-gray-700 text-gray-400 px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white transition-colors backdrop-blur-sm">
+            ← Back to Directory
+        </button>
 
-        {/* PROFILE HEADER (Identical to Profile.jsx) */}
-        <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-2 border-2 transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
-          {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
-              entity.slideshow_urls.map((url, idx) => (
-                  <div key={idx} className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? 'opacity-40' : 'opacity-0'}`} style={{ backgroundImage: `url(${url})` }} />
-              ))
-          ) : (
-              <div className="absolute inset-0 opacity-20" style={{ background: `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})` }} />
-          )}
-          
-          <div className="absolute inset-0 bg-gradient-to-t from-[#090812] via-[#090812]/50 to-transparent"></div>
+        {/* 1. VISUAL IDENTITY CARD */}
+        <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-8 border-2 shadow-2xl transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
+            <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
+            
+            <h2 className="text-5xl font-['Bebas_Neue'] tracking-wider mt-6 z-10 text-white relative" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
+                {entity.name || entity.username}
+            </h2>
 
-          <img src={entity.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${isPage ? entity.name : entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black z-10 object-cover shadow-2xl relative" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
-          
-          <h2 className="text-5xl font-['Bebas_Neue'] tracking-wider mt-6 z-10 text-white relative flex items-center gap-3 justify-center" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
-              {isPage ? entity.name : entity.username} 
-              {!isPage && entity.zodiac_sign && <span className="text-2xl" title={entity.zodiac_sign}>{entity.zodiac_sign.split(' ')[0]}</span>}
-          </h2>
-          
-          {/* Status / Account Type Block */}
-          {isPage ? (
-              <p className="text-sm text-gray-300 uppercase tracking-widest font-bold mb-6 z-10 relative drop-shadow-md">
-                  Official {entity.page_type}
-              </p>
-          ) : (
-              <>
-                  <div className="bg-black/50 border border-white/10 px-4 py-1 rounded-full relative z-10 backdrop-blur-md mt-1 mb-4">
-                      <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{entity.account_type || 'Regular'} Account</span>
-                  </div>
-
-                  <div className="bg-black/50 border border-white/10 px-4 py-3 rounded-xl w-full max-w-sm relative z-10 backdrop-blur-md">
-                      <p className="text-gray-200 text-xs sm:text-sm italic font-medium break-words">
-                        {recentPost ? `"${recentPost.content}"` : "No status set."}
-                      </p>
-                  </div>
-              </>
-          )}
-
-          {/* Points / Followers Row */}
-          <div className="flex gap-4 sm:gap-6 pt-4 mt-6 border-t border-white/10 w-full justify-center relative z-10">
-            <div className="text-center">
-              <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicPrimary}` }}>{followersCount}</span>
-              <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">{isPage ? 'Followers' : 'Friends'}</span>
+            <div className="bg-black/50 border border-white/10 px-4 py-1 rounded-full relative z-10 backdrop-blur-md mt-2 mb-4">
+                <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{isPage ? 'Venue' : entity.account_type + ' Account'}</span>
             </div>
-            {!isPage && (
-                <>
-                  <div className="text-center">
-                    <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicSecondary}` }}>{entity.lifestyle_points || 0}</span>
-                    <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">Life Pts</span>
-                  </div>
-                  <div className="text-center">
-                    <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicAccent}` }}>{entity.league_all_time || 0}</span>
-                    <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">League</span>
-                  </div>
-                </>
-            )}
-          </div>
 
-          <button onClick={handleConnectionToggle} className={`mt-6 px-8 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all relative z-10 ${isConnection ? 'bg-transparent border border-white/30 text-gray-300 hover:text-white hover:border-red-500 hover:bg-red-500/20' : 'text-white'}`} style={!isConnection ? { background: `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})`, boxShadow: `0 0 20px ${dynamicSecondary}66` } : {}}>
-              {isConnection ? (isPage ? '✓ Following' : '✓ Friends') : (isPage ? `+ Follow ${entity.page_type}` : '+ Add Friend')}
-          </button>
+            {!isPage && recentPost && (
+                <div className="bg-black/50 border border-white/10 px-4 py-3 rounded-xl w-full max-w-sm relative z-10 backdrop-blur-md mb-6">
+                    <p className="text-gray-200 text-xs italic font-medium break-words">"{recentPost.content}"</p>
+                </div>
+            )}
+
+            <div className="flex gap-6 mt-2 relative z-10">
+                <div className="text-center">
+                    <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicPrimary}` }}>{followersCount}</span>
+                    <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">{isPage ? 'Followers' : 'Friends'}</span>
+                </div>
+                {!isPage && (
+                    <>
+                        <div className="text-center">
+                            <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicSecondary}` }}>{entity.lifestyle_points || 0}</span>
+                            <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">Life Pts</span>
+                        </div>
+                        <div className="text-center">
+                            <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicAccent}` }}>{entity.league_all_time || 0}</span>
+                            <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">League</span>
+                        </div>
+                    </>
+                )}
+            </div>
+
+            <button onClick={handleConnectionToggle} className="mt-8 px-8 py-3 rounded-full text-xs font-bold uppercase tracking-widest text-white transition-all relative z-10 shadow-lg" style={{ background: isConnection ? 'transparent' : `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})`, border: isConnection ? `2px solid ${dynamicPrimary}` : 'none' }}>
+                {isConnection ? (isPage ? 'Unfollow' : 'Remove Friend') : (isPage ? 'Follow Venue' : 'Connect')}
+            </button>
         </div>
 
-        {/* VENUE / PAGE DETAILS */}
+        {/* 2. VENUE SPECIFIC DETAILS (If applicable) */}
         {isPage && (
-            <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicSecondary, boxShadow: `0 0 25px ${dynamicSecondary}33, inset 0 0 10px ${dynamicSecondary}22` }}>
-                <h3 className="text-2xl font-['Bebas_Neue'] tracking-widest mb-6 text-white" style={{ textShadow: `0 0 15px ${dynamicSecondary}` }}>About this {entity.page_type}</h3>
-                <div className="space-y-4 relative z-10">
-                    {entity.address && <div className="bg-black/50 p-4 rounded-2xl border border-gray-800 flex items-center gap-4"><span className="text-2xl">📍</span><div><span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest">Location</span><span className="text-white text-sm">{entity.address}</span></div></div>}
-                    {entity.cost && <div className="bg-black/50 p-4 rounded-2xl border border-gray-800 flex items-center gap-4"><span className="text-2xl">💵</span><div><span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest">Price Guide</span><span className="text-white text-sm">{entity.cost}</span></div></div>}
+            <div className="space-y-6 mb-8">
+                <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
+                    <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest text-white mb-6">Venue Details</h3>
+                    <div className="space-y-4 relative z-10">
+                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
+                            <p className="flex items-start gap-3 text-gray-300 text-sm"><span className="text-xl">📍</span> <span>{entity.address || "Address not provided"}</span></p>
+                        </div>
+                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
+                            <p className="flex items-center gap-3 text-gray-300 text-sm"><span className="text-xl">📞</span> <span>{entity.phone || "Phone not provided"}</span></p>
+                        </div>
+                    </div>
                 </div>
             </div>
         )}
 
-        {/* USER DETAILS */}
+        {/* 3. USER SPECIFIC DETAILS (If applicable) */}
         {!isPage && (
-            <div className="space-y-6 animate-fade-in">
-                <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicAccent, boxShadow: `0 0 25px ${dynamicAccent}33, inset 0 0 10px ${dynamicAccent}22` }}>
-                    <h3 className="text-2xl font-['Bebas_Neue'] tracking-widest mb-6 text-white flex items-center gap-3" style={{ textShadow: `0 0 15px ${dynamicAccent}` }}>
-                        <span>👤</span> User Details
-                    </h3>
+            <div className="space-y-6 mb-8">
+                <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
+                    <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest text-white mb-6">Vibe Check</h3>
                     <div className="grid grid-cols-2 gap-4 relative z-10">
                         <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
                             <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Full Name</span>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function FeedPost({ item, currentUser }) {
+// 🟢 FIX: Added onViewEntity to the props
+export default function FeedPost({ item, currentUser, onViewEntity }) {
     const [liked, setLiked] = useState(false)
     const [likeCount, setLikeCount] = useState(0)
     
@@ -91,9 +92,21 @@ export default function FeedPost({ item, currentUser }) {
             )}
 
             <div className="flex items-center gap-3 mb-4 relative z-10 pr-20">
-                <img src={item.data.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${item.data.username}`} className="w-12 h-12 rounded-full border border-blue-500/30 object-cover bg-black" alt="" />
+                {/* 🟢 FIX: Clickable Post Avatar */}
+                <img 
+                    src={item.data.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${item.data.username}`} 
+                    className="w-12 h-12 rounded-full border border-blue-500/30 object-cover bg-black cursor-pointer hover:border-blue-400 transition-colors" 
+                    alt="" 
+                    onClick={() => onViewEntity && onViewEntity(item.data.username)}
+                />
                 <div>
-                    <h4 className="font-bold text-white text-lg tracking-wide">{item.data.username}</h4>
+                    {/* 🟢 FIX: Clickable Post Username */}
+                    <h4 
+                        className="font-bold text-white text-lg tracking-wide cursor-pointer hover:text-blue-400 transition-colors"
+                        onClick={() => onViewEntity && onViewEntity(item.data.username)}
+                    >
+                        {item.data.username}
+                    </h4>
                     <span className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">{new Date(item.timestamp).toLocaleString()}</span>
                 </div>
             </div>
@@ -128,7 +141,7 @@ export default function FeedPost({ item, currentUser }) {
                 </button>
             </div>
 
-            {/* COMMENTS SECTION (Unchanged) */}
+            {/* COMMENTS SECTION */}
             {showComments && (
                 <div className="mt-4 pt-4 border-t border-gray-800 animate-slidedown relative z-10">
                     <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2 hide-scrollbar">
@@ -138,8 +151,20 @@ export default function FeedPost({ item, currentUser }) {
                             comments.map(comment => (
                                 <div key={comment.id} className={`bg-black/40 p-3 rounded-2xl border border-gray-800 ${comment.parent_id ? 'ml-8 border-l-blue-500/50' : ''}`}>
                                     <div className="flex items-center gap-2 mb-1">
-                                        <img src={comment.profiles?.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${comment.profiles?.username}`} className="w-6 h-6 rounded-full object-cover" alt="" />
-                                        <span className="text-xs font-bold text-white">{comment.profiles?.username}</span>
+                                        {/* 🟢 FIX: Clickable Comment Avatar */}
+                                        <img 
+                                            src={comment.profiles?.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${comment.profiles?.username}`} 
+                                            className="w-6 h-6 rounded-full object-cover cursor-pointer hover:border-blue-400 transition-colors" 
+                                            alt="" 
+                                            onClick={() => onViewEntity && onViewEntity(comment.profiles?.username)}
+                                        />
+                                        {/* 🟢 FIX: Clickable Comment Username */}
+                                        <span 
+                                            className="text-xs font-bold text-white cursor-pointer hover:text-blue-400 transition-colors"
+                                            onClick={() => onViewEntity && onViewEntity(comment.profiles?.username)}
+                                        >
+                                            {comment.profiles?.username}
+                                        </span>
                                         <span className="text-[8px] text-gray-500 uppercase tracking-widest">{new Date(comment.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                     </div>
                                     <p className="text-xs text-gray-300 ml-8">{comment.content}</p>

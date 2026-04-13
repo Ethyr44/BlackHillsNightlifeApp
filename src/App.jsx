@@ -4,8 +4,8 @@ import Auth from './Auth'
 import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
-import NotificationsMenu from './NotificationsMenu'
 import SplashScreen from './SplashScreen' 
+import TopNav from './TopNav'
 
 // Code Splitting
 const FYP = lazy(() => import('./FYP'))
@@ -24,45 +24,15 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   
-  // 🟢 GLOBAL RADAR SWEEP
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const pingLocation = () => {
-      const isEnabled = localStorage.getItem('bhnl_location_enabled') === 'true';
-      if (isEnabled && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-             const { latitude, longitude } = position.coords;
-             await supabase.from('profiles').update({ 
-                 current_lat: latitude, 
-                 current_lng: longitude,
-                 last_active: new Date().toISOString()
-             }).eq('id', currentUser.id);
-          },
-          (err) => console.error("Radar Sweep Error:", err),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      }
-    };
-
-    pingLocation();
-    const intervalId = setInterval(pingLocation, 60000);
-    
-    return () => clearInterval(intervalId);
-  }, [currentUser]);
-  
   const [activeTab, setActiveTab] = useState(() => {
       const params = new URLSearchParams(window.location.search)
       return params.get('tab') || 'FYP'
   })
   const [viewingEntity, setViewingEntity] = useState(null)
   const [showSplash, setShowSplash] = useState(false)
-  
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [showVibeCode, setShowVibeCode] = useState(false)
-
   const [rewardToast, setRewardToast] = useState(null) 
   const [notificationToast, setNotificationToast] = useState(null) 
   const [showNotifications, setShowNotifications] = useState(false) 
@@ -120,11 +90,8 @@ export default function App() {
   // 4. Mobile Hardware Back Button Interceptor
   useEffect(() => {
     const handlePopState = (event) => {
-      if (event.state && event.state.tab) {
-        setActiveTab(event.state.tab)
-      } else {
-        setActiveTab('FYP') 
-      }
+      if (event.state && event.state.tab) setActiveTab(event.state.tab)
+      else setActiveTab('FYP') 
     }
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
@@ -135,28 +102,17 @@ export default function App() {
     if (!currentUser) return
 
     const notifSubscription = supabase.channel('realtime-notifs')
-      .on('postgres', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${currentUser.id}` 
-      }, (payload) => {
+      .on('postgres', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
           const newNotif = payload.new
-          
           const pushEnabled = localStorage.getItem('bhnl_notifications_enabled') === 'true'
 
           if (pushEnabled && 'Notification' in window && Notification.permission === 'granted') {
-              new Notification('BHNL Alert', {
-                  body: newNotif.content,
-                  icon: '/vite.svg', 
-                  vibrate: [200, 100, 200] 
-              })
+              new Notification('BHNL Alert', { body: newNotif.content, icon: '/vite.svg', vibrate: [200, 100, 200] })
           } else {
               setNotificationToast(`🔔 Alert: ${newNotif.content}`)
               setTimeout(() => setNotificationToast(null), 5000)
           }
-      })
-      .subscribe()
+      }).subscribe()
 
     return () => supabase.removeChannel(notifSubscription)
   }, [currentUser])
@@ -176,7 +132,6 @@ export default function App() {
                 { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
                 { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
             ])
-            
             const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
             showReward('VibeCode Scanned!', earnedPts)
 
@@ -192,6 +147,27 @@ export default function App() {
     handleVibeScan()
   }, [currentUser, activeTab])
 
+  // 7. GLOBAL RADAR SWEEP
+  useEffect(() => {
+    if (!currentUser) return;
+    const pingLocation = () => {
+      const isEnabled = localStorage.getItem('bhnl_location_enabled') === 'true';
+      if (isEnabled && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+             const { latitude, longitude } = position.coords;
+             await supabase.from('profiles').update({ current_lat: latitude, current_lng: longitude, last_active: new Date().toISOString() }).eq('id', currentUser.id);
+          },
+          (err) => console.error("Radar Sweep Error:", err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+    };
+    pingLocation();
+    const intervalId = setInterval(pingLocation, 60000);
+    return () => clearInterval(intervalId);
+  }, [currentUser]);
+
   // Helpers
   const checkDailyBonus = async (userProfile) => {
       if (!userProfile) return
@@ -204,33 +180,21 @@ export default function App() {
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
 
-          await supabase.from('notifications').insert([{
-              user_id: userProfile.id,
-              title: 'Daily Login',
-              content: `You received ${earnedPts || 50} Lifestyle Points for your daily check-in!`
-          }])
+          await supabase.from('notifications').insert([{ user_id: userProfile.id, title: 'Daily Login', content: `You received ${earnedPts || 50} Lifestyle Points for your daily check-in!` }])
 
           if (userProfile.pref_events && userProfile.pref_events.length > 0) {
               const { data: allEvents } = await supabase.from('events').select('*').eq('status', 'approved')
-              
               if (allEvents) {
                   const dayOfWeek = today.getDay()
                   const activeToday = allEvents.filter(e => {
                       const eDate = new Date(e.event_date)
-                      if (e.recurring_weekly) return eDate.getDay() === dayOfWeek
-                      return eDate.toDateString() === todayString
+                      return e.recurring_weekly ? eDate.getDay() === dayOfWeek : eDate.toDateString() === todayString
                   })
-
                   const matchedEvents = activeToday.filter(e => userProfile.pref_events.includes(e.event_type))
 
                   if (matchedEvents.length > 0) {
                       const matchNames = [...new Set(matchedEvents.map(m => m.event_type))].join(' & ')
-                      
-                      await supabase.from('notifications').insert([{
-                          user_id: userProfile.id,
-                          title: 'Suggested Events',
-                          content: `🎉 Heads up! There are ${matchedEvents.length} ${matchNames} events happening tonight in the Black Hills! Check the Lineup.`
-                      }])
+                      await supabase.from('notifications').insert([{ user_id: userProfile.id, title: 'Suggested Events', content: `🎉 Heads up! There are ${matchedEvents.length} ${matchNames} events happening tonight in the Black Hills! Check the Lineup.` }])
                   }
               }
           }
@@ -278,16 +242,10 @@ export default function App() {
   const baseTabs = ["FYP", "Profile", "Songbook", "Leagues", "Live", "Settings"]
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
-  const SuspenseLoader = () => (
-    <div className="flex justify-center mt-20">
-      <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  )
-
   return (
     <div className="min-h-screen bg-[#030712] text-gray-200 font-['DM_Sans'] pb-20 relative">
       
-      {/* 🎁 THE UNIVERSAL REWARD TOAST 🎁 */}
+      {/* 🎁 REWARD TOASTS 🎁 */}
       {rewardToast && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
             <div className="bg-gradient-to-r from-yellow-600 via-orange-500 to-yellow-600 p-[2px] rounded-full shadow-[0_0_30px_rgba(234,179,8,0.4)]">
@@ -295,16 +253,12 @@ export default function App() {
                     <div className="text-3xl animate-bounce">🎁</div>
                     <div>
                         <p className="text-white font-bold text-[10px] uppercase tracking-widest shadow-black">{rewardToast.title}</p>
-                        <p className="text-yellow-400 font-['Bebas_Neue'] text-3xl leading-none tracking-wider drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">
-                            +{rewardToast.points} PTS
-                        </p>
+                        <p className="text-yellow-400 font-['Bebas_Neue'] text-3xl leading-none tracking-wider drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">+{rewardToast.points} PTS</p>
                     </div>
                 </div>
             </div>
         </div>
       )}
-
-      {/* 🔔 FALLBACK NOTIFICATION TOAST 🔔 */}
       {notificationToast && (
         <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
             <div className="bg-blue-600 border border-blue-400 px-6 py-3 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)]">
@@ -313,53 +267,24 @@ export default function App() {
         </div>
       )}
 
-      <nav className="bg-gray-900/95 backdrop-blur-md sticky top-0 z-50 border-b border-gray-800 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
-        <div className="max-w-2xl mx-auto p-4 flex gap-3 items-center justify-between">
-          <h1 className="font-['Bebas_Neue'] text-3xl tracking-widest text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)] hidden sm:block">BHNL</h1>
-          
-          <div className="flex-1 relative mx-2">
-            <input 
-              type="text" placeholder="Search users, venues, acts" value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={executeSearch}
-              className="w-full bg-black border border-gray-700 text-white rounded-full py-2 px-4 pl-10 focus:outline-none focus:border-blue-500 transition-all text-sm"
-            />
-            <span className="absolute left-4 top-2.5 text-gray-500">🔍</span>
-          </div>
-
-          <div className="relative">
-             <button onClick={() => setShowNotifications(!showNotifications)} className="text-2xl hover:scale-110 transition-transform bg-gray-800 w-10 h-10 rounded-full flex items-center justify-center border border-gray-700">
-                🔔
-             </button>
-             {showNotifications && <NotificationsMenu userId={currentUser.id} onClose={() => setShowNotifications(false)} />}
-          </div>
-        </div>
-        
-        <div className="max-w-2xl mx-auto px-4 flex overflow-x-auto hide-scrollbar border-t border-gray-800">
-          <div className="flex gap-1 py-2">
-            {tabs.map(tab => (
-              <button
-                key={tab} onClick={() => changeTab(tab)}
-                className={`px-4 py-2 rounded-full text-sm font-bold tracking-widest uppercase transition-all whitespace-nowrap ${
-                  activeTab === tab && !viewingEntity ? (tab === 'Admin Console' ? 'bg-red-900/20 text-red-500 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-blue-600/20 text-blue-400 border border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.2)]') : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
-      </nav>
+      <TopNav 
+          currentUser={currentUser}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          executeSearch={executeSearch}
+          showNotifications={showNotifications}
+          setShowNotifications={setShowNotifications}
+          tabs={tabs}
+          activeTab={activeTab}
+          changeTab={changeTab}
+          viewingEntity={viewingEntity}
+      />
 
       <main className="max-w-2xl mx-auto">
         {viewingEntity ? (
-          <PublicProfile 
-            entity={viewingEntity} 
-            onClose={() => { setViewingEntity(null); setForceFriendView(false); }} 
-            currentUser={currentUser} 
-            forceAccess={forceFriendView ? 'friend' : null} 
-          />
+          <PublicProfile entity={viewingEntity} onClose={() => { setViewingEntity(null); setForceFriendView(false); }} currentUser={currentUser} forceAccess={forceFriendView ? 'friend' : null} />
         ) : (
-          <Suspense fallback={<SuspenseLoader />}>
+          <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
             <div key={activeTab} className="animate-fade-in w-full h-full">
               {activeTab === 'Projector' && <Projector />}
               {activeTab === 'Search' && searchResults && (
@@ -370,16 +295,13 @@ export default function App() {
                     {searchResults.profiles.map(user => (
                       <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
                          <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
-                         <div>
-                           <h4 className="font-bold text-white text-lg">{user.username}</h4>
-                         </div>
+                         <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-              
-              {activeTab === 'FYP' && <FYP currentUser={currentUser} />}
+              {activeTab === 'FYP' && <FYP currentUser={currentUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Admin Console' && <AdminPanel session={session} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
@@ -387,7 +309,7 @@ export default function App() {
               {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
               {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
               {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
-              {activeTab === 'Live' && <Live currentUser={currentUser} />}
+              {activeTab === 'Live' && <Live currentUser={currentUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
             </div>
           </Suspense>
@@ -397,10 +319,7 @@ export default function App() {
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
 
       {!showVibeCode && (
-        <button 
-          onClick={() => setShowVibeCode(true)}
-          className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#090812] text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border-2 border-blue-500 flex items-center justify-center hover:scale-110 transition-transform z-50 group"
-        >
+        <button onClick={() => setShowVibeCode(true)} className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#090812] text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border-2 border-blue-500 flex items-center justify-center hover:scale-110 transition-transform z-50 group">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-blue-400 group-hover:text-white transition-colors">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
@@ -408,13 +327,7 @@ export default function App() {
         </button>
       )}
 
-      {showSplash && (
-        <SplashScreen 
-          username={currentUser?.username}
-          phase={showSplash} 
-          onComplete={() => setShowSplash(false)} 
-        />
-      )}
+      {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>
   )
 }

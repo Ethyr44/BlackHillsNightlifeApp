@@ -68,20 +68,25 @@ export default function Map({ onViewEntity }) {
 
       setVenues(processedVenues)
 
+      // 🟢 FIX #2: Safe and robust Google Maps Script Loader
       if (window.google && window.google.maps) {
         initializeMap(processedVenues)
-        return
-      }
+      } else {
+        // Queue our map initialization inside the global callback
+        const existingInit = window.initMap
+        window.initMap = () => {
+            if (existingInit) existingInit() // Don't break other components waiting to load!
+            initializeMap(processedVenues)
+        }
 
-      window.initMap = () => initializeMap(processedVenues)
-
-      if (!document.getElementById('google-maps-script')) {
-          const script = document.createElement('script')
-          script.id = 'google-maps-script'
-          script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
-          script.async = true 
-          script.defer = true
-          document.head.appendChild(script)
+        if (!document.getElementById('google-maps-script')) {
+            const script = document.createElement('script')
+            script.id = 'google-maps-script'
+            script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&loading=async&callback=initMap`
+            script.async = true 
+            script.defer = true
+            document.head.appendChild(script)
+        }
       }
     }
     init()
@@ -221,7 +226,6 @@ export default function Map({ onViewEntity }) {
         ))}
       </div>
 
-      {/* 🟢 THE ONLY CHANGE: Height is now dynamic based on screen size instead of fixed at 450px */}
       <div className="relative w-full h-[calc(100vh-280px)] min-h-[450px] rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]">
         {!mapInstance && (
             <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">

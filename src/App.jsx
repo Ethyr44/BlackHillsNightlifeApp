@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
+import { BrowserRouter, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import PublicProfile from './PublicProfile'
@@ -7,7 +8,7 @@ import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
 import TopNav from './TopNav'
 
-// 🟢 THE NEW BACKGROUND
+// THE GLOBAL BACKGROUND
 import Moonshower from './backgrounds/Moonshower'
 
 // Code Splitting
@@ -23,14 +24,13 @@ const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 
-export default function App() {
+// --- INNER APP LOGIC ---
+function MainApp() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') || 'FYP'
+  
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
-  
-  const [activeTab, setActiveTab] = useState(() => {
-      const params = new URLSearchParams(window.location.search)
-      return params.get('tab') || 'FYP'
-  })
   const [viewingEntity, setViewingEntity] = useState(null)
   const [showSplash, setShowSplash] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -90,15 +90,19 @@ export default function App() {
     }
   }, [session])
 
-  // 4. Mobile Hardware Back Button Interceptor
+  // 4. FIX #1 & #3: Hardware Back Button Interceptor (React Router Native)
   useEffect(() => {
-    const handlePopState = (event) => {
-      if (event.state && event.state.tab) setActiveTab(event.state.tab)
-      else setActiveTab('FYP') 
+    const view = searchParams.get('view')
+    if (!view) {
+        // If the URL drops the ?view parameter (e.g. hitting the back button), close overlays safely
+        setViewingEntity(null)
+        setForceFriendView(false)
     }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
+    if (activeTab !== 'Search') {
+        setSearchResults(null)
+        setSearchQuery('')
+    }
+  }, [searchParams, activeTab])
 
   // 5. Active Native Push Notifications (Supabase Realtime)
   useEffect(() => {
@@ -124,8 +128,7 @@ export default function App() {
   useEffect(() => {
     const handleVibeScan = async () => {
       if (!currentUser) return
-      const params = new URLSearchParams(window.location.search)
-      const targetId = params.get('connect')
+      const targetId = searchParams.get('connect')
 
       if (targetId && targetId !== currentUser.id) {
         const { data: existing } = await supabase.from('connections').select('id').eq('follower_id', currentUser.id).eq('target_id', targetId).maybeSingle()
@@ -143,32 +146,47 @@ export default function App() {
                 { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
             ])
         }
-        window.history.replaceState({}, document.title, `/?tab=${activeTab}`)
+        // Wipe 'connect' from the URL but keep the active tab, and open their profile
+        setSearchParams({ tab: activeTab, view: 'profile' }, { replace: true })
         setViewingEntity({ id: targetId }) 
       }
     }
     handleVibeScan()
-  }, [currentUser, activeTab])
+  }, [currentUser, searchParams])
 
-  // 7. GLOBAL RADAR SWEEP
+  // 7. FIX #4: GLOBAL RADAR SWEEP (Battery Optimized)
   useEffect(() => {
     if (!currentUser) return;
+    let watchId;
+    let lastUpdateTime = 0;
+
     const pingLocation = () => {
       const isEnabled = localStorage.getItem('bhnl_location_enabled') === 'true';
       if (isEnabled && navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
+        watchId = navigator.geolocation.watchPosition(
           async (position) => {
-             const { latitude, longitude } = position.coords;
-             await supabase.from('profiles').update({ current_lat: latitude, current_lng: longitude, last_active: new Date().toISOString() }).eq('id', currentUser.id);
+             const now = Date.now();
+             // Throttles the database updates to max once per 60 seconds to save battery & DB reads
+             if (now - lastUpdateTime >= 60000) {
+                 lastUpdateTime = now;
+                 const { latitude, longitude } = position.coords;
+                 await supabase.from('profiles').update({ 
+                     current_lat: latitude, 
+                     current_lng: longitude, 
+                     last_active: new Date().toISOString() 
+                 }).eq('id', currentUser.id);
+             }
           },
           (err) => console.error("Radar Sweep Error:", err),
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          { enableHighAccuracy: true, maximumAge: 60000, timeout: 10000 }
         );
       }
     };
     pingLocation();
-    const intervalId = setInterval(pingLocation, 60000);
-    return () => clearInterval(intervalId);
+
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
   }, [currentUser]);
 
   // Helpers
@@ -205,12 +223,8 @@ export default function App() {
   }
 
   const changeTab = (newTab) => {
-    window.history.pushState({ tab: newTab }, '', `?tab=${newTab}`)
-    setViewingEntity(null)
-    setForceFriendView(false) 
-    setSearchResults(null)
-    setSearchQuery('')
-    setActiveTab(newTab)
+    // Utilize React Router to push the new tab to browser history
+    setSearchParams({ tab: newTab })
   }
 
   const executeSearch = async (e) => {
@@ -220,18 +234,25 @@ export default function App() {
       const { data: profiles } = await supabase.from('profiles').select('*').ilike('username', query)
       
       setSearchResults({ pages: pages || [], profiles: profiles || [] })
-      setViewingEntity(null)
-      setForceFriendView(false)
-      setActiveTab('Search')
+      setSearchParams({ tab: 'Search' })
     }
   }
 
+  // FIX #2: Safe Database Search for view entity
   const onViewEntity = async (name) => {
     if (!name) return
-    const { data: page } = await supabase.from('pages').select('*').ilike('name', name).single()
-    if (page) return setViewingEntity(page)
-    const { data: profile } = await supabase.from('profiles').select('*').ilike('username', name).single()
-    if (profile) return setViewingEntity(profile)
+    const { data: page } = await supabase.from('pages').select('*').ilike('name', name).limit(1).maybeSingle()
+    if (page) {
+        setViewingEntity(page)
+        setSearchParams({ tab: activeTab, view: 'profile' })
+        return
+    }
+    const { data: profile } = await supabase.from('profiles').select('*').ilike('username', name).limit(1).maybeSingle()
+    if (profile) {
+        setViewingEntity(profile)
+        setSearchParams({ tab: activeTab, view: 'profile' })
+        return
+    }
     alert("This entity hasn't been added to the directory yet!")
   }
 
@@ -248,7 +269,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
       
-      {/* 🟢 THE GLOBAL BACKGROUND PATTERN 🟢 */}
       <Moonshower />
 
       {/* 🎁 REWARD TOASTS 🎁 */}
@@ -288,7 +308,12 @@ export default function App() {
 
       <main className="max-w-2xl mx-auto relative z-10">
         {viewingEntity ? (
-          <PublicProfile entity={viewingEntity} onClose={() => { setViewingEntity(null); setForceFriendView(false); }} currentUser={currentUser} forceAccess={forceFriendView ? 'friend' : null} />
+          <PublicProfile 
+              entity={viewingEntity} 
+              onClose={() => { setSearchParams({ tab: activeTab }) }} 
+              currentUser={currentUser} 
+              forceAccess={forceFriendView ? 'friend' : null} 
+          />
         ) : (
           <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
             <div key={activeTab} className="animate-fade-in w-full h-full">
@@ -299,8 +324,7 @@ export default function App() {
                   {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
                   <div className="space-y-4">
                     {searchResults.profiles.map(user => (
-                      <div key={user.id} onClick={() => setViewingEntity(user)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         {/* 🤖 THE FIX: Hardcoded shapes replaced with bottts */}
+                      <div key={user.id} onClick={() => onViewEntity(user.username)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
                          <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>
@@ -336,5 +360,14 @@ export default function App() {
 
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>
+  )
+}
+
+// --- APP WRAPPER FOR REACT ROUTER ---
+export default function App() {
+  return (
+    <BrowserRouter>
+      <MainApp />
+    </BrowserRouter>
   )
 }

@@ -22,21 +22,26 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
       {/* Background Logic */}
       {profile.slideshow_urls && profile.slideshow_urls.length > 0 ? (
           profile.slideshow_urls.map((url, idx) => (
-              <div key={idx} className={`absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? 'opacity-40' : 'opacity-0'}`} style={{ backgroundImage: `url(${url})` }} />
+              <img key={idx} src={url} alt="Slideshow" referrerPolicy="no-referrer" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? 'opacity-40' : 'opacity-0'}`} />
           ))
       ) : (
           <div className="absolute inset-0 opacity-20" style={{ background: `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})` }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-[#090812] via-[#090812]/50 to-transparent"></div>
 
-      <img src={profile.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}`} 
-           className="w-36 h-36 rounded-full border-4 bg-black z-10 object-cover shadow-2xl relative" 
-           style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
+      <img 
+          src={profile.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}`} 
+          className="w-36 h-36 rounded-full border-4 bg-black z-10 object-cover shadow-2xl relative" 
+          style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} 
+          alt="Profile" 
+          onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}` }}
+          referrerPolicy="no-referrer"
+      />
       
-      <h2 className="text-5xl font-['Bebas_Neue'] tracking-wider mt-6 z-10 text-white relative flex items-center gap-3 justify-center" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
+      <h1 className="font-['Bebas_Neue'] text-white tracking-widest uppercase leading-none drop-shadow-[0_5px_15px_rgba(0,0,0,0.8)] text-5xl sm:text-6xl break-all px-4 mt-6 z-10 relative flex items-center gap-3 justify-center" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
           {profile.username}
           {profile.zodiac_sign && <span className="text-2xl" title={profile.zodiac_sign}>{profile.zodiac_sign.split(' ')[0]}</span>}
-      </h2>
+      </h1>
       
       <div className="bg-black/50 border border-white/10 px-4 py-1 rounded-full relative z-10 backdrop-blur-md mt-1 mb-4">
           <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{profile.account_type} Account</span>

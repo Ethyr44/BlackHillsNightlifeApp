@@ -98,6 +98,8 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                     className="w-12 h-12 rounded-full border border-blue-500/30 object-cover bg-black cursor-pointer hover:border-blue-400 transition-colors" 
                     alt="" 
                     onClick={() => onViewEntity && onViewEntity(item.data.username)}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${item.data.username}` }}
                 />
                 <div>
                     {/* 🟢 FIX: Clickable Post Username */}
@@ -121,7 +123,13 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
             {/* HIGH-RES IMAGE RENDERER */}
             {item.data.image_url && (
                 <div className="relative z-10 mb-4 rounded-xl overflow-hidden border border-gray-800 bg-black">
-                    <img src={item.data.image_url} alt="Post media" className="w-full h-auto object-cover max-h-[500px]" />
+                    <img 
+                        src={item.data.image_url} 
+                        alt="Post media" 
+                        className="w-full h-auto object-cover max-h-[500px]" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => e.target.style.display = 'none'}
+                    />
                 </div>
             )}
 
@@ -157,6 +165,8 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                                             className="w-6 h-6 rounded-full object-cover cursor-pointer hover:border-blue-400 transition-colors" 
                                             alt="" 
                                             onClick={() => onViewEntity && onViewEntity(comment.profiles?.username)}
+                                            referrerPolicy="no-referrer"
+                                            onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${comment.profiles?.username}` }}
                                         />
                                         {/* 🟢 FIX: Clickable Comment Username */}
                                         <span 

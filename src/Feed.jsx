@@ -38,11 +38,6 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
     setLoading(false)
   }
 
-    const { data, error } = await query
-    if (!error && data) setPosts(data)
-    setLoading(false)
-  }
-
   if (loading) return (
     <div className="flex justify-center p-8">
       <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>

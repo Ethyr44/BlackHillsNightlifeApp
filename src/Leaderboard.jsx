@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function Leaderboard() {
+export default function Leaderboard({ onViewEntity }) {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -54,9 +54,16 @@ export default function Leaderboard() {
                 <div className={`font-['Bebas_Neue'] text-3xl w-8 text-center ${isTop3 ? medalColors[index] : 'text-gray-600'}`}>
                   {index + 1}
                 </div>
-                <img src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} alt="avatar" className={`w-12 h-12 rounded-full border-2 ${isTop3 ? 'border-blue-500' : 'border-gray-700'} object-cover bg-black`} />
+                <img 
+                  onClick={() => onViewEntity(user.username)} 
+                  src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}`} 
+                  alt="avatar" 
+                  className={`w-12 h-12 rounded-full border-2 ${isTop3 ? 'border-blue-500' : 'border-gray-700'} object-cover bg-black cursor-pointer hover:border-blue-400 transition-colors`} 
+                  referrerPolicy="no-referrer" 
+                  onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${user.username}` }} 
+                />
                 <div className="flex-1">
-                  <h4 className="font-bold text-white text-lg leading-tight">{user.username}</h4>
+                  <h4 onClick={() => onViewEntity(user.username)} className="font-bold text-white text-lg leading-tight cursor-pointer hover:text-blue-400 transition-colors">{user.username}</h4>
                   <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20">{user.account_type}</span>
                 </div>
                 <div className="text-right">

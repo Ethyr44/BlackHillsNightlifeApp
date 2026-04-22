@@ -100,7 +100,7 @@ export default function Live({ currentUser, onViewEntity }) {
 
             {/* MINI-PAGE RENDERING */}
             <div className="p-4 mt-2">
-                {activeMiniPage === 'Map' && <Map onViewEntity={onViewEntity} />}
+                {activeMiniPage === 'Map' && <Map currentUser={currentUser} onViewEntity={onViewEntity} />}
                 {activeMiniPage === 'Shop' && <Shop currentUser={currentUser} />}
                 
                 {activeMiniPage === 'KSocial' && (
@@ -111,6 +111,9 @@ export default function Live({ currentUser, onViewEntity }) {
                             <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest">Enter the PIN to unlock Casual KSocial.</p>
                             
                             <input 
+                                id="ksocial-pin"
+                                name="ksocial-pin"
+                                autoComplete="off"
                                 type="password" 
                                 value={hubPin} 
                                 onChange={e => setHubPin(e.target.value)} 
@@ -196,6 +199,9 @@ export default function Live({ currentUser, onViewEntity }) {
                         <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest">Enter Host PIN to launch tournament mode.</p>
                         
                         <input 
+                            id="league-pin"
+                            name="league-pin"
+                            autoComplete="off"
                             type="password" 
                             value={pinCode} 
                             onChange={e => setPinCode(e.target.value)} 

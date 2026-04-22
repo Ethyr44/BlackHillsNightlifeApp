@@ -149,7 +149,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                         <button onClick={() => setSelectedVenueInfo(null)} className="absolute top-4 right-4 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center">✕</button>
                     </div>
                     <div className="px-6 pb-6 relative">
-                        <img src={selectedVenueInfo.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${selectedVenueInfo.name}`} className="w-24 h-24 rounded-full border-4 border-gray-900 bg-black absolute -top-12 object-cover" alt="" />
+                        <img src={selectedVenueInfo.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${selectedVenueInfo.name}`} className="w-24 h-24 rounded-full border-4 border-gray-900 bg-black absolute -top-12 object-cover" alt="" referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${selectedVenueInfo.name}` }} />
                         <h2 className="text-3xl font-['Bebas_Neue'] tracking-widest text-white pt-14 mb-1">{selectedVenueInfo.name}</h2>
                         <div className="flex gap-2 mb-4">
                             <span className="bg-blue-900/30 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest">Venue</span>

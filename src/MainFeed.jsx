@@ -15,7 +15,7 @@ export default function MainFeed({ currentUser, onViewEntity }) {
       const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic')
       
       const formattedPosts = (rawPosts || []).map(post => {
-          const author = profiles?.find(p => p.id === post.author_id || p.id === post.user_id) || {}
+          const author = profiles?.find(p => p.id === post.author_id) || {}
           return {
               id: `post_${post.id}`, type: 'post', timestamp: new Date(post.created_at).getTime(),
               data: { ...post, username: author.username || 'Unknown', profile_pic: author.profile_pic }

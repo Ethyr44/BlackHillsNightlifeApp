@@ -78,6 +78,9 @@ export default function AdminPages() {
                     const { error: updateError } = await supabase.from('pages').update({ lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) }).eq('id', venue.id);
                     if (!updateError) updatedCount++;
                 }
+                
+                // Delay for 1 second to comply with OpenStreetMap/Nominatim's strict usage policy
+                await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (err) {
                 console.error(`Error processing venue ${venue.id}:`, err);
             }
@@ -164,7 +167,7 @@ export default function AdminPages() {
             <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2">Logo / Profile Picture</label>
                 <div className="flex items-center gap-4">
-                    {profilePic && <img src={profilePic} className="w-12 h-12 rounded-full border border-gray-700 object-cover" alt="Logo preview" />}
+                    {profilePic && <img src={profilePic} className="w-12 h-12 rounded-full border border-gray-700 object-cover" alt="Logo preview" referrerPolicy="no-referrer" />}
                     <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'avatar')} disabled={uploading} className="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:uppercase file:tracking-widest file:bg-gray-800 file:text-white hover:file:bg-gray-700 cursor-pointer" />
                 </div>
             </div>
@@ -175,7 +178,7 @@ export default function AdminPages() {
                   <div className="flex gap-2 overflow-x-auto pb-2">
                       {slideshowUrls.map((url, idx) => (
                           <div key={idx} className="relative flex-shrink-0 w-16 h-16 rounded overflow-hidden border border-gray-700">
-                              <img src={url} className="w-full h-full object-cover" alt={`Slide ${idx}`} />
+                              <img src={url} className="w-full h-full object-cover" alt={`Slide ${idx}`} referrerPolicy="no-referrer" />
                               <button onClick={() => setSlideshowUrls(slideshowUrls.filter((_, i) => i !== idx))} className="absolute top-1 right-1 bg-red-600 text-white w-4 h-4 rounded-full text-[8px] flex items-center justify-center">✕</button>
                           </div>
                       ))}
@@ -224,7 +227,7 @@ export default function AdminPages() {
         {pages.map(p => (
           <div key={p.id} className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:border-gray-600 transition-colors">
             <div className="flex items-center gap-3">
-              <img src={p.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${p.name}`} className="w-10 h-10 rounded-full border border-gray-700 object-cover bg-black" alt="" />
+              <img src={p.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${p.name}`} className="w-10 h-10 rounded-full border border-gray-700 object-cover bg-black" alt="" referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${p.name}` }} />
               <div>
                 <h4 className="font-bold text-white text-lg">{p.name}</h4>
                 <span className={`text-[9px] px-2 py-0.5 rounded uppercase tracking-widest font-bold ${p.page_type === 'Venue' ? 'text-blue-400 border border-blue-500/30 bg-blue-900/20' : 'text-purple-400 border border-purple-500/30 bg-purple-900/20'}`}>{p.page_type}</span>

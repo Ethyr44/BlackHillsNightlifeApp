@@ -4,13 +4,17 @@ export default function SplashScreen({ username, phase, onComplete }) {
   const [fadeState, setFadeState] = useState('opacity-100')
 
   useEffect(() => {
+    let fadeTimer, completeTimer;
     // Start the self-destruct sequence (3 seconds total)
-    const timer = setTimeout(() => {
+    fadeTimer = setTimeout(() => {
       setFadeState('opacity-0 pointer-events-none') 
-      setTimeout(onComplete, 1000) 
+      completeTimer = setTimeout(onComplete, 1000) 
     }, 3000)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(fadeTimer)
+      clearTimeout(completeTimer)
+    }
   }, [onComplete])
 
   // The 7-Phase Dynamic Visual Engine
@@ -39,9 +43,9 @@ export default function SplashScreen({ username, phase, onComplete }) {
 
        {/* The Greeting */}
        <div className="z-10 text-center animate-fade-in -translate-y-16">
-         <h1 className={`text-6xl sm:text-7xl font-['Bebas_Neue'] tracking-wider ${currentTheme.text} transition-colors duration-1000`}>
-           What's Boppin,<br/>{username || 'Rapid City'}!
-         </h1>
+         <h2 className="font-['Bebas_Neue'] text-blue-400 leading-none drop-shadow-[0_0_15px_rgba(59,130,246,0.5)] text-6xl sm:text-8xl break-all px-4">
+             {username || 'VIBER'}
+         </h2>
          <p className="text-white/70 uppercase tracking-widest text-xs font-bold mt-2">
             {phase} Vibe
          </p>

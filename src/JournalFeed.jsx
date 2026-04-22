@@ -1,3 +1,4 @@
+// Inside JournalFeed.jsx
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
@@ -16,8 +17,26 @@ export default function JournalFeed({ currentUser }) {
      return () => supabase.removeChannel(sub)
   }, [])
 
+  // NEW: Silent 60-second sweeper to remove expired messages from view
+  useEffect(() => {
+      const interval = setInterval(() => {
+         const tenMinsAgo = new Date(Date.now() - 10 * 60000)
+         setEntries(prev => prev.filter(e => new Date(e.created_at) > tenMinsAgo))
+      }, 60000)
+      return () => clearInterval(interval)
+  }, [])
+
   const fetchJournal = async () => {
-     const { data } = await supabase.from('journal').select('*').order('created_at', { ascending: false }).limit(50)
+     // NEW: Only pull records from the last 10 minutes
+     const tenMinsAgo = new Date(Date.now() - 10 * 60000).toISOString()
+     
+     const { data } = await supabase
+        .from('journal')
+        .select('*')
+        .gte('created_at', tenMinsAgo)
+        .order('created_at', { ascending: false })
+        .limit(50)
+        
      if (data) setEntries(data)
      setLoading(false)
   }
@@ -31,9 +50,11 @@ export default function JournalFeed({ currentUser }) {
   }
 
   return (
-    <div className="animate-fade-in flex flex-col h-[calc(100vh-280px)] min-h-[500px]">
+    // Minor UI tweak: Removed the fixed height so it flows naturally at the bottom of the map
+    <div className="animate-fade-in flex flex-col min-h-[500px]">
         <div className="flex-1 bg-[#090812] border-2 border-gray-800 rounded-t-3xl p-4 overflow-y-auto flex flex-col-reverse hide-scrollbar shadow-inner">
-            {loading ? <div className="text-center text-gray-500 text-xs py-10">Decrypting journal...</div> : (
+            {loading ? <div className="text-center text-gray-500 text-xs py-10">Decrypting local frequencies...</div> : (
+                entries.length === 0 ? <div className="text-center text-gray-600 text-xs py-10 uppercase tracking-widest font-bold">No active transmissions.</div> :
                 entries.map((entry, index) => {
                     const isMine = entry.user_id === currentUser?.id
                     const prevEntry = entries[index + 1]
@@ -64,7 +85,7 @@ export default function JournalFeed({ currentUser }) {
                     value={text} 
                     onChange={e => setText(e.target.value)} 
                     maxLength={77}
-                    placeholder="Send an anonymous message..."
+                    placeholder="Broadcast anonymously (10 min expiry)..."
                     className="flex-1 bg-black border border-gray-700 text-white rounded-full px-5 focus:outline-none focus:border-blue-500 text-sm transition-colors"
                 />
                 <button type="submit" disabled={!text.trim()} className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-[0_0_10px_rgba(59,130,246,0.4)]">

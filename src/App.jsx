@@ -24,6 +24,29 @@ const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 
+// Calculate Splash Screen status synchronously to prevent initial UI flash
+const getInitialSplash = () => {
+    const hour = new Date().getHours()
+    const date = new Date().toDateString()
+    let currentPhase = 'Midnight'
+    
+    if (hour >= 6 && hour < 10) currentPhase = 'Morning'
+    else if (hour >= 10 && hour < 12) currentPhase = 'Day'
+    else if (hour >= 12 && hour < 14) currentPhase = 'Noon'
+    else if (hour >= 14 && hour < 17) currentPhase = 'Afternoon'
+    else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
+    else if (hour >= 20 && hour < 24) currentPhase = 'Night'
+
+    const timeBlockKey = `${date}-${currentPhase}`
+    const lastSeen = localStorage.getItem('bhnl_last_splash')
+
+    if (lastSeen !== timeBlockKey) {
+        localStorage.setItem('bhnl_last_splash', timeBlockKey)
+        return currentPhase
+    }
+    return false
+}
+
 // --- INNER APP LOGIC ---
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -32,7 +55,7 @@ function MainApp() {
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [viewingEntity, setViewingEntity] = useState(null)
-  const [showSplash, setShowSplash] = useState(false)
+  const [showSplash, setShowSplash] = useState(getInitialSplash)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [showVibeCode, setShowVibeCode] = useState(false)
@@ -47,28 +70,6 @@ function MainApp() {
           setTimeout(() => setRewardToast(null), 5000)
       }
   }
-
-  // 1. Splash Screen
-  useEffect(() => {
-      const hour = new Date().getHours()
-      const date = new Date().toDateString()
-      let currentPhase = 'Midnight'
-      
-      if (hour >= 6 && hour < 10) currentPhase = 'Morning'
-      else if (hour >= 10 && hour < 12) currentPhase = 'Day'
-      else if (hour >= 12 && hour < 14) currentPhase = 'Noon'
-      else if (hour >= 14 && hour < 17) currentPhase = 'Afternoon'
-      else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
-      else if (hour >= 20 && hour < 24) currentPhase = 'Night'
-
-      const timeBlockKey = `${date}-${currentPhase}`
-      const lastSeen = localStorage.getItem('bhnl_last_splash')
-
-      if (lastSeen !== timeBlockKey) {
-          setShowSplash(currentPhase) 
-          localStorage.setItem('bhnl_last_splash', timeBlockKey)
-      }
-  }, [])
 
   // 2. Auth Listener
   useEffect(() => {
@@ -300,6 +301,7 @@ function MainApp() {
           executeSearch={executeSearch}
           showNotifications={showNotifications}
           setShowNotifications={setShowNotifications}
+          setShowVibeCode={setShowVibeCode}
           tabs={tabs}
           activeTab={activeTab}
           changeTab={changeTab}
@@ -325,7 +327,7 @@ function MainApp() {
                   <div className="space-y-4">
                     {searchResults.profiles.map(user => (
                       <div key={user.id} onClick={() => onViewEntity(user.username)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} />
+                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` }} />
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>
                     ))}
@@ -336,10 +338,10 @@ function MainApp() {
               {activeTab === 'Admin Console' && <AdminPanel session={session} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
-              {activeTab === 'Leagues' && <Leaderboard />}
+              {activeTab === 'Leagues' && <Leaderboard onViewEntity={onViewEntity} />}
               {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
               {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
-              {activeTab === 'Map' && <Map onViewEntity={onViewEntity} />}
+              {activeTab === 'Map' && <Map currentUser={currentUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Live' && <Live currentUser={currentUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
             </div>
@@ -348,15 +350,6 @@ function MainApp() {
       </main>
 
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
-
-      {!showVibeCode && (
-        <button onClick={() => setShowVibeCode(true)} className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#090812] text-white w-16 h-16 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.6)] border-2 border-blue-500 flex items-center justify-center hover:scale-110 transition-transform z-50 group">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-blue-400 group-hover:text-white transition-colors">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
-          </svg>
-        </button>
-      )}
 
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>

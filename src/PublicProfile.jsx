@@ -49,7 +49,7 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
       if (!isPage) {
           const { data: posts } = await supabase.from('posts')
             .select('*')
-            .or(`author_id.eq.${entity.id},user_id.eq.${entity.id}`)
+            .eq('author_id', entity.id)
             .order('created_at', { ascending: false })
             .limit(1)
           
@@ -99,7 +99,7 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
     <>
       {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
           entity.slideshow_urls.map((url, idx) => (
-             <div key={idx} className={`fixed inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out z-0 pointer-events-none opacity-30 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`} style={{ backgroundImage: `url(${url})` }}></div>
+             <img key={idx} src={url} alt="Slideshow" referrerPolicy="no-referrer" className={`fixed inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out z-0 pointer-events-none opacity-30 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`} />
           ))
       ) : (
           <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
@@ -111,7 +111,7 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
         </button>
 
         <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-8 border-2 shadow-2xl transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
-            <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" />
+            <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}` }} />
             
             <h2 className="text-5xl font-['Bebas_Neue'] tracking-wider mt-6 z-10 text-white relative" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
                 {entity.name || entity.username}

@@ -14,6 +14,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
   useEffect(() => {
     async function init() {
+      console.log("1. Starting Map Data Fetch...")
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
       const startOfToday = new Date()
@@ -48,22 +49,26 @@ export default function Map({ currentUser, onViewEntity }) {
       }) : []
 
       setVenues(processedVenues)
+      console.log("2. Data Fetched. Checking for Google Maps...")
 
-      // 🟢 FIX #2: Safe and robust Google Maps Script Loader
+      // 🟢 BULLETPROOF SCRIPT LOADER
       if (window.google && window.google.maps) {
+        console.log("3. Google Maps found instantly! Initializing...")
         initializeMap(processedVenues)
       } else {
-        // Queue our map initialization inside the global callback
-        const existingInit = window.initMap
+        console.log("3. Injecting Google Maps script into the page...")
+        
+        // We set the callback function on the window so Google can trigger it when ready
         window.initMap = () => {
-            if (existingInit) existingInit() // Don't break other components waiting to load!
+            console.log("4. Google Maps script finished downloading! Firing callback.")
             initializeMap(processedVenues)
         }
 
         if (!document.getElementById('google-maps-script')) {
             const script = document.createElement('script')
             script.id = 'google-maps-script'
-            script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&map_ids=e48372c619f58e7f83289663&loading=async&callback=initMap`
+            // Added &v=weekly to ensure we get the latest WebGL renderer
+            script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&map_ids=e48372c619f58e7f83289663&v=weekly&loading=async&callback=initMap`
             script.async = true 
             script.defer = true
             document.head.appendChild(script)
@@ -99,8 +104,17 @@ export default function Map({ currentUser, onViewEntity }) {
   }, [])
 
   const initializeMap = async (venueData) => {
-    if (!mapRef.current || !window.google) return
+    console.log("5. initializeMap triggered. Checking refs...")
+    if (!mapRef.current) {
+        console.error("❌ mapRef.current is missing! The div hasn't rendered.")
+        return
+    }
+    if (!window.google) {
+        console.error("❌ window.google is missing!")
+        return
+    }
 
+    console.log("6. Building the map instance...")
     const map = new window.google.maps.Map(mapRef.current, {
       center: { lat: 44.0805, lng: -103.2310 },
       zoom: 13,
@@ -110,6 +124,7 @@ export default function Map({ currentUser, onViewEntity }) {
     })
 
     setMapInstance(map)
+    console.log("7. Map Built. Plotting markers...")
 
     if (venueData && venueData.length > 0) {
       const bounds = new window.google.maps.LatLngBounds()
@@ -209,14 +224,14 @@ export default function Map({ currentUser, onViewEntity }) {
             ))}
           </div>
 
-          {/* Fixed height collapse and WebGL blend mode issues */}
-          <div className="relative w-full flex-1 min-h-[50vh] rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]">
+          {/* 🟢 HARDCODED INLINE CSS TO BYPASS CLOUDFLARE CACHE */}
+          <div className="relative w-full flex-1 rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]" style={{ minHeight: '400px' }}>
             {!mapInstance && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
                     Initializing Radar...
                 </div>
             )}
-            <div ref={mapRef} className="w-full h-full"></div>
+            <div ref={mapRef} style={{ width: '100%', height: '100%', backgroundColor: '#090812' }}></div>
           </div>
 
           {activeVenue && (

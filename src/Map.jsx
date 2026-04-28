@@ -201,48 +201,42 @@ export default function Map({ currentUser, onViewEntity }) {
       </div>
 
       {/* 🟢 THE MERGED MAP & JOURNAL HUD */}
-      <div className="relative w-full h-[65vh] min-h-[500px] rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+      <div className="relative w-full rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col bg-[#050505]">
         
-        {/* Map Base Layer */}
-        {!mapInstance && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
-                Initializing Radar...
-            </div>
-        )}
-        <div ref={mapRef} className="absolute inset-0 bg-[#090812] z-0"></div>
-
-        {/* 🟢 The Journal HUD Overlay */}
-        <div className="absolute bottom-0 left-0 w-full z-20 bg-gradient-to-t from-[#030712] via-[#030712]/90 to-transparent pt-20 pb-4 px-4 pointer-events-none">
-            <div className="pointer-events-auto max-w-md mx-auto">
-                <div className="flex items-center justify-between mb-3 px-2">
-                    <h2 className="text-2xl font-['Bebas_Neue'] text-gray-300 tracking-wider drop-shadow-md">The Void</h2>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 bg-blue-900/30 px-2 py-1 rounded-full border border-blue-500/30 backdrop-blur-sm">Live Chatter</span>
+        {/* Map Viewport (Takes up the majority of the space) */}
+        <div className="relative w-full h-[60vh] min-h-[450px]">
+            {!mapInstance && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
+                    Initializing Radar...
                 </div>
-                <JournalFeed currentUser={currentUser} />
-            </div>
+            )}
+            <div ref={mapRef} className="absolute inset-0 bg-[#090812] z-0"></div>
+
+            {/* Venue Info Overlay (Pops over the map when a pin is clicked) */}
+            {activeVenue && (
+                <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
+                    <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{activeVenue.name}</h3>
+                        <button onClick={() => setActiveVenue(null)} className="text-gray-500 hover:text-white">✕</button>
+                    </div>
+                    {activeVenue.eventToday ? (
+                        <div className="mb-3">
+                            <span className="text-[#ff2d78] text-[9px] font-bold uppercase tracking-widest block">{activeVenue.isLive ? '🔥 LIVE NOW' : '📅 TODAY'}</span>
+                            <span className="text-white text-xs font-bold">{activeVenue.eventToday.title}</span>
+                        </div>
+                    ) : (
+                        <span className="text-purple-400 text-[9px] font-bold uppercase tracking-widest block mb-3">Official BHNL Venue</span>
+                    )}
+                    <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-colors shadow-lg">
+                        Full Profile
+                    </button>
+                </div>
+            )}
         </div>
 
-        {/* Venue Info Overlay (Pops over the Journal when a pin is clicked) */}
-        {activeVenue && (
-            <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
-                <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{activeVenue.name}</h3>
-                    <button onClick={() => setActiveVenue(null)} className="text-gray-500 hover:text-white">✕</button>
-                </div>
-                {activeVenue.eventToday ? (
-                    <div className="mb-3">
-                        <span className="text-[#ff2d78] text-[9px] font-bold uppercase tracking-widest block">{activeVenue.isLive ? '🔥 LIVE NOW' : '📅 TODAY'}</span>
-                        <span className="text-white text-xs font-bold">{activeVenue.eventToday.title}</span>
-                    </div>
-                ) : (
-                    <span className="text-purple-400 text-[9px] font-bold uppercase tracking-widest block mb-3">Official BHNL Venue</span>
-                )}
-                <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-colors shadow-lg">
-                    Full Profile
-                </button>
-            </div>
-        )}
+        {/* 🟢 The Journal Input Bar (Sits completely beneath the map) */}
+        <div className="relative w-full z-40 border-t border-gray-800">
+            <JournalFeed currentUser={currentUser} />
+        </div>
+
       </div>
-    </div>
-  )
-}

@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import JournalFeed from './JournalFeed'
+import { useAppConfig } from './useAppConfig'
 
 export default function Map({ currentUser, onViewEntity }) {
   const mapRef = useRef(null)
   const [venues, setVenues] = useState([])
   const [activeVenue, setActiveVenue] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
+  const config = useAppConfig()
 
   const venueMarkersRef = useRef([])
   const userMarkersRef = useRef([])
@@ -174,8 +176,12 @@ export default function Map({ currentUser, onViewEntity }) {
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
 
-      <div className="text-center">
-        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
+      <div className="text-center mb-6">
+        {config.map_title_visible !== false && (
+            <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
+                {config.map_title || 'The Scene'}
+            </h2>
+        )}
         <div className="flex justify-center gap-4 mt-2">
             <span className="text-[10px] font-bold uppercase tracking-widest text-[#ff2d78] flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff2d78] animate-pulse"></span> Event</span>
             <span className="text-[10px] font-bold uppercase tracking-widest text-purple-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Venue</span>
@@ -233,11 +239,24 @@ export default function Map({ currentUser, onViewEntity }) {
             )}
         </div>
 
-        {/* 🟢 The Journal Input Bar (Sits completely beneath the map) */}
-        <div className="relative w-full z-40 border-t border-gray-800">
-            <JournalFeed currentUser={currentUser} />
-        </div>
+      </div>
 
+      {/* SECTION 2: THE JOURNAL WIDGET */}
+      <div className="pb-32">
+          <div className="text-center mb-6">
+              {config.journal_title_visible !== false && (
+                  <h2 className="text-4xl font-['Bebas_Neue'] text-gray-300 tracking-wider">
+                      {config.journal_title || 'The Void'}
+                  </h2>
+              )}
+              {config.journal_subtitle_visible !== false && (
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                      {config.journal_subtitle || 'Global Anonymous Chatter • 10 Min Auto-Wipe'}
+                  </p>
+              )}
+          </div>
+          
+          <JournalFeed currentUser={currentUser} />
       </div>
     </div>
   )

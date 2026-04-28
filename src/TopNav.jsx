@@ -1,4 +1,6 @@
 import NotificationsMenu from './NotificationsMenu'
+import { useAppConfig } from './useAppConfig'
+
 
 export default function TopNav({
   currentUser,
@@ -13,12 +15,16 @@ export default function TopNav({
   changeTab, 
   viewingEntity
 }) {
+  const config = useAppConfig()
+
   return (
     <nav className="bg-gray-900/95 backdrop-blur-md sticky top-0 z-50 border-b border-gray-800 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
       <div className="max-w-2xl mx-auto p-4 flex gap-3 items-center justify-between">
-        <h1 className="font-['Bebas_Neue'] text-3xl tracking-widest text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)] hidden sm:block">
-            BHNL
-        </h1>
+        {config.app_title_visible !== false && (
+            <h1 className="font-['Bebas_Neue'] text-3xl tracking-widest text-blue-500 drop-shadow-[0_0_8px_rgba(59,130,246,0.8)] hidden sm:block">
+                {config.app_title || 'BHNL'}
+            </h1>
+        )}
         
         <div className="flex-1 relative mx-2">
           <input 

@@ -5,6 +5,7 @@ import AdminShop from './AdminShop'
 import AdminEconomy from './AdminEconomy'
 import AdminSocial from './AdminSocial'
 import AdminCategories from './AdminCategories'
+import AdminConfig from './AdminConfig'
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('Pages')
@@ -15,7 +16,7 @@ export default function AdminPanel() {
       {/* Tab Navigation */}
       <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 mb-8 overflow-x-auto hide-scrollbar">
         {/* 🟢 ADDED 'Categories' TO THIS ARRAY */}
-        {['Pages', 'Events', 'Shop', 'Economy', 'Social', 'Categories'].map(tab => (
+        {['Pages', 'Events', 'Shop', 'Economy', 'Social', 'Categories', 'App Text'].map(tab => (
           <button 
             key={tab} onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
@@ -37,6 +38,7 @@ export default function AdminPanel() {
       {activeTab === 'Social' && <AdminSocial />}
       {/* 🟢 ADDED THIS RENDER CONDITION */}
       {activeTab === 'Categories' && <AdminCategories />}
+      {activeTab === 'App Text' && <AdminConfig />}
     </div>
   )
 }

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { useAppConfig } from './useAppConfig'
 
 export default function JournalFeed({ currentUser }) {
   const [entries, setEntries] = useState([])
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
+  const config = useAppConfig()
 
   useEffect(() => {
      fetchJournal()
@@ -55,7 +57,18 @@ export default function JournalFeed({ currentUser }) {
   }
 
   return (
-    <div className="animate-fade-in flex flex-col min-h-[500px]">
+    <div className="w-full flex flex-col animate-fade-in bg-[#050505]">
+        
+        {/* HEADER: Now dynamically powered by Supabase! */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-black/40 shrink-0">
+            <h2 className="text-xl font-['Bebas_Neue'] text-white tracking-wider">
+                {config.journal_title || 'The Void'}
+            </h2>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 bg-blue-900/30 px-2 py-1 rounded-full border border-blue-500/30">
+                {config.journal_subtitle || 'Global • 10 Min Wipe'}
+            </span>
+        </div>
+
         <div className="flex-1 bg-[#090812] border-2 border-gray-800 rounded-t-3xl p-4 overflow-y-auto flex flex-col-reverse hide-scrollbar shadow-inner">
             {loading ? <div className="text-center text-gray-500 text-xs py-10">Decrypting local frequencies...</div> : (
                 entries.length === 0 ? <div className="text-center text-gray-600 text-xs py-10 uppercase tracking-widest font-bold">No active transmissions.</div> :

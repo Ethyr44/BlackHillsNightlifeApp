@@ -1,4 +1,3 @@
-// Inside JournalFeed.jsx
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
@@ -17,7 +16,7 @@ export default function JournalFeed({ currentUser }) {
      return () => supabase.removeChannel(sub)
   }, [])
 
-  // NEW: Silent 60-second sweeper to remove expired messages from view
+  // Silent 60-second sweeper to remove expired messages from view
   useEffect(() => {
       const interval = setInterval(() => {
          const tenMinsAgo = new Date(Date.now() - 10 * 60000)
@@ -27,7 +26,7 @@ export default function JournalFeed({ currentUser }) {
   }, [])
 
   async function fetchJournal() {
-     // NEW: Only pull records from the last 10 minutes
+     // Only pull records from the last 10 minutes
      const tenMinsAgo = new Date(Date.now() - 10 * 60000).toISOString()
      
      const { data } = await supabase
@@ -111,3 +110,4 @@ export default function JournalFeed({ currentUser }) {
         
     </div>
   )
+}

@@ -14,7 +14,8 @@ export default function AdminPanel() {
       
       {/* Tab Navigation */}
       <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 mb-8 overflow-x-auto hide-scrollbar">
-        {['Pages', 'Events', 'Shop', 'Economy', 'Social'].map(tab => (
+        {/* 🟢 ADDED 'Categories' TO THIS ARRAY */}
+        {['Pages', 'Events', 'Shop', 'Economy', 'Social', 'Categories'].map(tab => (
           <button 
             key={tab} onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
@@ -34,8 +35,8 @@ export default function AdminPanel() {
       {activeTab === 'Shop' && <AdminShop />}
       {activeTab === 'Economy' && <AdminEconomy />}
       {activeTab === 'Social' && <AdminSocial />}
+      {/* 🟢 ADDED THIS RENDER CONDITION */}
       {activeTab === 'Categories' && <AdminCategories />}
-
     </div>
   )
 }

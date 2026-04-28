@@ -52,18 +52,12 @@ export default function JournalFeed({ currentUser }) {
     <div className="w-full relative animate-fade-in">
         
         {/* 🟢 BUBBLES CONTAINER: Floating OVER the Map Viewport */}
-        {/* 'bottom-[100%]' pushes this div perfectly above the input bar */}
+        {/* 'pointer-events-none' applied to ALL floating wrappers allows clicks to pass through to the Map */}
         <div className="absolute bottom-[100%] left-0 w-full h-[350px] flex flex-col justify-end pointer-events-none z-20 pb-2">
-            <div className="w-full max-w-md mx-auto flex flex-col justify-end h-full pointer-events-auto">
+            <div className="w-full max-w-md mx-auto flex flex-col justify-end h-full pointer-events-none">
                 
-                {/* HUD Header */}
-                <div className="flex items-center justify-between mb-2 px-4 shrink-0">
-                    <h2 className="text-2xl font-['Bebas_Neue'] text-white tracking-wider drop-shadow-[0_0_8px_rgba(0,0,0,1)]">The Void</h2>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-blue-300 drop-shadow-[0_0_8px_rgba(0,0,0,1)]">Global • 10 Min Wipe</span>
-                </div>
-
-                {/* The Chat Window */}
-                <div className="px-4 overflow-y-auto flex flex-col-reverse hide-scrollbar">
+                {/* The Chat Window (Header text removed) */}
+                <div className="px-4 overflow-hidden flex flex-col-reverse hide-scrollbar">
                     {loading ? <div className="text-center text-white drop-shadow-md text-xs py-10">Decrypting local frequencies...</div> : (
                         entries.length === 0 ? <div className="text-center text-white drop-shadow-[0_0_5px_rgba(0,0,0,1)] text-xs py-10 uppercase tracking-widest font-bold">No active transmissions.</div> :
                         entries.map((entry, index) => {

@@ -50,7 +50,7 @@ const getInitialSplash = () => {
 // --- INNER APP LOGIC ---
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') || 'FYP'
+  const activeTab = searchParams.get('tab') || "What's Boppin"
   
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -264,7 +264,7 @@ function MainApp() {
     return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
   }
 
-  const baseTabs = ["FYP", "Profile", "Songbook", "Leagues", "Live", "Settings"]
+  const baseTabs = ["What's Boppin", "Profile", "Songbook", "Leagues", "Live", "Settings"]
   const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
 
   return (
@@ -334,7 +334,7 @@ function MainApp() {
                   </div>
                 </div>
               )}
-              {activeTab === 'FYP' && <FYP currentUser={currentUser} onViewEntity={onViewEntity} />}
+              {activeTab === "What's Boppin" && <FYP currentUser={currentUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Admin Console' && <AdminPanel session={session} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}

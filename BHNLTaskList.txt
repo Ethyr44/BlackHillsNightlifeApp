@@ -1,0 +1,39 @@
+-making adspace for the app and optimized for each page additionally. ***
+-move QR Code button to profile or next to notification bell to make room for adspace ***
+-more map pins: 1. Venue, 2. Event, 3. User, 4. Featured, 5. Live Session, 6. Item ***
+-Make names and profile pics on Leaderboard and everywhere else link to profile. ***
+-fix text wrapping ***
+-replace app icon ***
+-make sure slideshow is still working properly ***
+-clean up slideshow upload modal/form ***
+-create user counter for admins ***
+-make it so that Users can upload pics ***
+-make function to set featured venues so that they display higher in the venue card list ***
+-create test notification "admin-to-user" button ***
+-toggle lox-permit switch/button within map mini-page ***
+-fix map and journal merger ***
+-admin panel buttons to show/hide pages and mini-pages at will. ***
+-fix onboarding, it's not showing any options for the user to pick from after the previous one or two updates. ***
+
+-clean up supabase to get ride of redundant and/or unnecessary items/rows/keys/subjects **
+-do some more code-splitting if possible **
+-create contact section in settings or it's own page **
+-fix and make sure lifestyle points distribution system is fully functional **
+-add a scrolling ticker **
+-look into FB, IG, Snap to-BHNL Sign in, pros/cons, difficulty **
+
+-how to fix supabase URL so that it displays a more trustworthy URL when required*
+-add more reaction options. *
+-replace notification icon *
+-make it so that venue cards change according to the time of day *
+
+
+-make it so that Users can upload vids??
+-add reacts to journal entries??
+-make it so bg changes according to the time of day??
+-maybe integrate daily zodiac and/or horoscope stuff, Planetary alignments??
+-add mini-games page/mini-page? 
+-how to livestream audio? 
+-watch ads for more lifestyle points? 
+-make it so that users can upload audio snippets?
+-weather info integration?

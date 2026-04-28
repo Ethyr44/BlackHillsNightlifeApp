@@ -14,6 +14,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
   useEffect(() => {
     async function init() {
+      console.log("1. Starting Map Data Fetch...")
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
       const startOfToday = new Date()
@@ -48,18 +49,25 @@ export default function Map({ currentUser, onViewEntity }) {
       }) : []
 
       setVenues(processedVenues)
+      console.log("2. Data Fetched. Checking for Google Maps...")
 
-      // BULLETPROOF SCRIPT LOADER (With Strict Mode Fix)
+      // 🟢 BULLETPROOF SCRIPT LOADER
       if (window.google && window.google.maps && window.google.maps.Map) {
+        console.log("3. Google Maps found instantly! Initializing...")
         initializeMap(processedVenues)
       } else {
+        console.log("3. Injecting Google Maps script into the page...")
+        
+        // We set the callback function on the window so Google can trigger it when ready
         window.initMap = () => {
+            console.log("4. Google Maps script finished downloading! Firing callback.")
             initializeMap(processedVenues)
         }
 
         if (!document.getElementById('google-maps-script')) {
             const script = document.createElement('script')
             script.id = 'google-maps-script'
+            // Added &v=weekly to ensure we get the latest WebGL renderer
             script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&map_ids=e48372c619f58e7f83289663&v=weekly&loading=async&callback=initMap`
             script.async = true 
             script.defer = true
@@ -96,8 +104,17 @@ export default function Map({ currentUser, onViewEntity }) {
   }, [])
 
   async function initializeMap(venueData) {
-    if (!mapRef.current || !window.google) return
+    console.log("5. initializeMap triggered. Checking refs...")
+    if (!mapRef.current) {
+        console.error("❌ mapRef.current is missing! The div hasn't rendered.")
+        return
+    }
+    if (!window.google) {
+        console.error("❌ window.google is missing!")
+        return
+    }
 
+    console.log("6. Building the map instance...")
     const map = new window.google.maps.Map(mapRef.current, {
       center: { lat: 44.0805, lng: -103.2310 },
       zoom: 13,
@@ -107,6 +124,7 @@ export default function Map({ currentUser, onViewEntity }) {
     })
 
     setMapInstance(map)
+    console.log("7. Map Built. Plotting markers...")
 
     if (venueData && venueData.length > 0) {
       const bounds = new window.google.maps.LatLngBounds()
@@ -115,6 +133,7 @@ export default function Map({ currentUser, onViewEntity }) {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         const dotDiv = document.createElement('div')
         
+        // 🟢 DYNAMIC GLOWING VENUE DOTS
         let dotColor = 'bg-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.8)]' 
         let dotSize = 'w-4 h-4'
         let animation = ''
@@ -129,6 +148,8 @@ export default function Map({ currentUser, onViewEntity }) {
 
         dotDiv.innerHTML = `<div class="${dotSize} ${dotColor} ${animation} rounded-full border-2 border-white transition-transform duration-300"></div>`
         dotDiv.style.cursor = 'pointer'
+        dotDiv.onmouseover = () => dotDiv.children[0].style.transform = 'scale(1.3)'
+        dotDiv.onmouseout = () => dotDiv.children[0].style.transform = 'scale(1)'
 
         const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map, title: venue.name || 'Venue', content: dotDiv })
         marker.addListener('gmp-click', () => {
@@ -157,6 +178,7 @@ export default function Map({ currentUser, onViewEntity }) {
           const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
           const dotDiv = document.createElement('div')
           
+          // 🟢 CYAN USER DOTS
           dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
 
           const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
@@ -173,76 +195,82 @@ export default function Map({ currentUser, onViewEntity }) {
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
+    <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-12">
       
-      <div className="text-center">
-        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
-        <div className="flex justify-center gap-4 mt-2">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-[#ff2d78] flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff2d78] animate-pulse"></span> Event</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-purple-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Venue</span>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> User</span>
-        </div>
-      </div>
-
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 shrink-0">
-        {venues.map(venue => (
-            <button 
-                key={venue.id}
-                onClick={() => handleVenueClick(venue)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
-                    activeVenue?.id === venue.id 
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
-                    : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
-                }`}
-            >
-                {venue.name}
-            </button>
-        ))}
-      </div>
-
-      {/* 🟢 THE MERGED MAP & JOURNAL HUD */}
-      <div className="relative w-full h-[65vh] min-h-[500px] rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-        
-        {/* Map Base Layer */}
-        {!mapInstance && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
-                Initializing Radar...
+      {/* SECTION 1: THE FULL SCREEN MAP */}
+      <div className="flex flex-col min-h-[85vh]"> 
+          <div className="text-center mb-6">
+            <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
+            <div className="flex justify-center gap-4 mt-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#ff2d78] flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#ff2d78] shadow-[0_0_5px_#ff2d78] animate-pulse"></span> Active Event</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-purple-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_#a855f7]"></span> Venue</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_5px_#00f5ff]"></span> User</span>
             </div>
-        )}
-        <div ref={mapRef} className="absolute inset-0 bg-[#090812] z-0"></div>
+          </div>
 
-        {/* 🟢 The Journal HUD Overlay */}
-        <div className="absolute bottom-0 left-0 w-full z-20 bg-gradient-to-t from-[#030712] via-[#030712]/90 to-transparent pt-20 pb-4 px-4 pointer-events-none">
-            <div className="pointer-events-auto max-w-md mx-auto">
-                <div className="flex items-center justify-between mb-3 px-2">
-                    <h2 className="text-2xl font-['Bebas_Neue'] text-gray-300 tracking-wider drop-shadow-md">The Void</h2>
-                    <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 bg-blue-900/30 px-2 py-1 rounded-full border border-blue-500/30 backdrop-blur-sm">Live Chatter</span>
-                </div>
-                <JournalFeed currentUser={currentUser} />
-            </div>
-        </div>
+          <div className="flex overflow-x-auto hide-scrollbar gap-2 mb-4 pb-2 shrink-0">
+            {venues.map(venue => (
+                <button 
+                    key={venue.id}
+                    onClick={() => handleVenueClick(venue)}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
+                        activeVenue?.id === venue.id 
+                        ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                        : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
+                    }`}
+                >
+                    {venue.name}
+                </button>
+            ))}
+          </div>
 
-        {/* Venue Info Overlay (Pops over the Journal when a pin is clicked) */}
-        {activeVenue && (
-            <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
-                <div className="flex justify-between items-start mb-2">
-                    <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{activeVenue.name}</h3>
-                    <button onClick={() => setActiveVenue(null)} className="text-gray-500 hover:text-white">✕</button>
+          {/* 🟢 HARDCODED INLINE CSS TO BYPASS CLOUDFLARE CACHE */}
+          <div className="relative w-full flex-1 rounded-3xl overflow-hidden border-2 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.5)] mb-6 bg-[#090812]" style={{ minHeight: '400px' }}>
+            {!mapInstance && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
+                    Initializing Radar...
                 </div>
+            )}
+            <div ref={mapRef} style={{ width: '100%', height: '100%', backgroundColor: '#090812' }}></div>
+          </div>
+
+          {activeVenue && (
+            <div className="p-6 rounded-3xl border transition-all animate-fade-in bg-black border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.1)] shrink-0">
+                <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{activeVenue.name}</h3>
+                
                 {activeVenue.eventToday ? (
-                    <div className="mb-3">
-                        <span className="text-[#ff2d78] text-[9px] font-bold uppercase tracking-widest block">{activeVenue.isLive ? '🔥 LIVE NOW' : '📅 TODAY'}</span>
-                        <span className="text-white text-xs font-bold">{activeVenue.eventToday.title}</span>
+                    <div className="mb-4">
+                        <span className="text-[#ff2d78] text-[10px] font-bold uppercase tracking-widest block mb-1">
+                            {activeVenue.isLive ? '🔥 LIVE NOW:' : '📅 SCHEDULED TODAY:'}
+                        </span>
+                        <span className="text-white text-sm font-bold block">{activeVenue.eventToday.title}</span>
                     </div>
                 ) : (
-                    <span className="text-purple-400 text-[9px] font-bold uppercase tracking-widest block mb-3">Official BHNL Venue</span>
+                    <span className="text-purple-400 text-[10px] font-bold uppercase tracking-widest block mb-4">Official BHNL Venue</span>
                 )}
-                <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-colors shadow-lg">
-                    Full Profile
+                
+                <div className="space-y-3 mb-6 text-sm text-gray-300">
+                    <p className="flex items-start gap-3"><span className="text-lg">📍</span> <span>{activeVenue.address}</span></p>
+                    {activeVenue.cost && <p className="flex items-center gap-3"><span className="text-lg">💵</span> <span>Price Guide: {activeVenue.cost}</span></p>}
+                </div>
+
+                <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(59,130,246,0.4)]">
+                    View Full Profile & Events
                 </button>
             </div>
-        )}
+          )}
       </div>
+
+      {/* SECTION 2: THE JOURNAL WIDGET */}
+      <div className="pb-32">
+          <div className="text-center mb-6">
+              <h2 className="text-4xl font-['Bebas_Neue'] text-gray-300 tracking-wider">The Void</h2>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Global Anonymous Chatter • 10 Min Auto-Wipe</p>
+          </div>
+          
+          <JournalFeed currentUser={currentUser} />
+      </div>
+
     </div>
   )
 }

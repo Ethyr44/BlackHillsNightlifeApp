@@ -7,15 +7,15 @@ export default function Map({ currentUser, onViewEntity }) {
   const [venues, setVenues] = useState([])
   const [activeVenue, setActiveVenue] = useState(null)
   const [mapInstance, setMapInstance] = useState(null)
-  
+
   const venueMarkersRef = useRef([])
-  const userMarkersRef = useRef([]) 
+  const userMarkersRef = useRef([])
   const [activeUsers, setActiveUsers] = useState([])
 
   useEffect(() => {
     async function init() {
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
-      
+
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
 
@@ -49,7 +49,6 @@ export default function Map({ currentUser, onViewEntity }) {
 
       setVenues(processedVenues)
 
-      // BULLETPROOF SCRIPT LOADER (With Strict Mode Fix)
       if (window.google && window.google.maps && window.google.maps.Map) {
         initializeMap(processedVenues)
       } else {
@@ -61,7 +60,7 @@ export default function Map({ currentUser, onViewEntity }) {
             const script = document.createElement('script')
             script.id = 'google-maps-script'
             script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&map_ids=e48372c619f58e7f83289663&v=weekly&loading=async&callback=initMap`
-            script.async = true 
+            script.async = true
             script.defer = true
             document.head.appendChild(script)
         }
@@ -79,7 +78,7 @@ export default function Map({ currentUser, onViewEntity }) {
               .gte('last_active', twoHoursAgo)
           if (data) setActiveUsers(data)
       }
-      
+
       fetchUsers()
 
       const sub = supabase.channel('public-users-location')
@@ -101,7 +100,7 @@ export default function Map({ currentUser, onViewEntity }) {
     const map = new window.google.maps.Map(mapRef.current, {
       center: { lat: 44.0805, lng: -103.2310 },
       zoom: 13,
-      disableDefaultUI: true, 
+      disableDefaultUI: true,
       zoomControl: true,
       mapId: 'e48372c619f58e7f83289663'
     })
@@ -114,8 +113,8 @@ export default function Map({ currentUser, onViewEntity }) {
       venueData.forEach(venue => {
         const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
         const dotDiv = document.createElement('div')
-        
-        let dotColor = 'bg-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.8)]' 
+
+        let dotColor = 'bg-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.8)]'
         let dotSize = 'w-4 h-4'
         let animation = ''
 
@@ -156,7 +155,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
           const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
           const dotDiv = document.createElement('div')
-          
+
           dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
 
           const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
@@ -174,7 +173,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
-      
+
       <div className="text-center">
         <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">The Scene</h2>
         <div className="flex justify-center gap-4 mt-2">
@@ -186,12 +185,12 @@ export default function Map({ currentUser, onViewEntity }) {
 
       <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 shrink-0">
         {venues.map(venue => (
-            <button 
+            <button
                 key={venue.id}
                 onClick={() => handleVenueClick(venue)}
                 className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
-                    activeVenue?.id === venue.id 
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
+                    activeVenue?.id === venue.id
+                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]'
                     : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
                 }`}
             >
@@ -202,7 +201,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
       {/* 🟢 THE MERGED MAP & JOURNAL HUD */}
       <div className="relative w-full rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col bg-[#050505]">
-        
+
         {/* Map Viewport (Takes up the majority of the space) */}
         <div className="relative w-full h-[60vh] min-h-[450px]">
             {!mapInstance && (
@@ -240,3 +239,6 @@ export default function Map({ currentUser, onViewEntity }) {
         </div>
 
       </div>
+    </div>
+  )
+}

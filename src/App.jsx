@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react'
-import { BrowserRouter, useSearchParams, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, useSearchParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
 import PublicProfile from './PublicProfile'
@@ -191,7 +191,7 @@ function MainApp() {
   }, [currentUser]);
 
   // Helpers
-  const checkDailyBonus = async (userProfile) => {
+  async function checkDailyBonus(userProfile) {
       if (!userProfile) return
       const today = new Date()
       const todayString = today.toDateString()

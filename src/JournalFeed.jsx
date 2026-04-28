@@ -26,7 +26,7 @@ export default function JournalFeed({ currentUser }) {
       return () => clearInterval(interval)
   }, [])
 
-  const fetchJournal = async () => {
+  async function fetchJournal() {
      // NEW: Only pull records from the last 10 minutes
      const tenMinsAgo = new Date(Date.now() - 10 * 60000).toISOString()
      

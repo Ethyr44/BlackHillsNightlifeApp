@@ -15,12 +15,20 @@ export default function AdminCategories() {
 
   const handleAdd = async () => {
     if (!newItem.trim()) return
-    await supabase.from('system_categories').insert([{ category_type: type, name: newItem }])
+    const itemToAdd = { category_type: type, name: newItem }
+    
+    // Optimistic Update
+    setCategories(prev => [...prev, { ...itemToAdd, id: Date.now() }])
     setNewItem('')
+    
+    await supabase.from('system_categories').insert([itemToAdd])
     fetchCategories()
   }
 
   const handleDelete = async (id) => {
+    // Optimistic Update
+    setCategories(prev => prev.filter(c => c.id !== id))
+    
     await supabase.from('system_categories').delete().eq('id', id)
     fetchCategories()
   }
@@ -42,9 +50,9 @@ export default function AdminCategories() {
 
             <div className="flex flex-wrap gap-2">
                 {categories.filter(c => c.category_type === type).map(cat => (
-                    <div key={cat.id} className="bg-black border border-gray-800 text-gray-300 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                    <div key={cat.id} className="bg-black border border-gray-800 text-gray-300 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all">
                         {cat.name}
-                        <button onClick={() => handleDelete(cat.id)} className="text-red-500 hover:text-red-400">✕</button>
+                        <button onClick={() => handleDelete(cat.id)} className="text-red-500 hover:text-red-400 font-bold">✕</button>
                     </div>
                 ))}
             </div>

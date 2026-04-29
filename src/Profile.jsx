@@ -15,15 +15,25 @@ const GRADIENTS = {
   'abyss': 'bg-black/60 backdrop-blur-md'
 }
 
+const GEM_STATS = {
+    'Quartz': { mult: 2, uses: 1, color: 'text-pink-300' },
+    'Amethyst': { mult: 2, uses: 2, color: 'text-purple-400' },
+    'Jade': { mult: 3, uses: 1, color: 'text-emerald-400' },
+    'Emerald': { mult: 3, uses: 2, color: 'text-green-500' },
+    'Sapphire': { mult: 4, uses: 1, color: 'text-blue-500' },
+    'Ruby': { mult: 2, uses: 5, color: 'text-red-500' },
+    'Diamond': { mult: 4, uses: 4, color: 'text-cyan-300' },
+}
+
 export default function Profile({ session }) {
   const [profile, setProfile] = useState(null)
   const [isEditingTheme, setIsEditingTheme] = useState(false)
+  const [showInventory, setShowInventory] = useState(false)
   const [posts, setPosts] = useState([])
   const [newPostText, setNewPostText] = useState('')
   const [friendsCount, setFriendsCount] = useState(0)
   const [setlistTrigger, setSetlistTrigger] = useState(0)
   
-  // Ranks & Categories
   const [bhnlRank, setBhnlRank] = useState('#--')
   const [ksocialRank, setKsocialRank] = useState('#--')
   const [systemOptions, setSystemOptions] = useState({ venues: [], events: [], genres: [] })
@@ -31,7 +41,6 @@ export default function Profile({ session }) {
 
   useEffect(() => {
     if (!session) return
-
     fetchProfileData()
 
     const pointListener = supabase.channel('profile-points')
@@ -43,20 +52,16 @@ export default function Profile({ session }) {
   }, [session])
 
   const fetchProfileData = async () => {
-    // 1. Get Profile
     const { data: pData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (pData) setProfile(pData)
 
-    // 2. Get Friends
     const { count } = await supabase.from('connections').select('*', { count: 'exact', head: true })
         .eq('target_id', session.user.id).eq('connection_type', 'friend')
     setFriendsCount(count || 0)
 
-    // 3. Get Posts
     const { data: postData } = await supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false })
     if (postData) setPosts(postData)
 
-    // 4. Calculate Ranks
     const { data: allProfiles } = await supabase.from('profiles').select('id, lifestyle_points, league_monthly')
     if (allProfiles) {
        const sortedBhnl = [...allProfiles].sort((a,b) => (b.lifestyle_points || 0) - (a.lifestyle_points || 0))
@@ -69,7 +74,6 @@ export default function Profile({ session }) {
        setKsocialRank(kIndex !== -1 ? `#${kIndex + 1}` : '#--')
     }
 
-    // 5. Get Categories for Editing
     const { data: sysData } = await supabase.from('system_categories').select('*')
     if (sysData) {
         setSystemOptions({
@@ -96,21 +100,43 @@ export default function Profile({ session }) {
     setProfile(prev => ({ ...prev, [`pref_${type}`]: current }))
   }
 
+  const consumeGem = async (gemName) => {
+      if (profile.multiplier_uses_left > 0) {
+          return alert(`You already have an active ${profile.active_multiplier}x Multiplier! Exhaust it before activating another gem.`)
+      }
+      
+      const stats = GEM_STATS[gemName]
+      const currentGems = profile.inv_gems || {}
+      if (!currentGems[gemName] || currentGems[gemName] < 1) return
+
+      currentGems[gemName] -= 1
+
+      await supabase.from('profiles').update({
+          inv_gems: currentGems,
+          active_multiplier: stats.mult,
+          multiplier_uses_left: stats.uses
+      }).eq('id', session.user.id)
+
+      alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
+      fetchProfileData()
+  }
+
   if (!profile) return <div className="p-10 text-center text-blue-400 font-bold uppercase tracking-widest animate-pulse">Loading Identity...</div>
 
   const latestPost = posts.length > 0 ? posts[0] : null
   const gradientClass = profile.bg_gradient ? GRADIENTS[profile.bg_gradient] : GRADIENTS['deep-space']
   const dynamicSecondary = profile.secondary_color || '#9333ea'
-  
   const showKaraokeFeatures = ['Regular', 'Singer', 'Host', 'Admin'].includes(profile.account_type)
+
+  const gems = profile.inv_gems || {}
+  const items = profile.inv_items || {}
 
   return (
     <>
       <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
       
-      <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-8">
+      <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-6">
         
-        {/* 🟢 THE RANK HUD OVERLAY */}
         <div className="relative pt-8">
             <div className="absolute top-0 left-0 right-0 flex justify-center gap-[100px] sm:gap-[130px] z-20 pointer-events-none">
                 <div className="bg-black/80 backdrop-blur border border-blue-500/50 rounded-lg px-3 py-1 text-center shadow-[0_0_10px_rgba(59,130,246,0.3)]">
@@ -123,14 +149,16 @@ export default function Profile({ session }) {
                 </div>
             </div>
 
-            {/* ProfileHeader naturally handles lifestyle_points, but we will label it L$ in the UI */}
-            <ProfileHeader 
-                profile={profile} 
-                latestPost={latestPost} 
-                friendsCount={friendsCount} 
-                onEditTheme={() => setIsEditingTheme(true)} 
-            />
+            <ProfileHeader profile={profile} latestPost={latestPost} friendsCount={friendsCount} onEditTheme={() => setIsEditingTheme(true)} />
         </div>
+
+        {/* 🟢 THE INVENTORY BUTTON */}
+        <button 
+            onClick={() => setShowInventory(true)} 
+            className="w-full bg-black/80 backdrop-blur-md border border-green-500/50 hover:border-green-400 text-green-400 py-3.5 rounded-xl font-bold uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.2)] flex items-center justify-center gap-2"
+        >
+            <span className="text-xl">🎒</span> Open Inventory & Wallet
+        </button>
 
         {isEditingTheme && <ThemeEditorModal session={session} profile={profile} onClose={() => setIsEditingTheme(false)} onUpdate={setProfile} />}
 
@@ -143,7 +171,7 @@ export default function Profile({ session }) {
             </div>
         </div>
 
-        {/* 🟢 CATEGORY PREFERENCES */}
+        {/* CATEGORY PREFERENCES */}
         <div className="bg-black/40 border border-gray-800 rounded-3xl p-6">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-2xl font-['Bebas_Neue'] text-gray-300 tracking-widest">My Vibe</h3>
@@ -153,7 +181,6 @@ export default function Profile({ session }) {
             </div>
             
             <div className="space-y-4">
-                {/* Events */}
                 <div>
                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Event Styles</span>
                     <div className="flex flex-wrap gap-2">
@@ -166,10 +193,8 @@ export default function Profile({ session }) {
                                 </button>
                             )
                         })}
-                        {!isEditingPrefs && (!profile.pref_events || profile.pref_events.length === 0) && <span className="text-xs text-gray-600">None selected.</span>}
                     </div>
                 </div>
-                {/* Venues */}
                 <div>
                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Venue Styles</span>
                     <div className="flex flex-wrap gap-2">
@@ -182,10 +207,8 @@ export default function Profile({ session }) {
                                 </button>
                             )
                         })}
-                        {!isEditingPrefs && (!profile.pref_venues || profile.pref_venues.length === 0) && <span className="text-xs text-gray-600">None selected.</span>}
                     </div>
                 </div>
-                {/* Genres */}
                 <div>
                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Music Genres</span>
                     <div className="flex flex-wrap gap-2">
@@ -198,7 +221,6 @@ export default function Profile({ session }) {
                                 </button>
                             )
                         })}
-                        {!isEditingPrefs && (!profile.pref_genres || profile.pref_genres.length === 0) && <span className="text-xs text-gray-600">None selected.</span>}
                     </div>
                 </div>
             </div>
@@ -213,6 +235,112 @@ export default function Profile({ session }) {
             </>
         )}
       </div>
+
+      {/* 🟢 THE INVENTORY & WALLET MODAL */}
+      {showInventory && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 overflow-y-auto p-4 animate-fade-in">
+              <div className="max-w-md mx-auto bg-[#090812] border-2 border-gray-800 rounded-3xl mt-10 p-6 shadow-[0_0_50px_rgba(34,197,94,0.1)] mb-20">
+                  <div className="flex justify-between items-start mb-6 border-b border-gray-800 pb-4">
+                      <div>
+                          <h2 className="text-4xl font-['Bebas_Neue'] tracking-widest text-white">Vault</h2>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Inventory & Assets</p>
+                      </div>
+                      <button onClick={() => setShowInventory(false)} className="text-gray-500 hover:text-white bg-gray-900 w-8 h-8 rounded-full flex items-center justify-center font-bold">✕</button>
+                  </div>
+
+                  {/* SECTION 6: ACTIVE MULTIPLIER (Dynamic) */}
+                  {profile.multiplier_uses_left > 0 && (
+                      <div className="bg-green-900/20 border border-green-500/50 p-4 rounded-xl mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)] animate-pulse">
+                          <h4 className="text-green-400 font-bold uppercase tracking-widest text-xs flex justify-between">
+                              <span>Active Bonus: {profile.active_multiplier}x Pts</span>
+                              <span>{profile.multiplier_uses_left} Uses Left</span>
+                          </h4>
+                      </div>
+                  )}
+
+                  {/* SECTION 1 & 2: CURRENCY */}
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="bg-black border border-blue-900/50 p-4 rounded-xl text-center shadow-inner">
+                          <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Lifestyle Points</span>
+                          <span className="text-3xl font-['Bebas_Neue'] text-blue-400">{profile.lifestyle_points || 0} L$</span>
+                      </div>
+                      <div className="bg-black border border-green-900/50 p-4 rounded-xl text-center shadow-inner">
+                          <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Available USD</span>
+                          <span className="text-3xl font-['Bebas_Neue'] text-green-400">${profile.cur_usd || '0.00'}</span>
+                      </div>
+                  </div>
+
+                  {/* SECTION 3: RESOURCES */}
+                  <div className="mb-6">
+                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Resources</h4>
+                      <div className="grid grid-cols-3 gap-2">
+                          <div className="bg-amber-900/20 border border-amber-900/50 p-3 rounded-xl text-center">
+                              <span className="block text-2xl mb-1">🪵</span>
+                              <span className="block text-amber-500 font-bold">{profile.cur_wood || 0}</span>
+                              <span className="block text-[8px] uppercase tracking-widest text-amber-700 font-bold">Wood</span>
+                          </div>
+                          <div className="bg-slate-800/30 border border-slate-700 p-3 rounded-xl text-center">
+                              <span className="block text-2xl mb-1">🪨</span>
+                              <span className="block text-slate-400 font-bold">{profile.cur_stone || 0}</span>
+                              <span className="block text-[8px] uppercase tracking-widest text-slate-500 font-bold">Stone</span>
+                          </div>
+                          <div className="bg-gray-800/50 border border-gray-600 p-3 rounded-xl text-center">
+                              <span className="block text-2xl mb-1">⛓️</span>
+                              <span className="block text-gray-300 font-bold">{profile.cur_iron || 0}</span>
+                              <span className="block text-[8px] uppercase tracking-widest text-gray-500 font-bold">Iron</span>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* SECTION 4: GEMS */}
+                  <div className="mb-6">
+                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Rare Gems</h4>
+                      {Object.keys(gems).length === 0 ? (
+                          <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest text-center py-4 bg-black rounded-xl">No gems acquired yet.</p>
+                      ) : (
+                          <div className="grid grid-cols-2 gap-3">
+                              {Object.entries(gems).map(([gemName, amount]) => {
+                                  if (amount < 1) return null;
+                                  const stats = GEM_STATS[gemName]
+                                  return (
+                                      <div key={gemName} className="bg-black border border-gray-800 p-3 rounded-xl flex flex-col justify-between">
+                                          <div className="flex justify-between items-start mb-2">
+                                              <span className={`font-bold ${stats?.color || 'text-white'}`}>{gemName}</span>
+                                              <span className="text-xs bg-gray-800 px-2 py-0.5 rounded text-white font-bold">x{amount}</span>
+                                          </div>
+                                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-3">Boost: {stats?.mult}x ({stats?.uses} Uses)</span>
+                                          <button onClick={() => consumeGem(gemName)} className="w-full bg-gray-900 hover:bg-gray-800 border border-gray-700 text-xs text-white font-bold uppercase tracking-widest py-1.5 rounded transition-colors">
+                                              Consume
+                                          </button>
+                                      </div>
+                                  )
+                              })}
+                          </div>
+                      )}
+                  </div>
+
+                  {/* SECTION 5: ITEMS */}
+                  <div>
+                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Equipment & Items</h4>
+                      {Object.keys(items).length === 0 ? (
+                          <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest text-center py-4 bg-black rounded-xl">No items acquired yet.</p>
+                      ) : (
+                          <div className="space-y-2">
+                              {Object.entries(items).map(([itemName, amount]) => {
+                                  if (amount < 1) return null;
+                                  return (
+                                      <div key={itemName} className="bg-black border border-gray-800 px-4 py-3 rounded-xl flex justify-between items-center">
+                                          <span className="text-white font-bold text-sm">{itemName}</span>
+                                          <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400 font-bold uppercase tracking-widest">Qty: {amount}</span>
+                                      </div>
+                                  )
+                              })}
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </>
   )
 }

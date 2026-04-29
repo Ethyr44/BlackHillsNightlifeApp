@@ -5,7 +5,7 @@ import { useAppConfig } from './useAppConfig'
 
 // Haversine Formula to accurately calculate distance between two GPS coordinates in feet
 function getDistanceInFeet(lat1, lon1, lat2, lon2) {
-    const R = 3958.8; // Radius of the earth in miles
+    const R = 3958.8;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -13,7 +13,7 @@ function getDistanceInFeet(lat1, lon1, lat2, lon2) {
               Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     const d = R * c; 
-    return d * 5280; // Convert to feet
+    return d * 5280;
 }
 
 export default function Map({ currentUser, onViewEntity }) {
@@ -27,25 +27,37 @@ export default function Map({ currentUser, onViewEntity }) {
   const [activeUsers, setActiveUsers] = useState([])
   
   // UI State
-  const [activeFilter, setActiveFilter] = useState('All') // 'All', 'Venues', 'Events', 'Geo-Gifts', 'Hotspots'
+  const [activeFilter, setActiveFilter] = useState('All')
   const [activeVenue, setActiveVenue] = useState(null)
   const [activeGift, setActiveGift] = useState(null)
   const [claiming, setClaiming] = useState(false)
 
-  const markersRef = useRef([]) // Unified ref for venues and gifts
+  // 🟢 ADMIN STATE
+  const [showAdminGiftModal, setShowAdminGiftModal] = useState(false)
+  const [adminGift, setAdminGift] = useState({
+      title: 'Admin Test Drop',
+      lat: '',
+      lng: '',
+      lp: 100,
+      wood: 0,
+      stone: 0,
+      iron: 0,
+      gemType: 'None',
+      gemQty: 1,
+      expiresAt: ''
+  })
+
+  const markersRef = useRef([])
   const userMarkersRef = useRef([])
 
   useEffect(() => {
     async function init() {
-      // Fetch Venues
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
-      // Fetch Events
       const startOfToday = new Date()
       startOfToday.setHours(0, 0, 0, 0)
       const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved').gte('event_date', startOfToday.toISOString())
 
-      // Fetch Geo-Gifts
       const { data: giftData } = await supabase.from('geo_gifts').select('*')
       if (giftData) setGeoGifts(giftData)
 
@@ -122,18 +134,15 @@ export default function Map({ currentUser, onViewEntity }) {
     setMapInstance(map)
   }
 
-  // 🟢 DYNAMIC MARKER RENDERING ENGINE
   useEffect(() => {
       if (!mapInstance || !window.google) return
 
-      // Clear existing markers
       markersRef.current.forEach(m => m.map = null)
       markersRef.current = []
 
       const bounds = new window.google.maps.LatLngBounds()
       let pointsPlotted = false
 
-      // 1. Plot Venues / Events / Hotspots based on Filter
       venues.forEach(venue => {
           let show = false
           if (activeFilter === 'All' || activeFilter === 'Venues') show = true
@@ -170,15 +179,16 @@ export default function Map({ currentUser, onViewEntity }) {
           }
       })
 
-      // 2. Plot Geo-Gifts based on Filter
       if (activeFilter === 'All' || activeFilter === 'Geo-Gifts') {
           geoGifts.forEach(gift => {
-              if (gift.claimed_by?.includes(currentUser?.id)) return // Hide if already claimed by me
+              if (gift.claimed_by?.includes(currentUser?.id)) return 
+              
+              // Hide if expired
+              if (gift.expires_at && new Date(gift.expires_at) < new Date()) return
 
               const position = { lat: parseFloat(gift.lat), lng: parseFloat(gift.lng) }
               const dotDiv = document.createElement('div')
               
-              // Toxic Green Pulsing Pin for Rewards
               dotDiv.innerHTML = `<div class="w-5 h-5 bg-green-500 shadow-[0_0_25px_rgba(34,197,94,1)] animate-pulse rounded-full border-2 border-white transition-transform duration-300"></div>`
               dotDiv.style.cursor = 'pointer'
 
@@ -187,7 +197,7 @@ export default function Map({ currentUser, onViewEntity }) {
                   setActiveVenue(null)
                   setActiveGift(gift)
                   mapInstance.panTo(position)
-                  mapInstance.setZoom(20) // Extreme zoom to help find the 25ft mark
+                  mapInstance.setZoom(20) 
               })
 
               markersRef.current.push(marker)
@@ -199,7 +209,6 @@ export default function Map({ currentUser, onViewEntity }) {
       if (pointsPlotted && activeFilter !== 'All') mapInstance.fitBounds(bounds)
   }, [mapInstance, venues, geoGifts, activeFilter, currentUser])
 
-  // Plot User Radar Dots
   useEffect(() => {
       if (!mapInstance || !window.google) return
       userMarkersRef.current.forEach(marker => { marker.map = null })
@@ -215,7 +224,6 @@ export default function Map({ currentUser, onViewEntity }) {
       })
   }, [activeUsers, mapInstance])
 
-  // 🟢 THE CLAIM LOGIC (25 FT RULE)
   const handleClaimGift = async () => {
       if (!currentUser?.current_lat || !currentUser?.current_lng) {
           return alert("Radar Offline. Ensure location services are enabled to claim Geo-Gifts.")
@@ -229,10 +237,8 @@ export default function Map({ currentUser, onViewEntity }) {
 
       setClaiming(true)
 
-      // 1. Refresh profile data to avoid race condition wipes
       const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single()
       
-      // 2. Perform math
       const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
       const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
       const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
@@ -243,7 +249,6 @@ export default function Map({ currentUser, onViewEntity }) {
            newGems[gem] = (newGems[gem] || 0) + amt
       }
 
-      // 3. Update Database
       await supabase.from('profiles').update({
           lifestyle_points: newLp,
           cur_wood: newWood,
@@ -255,11 +260,47 @@ export default function Map({ currentUser, onViewEntity }) {
       const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
       await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
 
-      // 4. Update UI
       alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp} L$.`)
       setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
       setActiveGift(null)
       setClaiming(false)
+  }
+
+  // 🟢 ADMIN: CREATE CUSTOM GEO-GIFT
+  const handleAdminGiftSubmit = async (e) => {
+      e.preventDefault()
+      const payload = {
+          title: adminGift.title,
+          lat: parseFloat(adminGift.lat),
+          lng: parseFloat(adminGift.lng),
+          reward_lp: parseInt(adminGift.lp),
+          reward_resources: {
+              Wood: parseInt(adminGift.wood),
+              Stone: parseInt(adminGift.stone),
+              Iron: parseInt(adminGift.iron)
+          },
+          reward_gems: adminGift.gemType !== 'None' ? { [adminGift.gemType]: parseInt(adminGift.gemQty) } : {},
+          expires_at: adminGift.expiresAt ? new Date(adminGift.expiresAt).toISOString() : null
+      }
+      
+      const { data, error } = await supabase.from('geo_gifts').insert([payload]).select()
+      if (!error && data) {
+          setGeoGifts(prev => [...prev, data[0]])
+          setShowAdminGiftModal(false)
+          alert("Admin Geo-Gift deployed!")
+      } else {
+          alert("Error deploying Geo-Gift.")
+      }
+  }
+
+  // Helper to open the admin modal and snap to current GPS
+  const openAdminModal = () => {
+      setAdminGift(prev => ({
+          ...prev,
+          lat: currentUser?.current_lat || '',
+          lng: currentUser?.current_lng || ''
+      }))
+      setShowAdminGiftModal(true)
   }
 
   return (
@@ -273,27 +314,37 @@ export default function Map({ currentUser, onViewEntity }) {
         )}
       </div>
 
-      {/* 🟢 NEW VIEWPORT FILTER ROW */}
-      <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 shrink-0 border-b border-gray-800">
-        {['All', 'Venues', 'Events', 'Geo-Gifts', 'Hotspots'].map(filter => (
-            <button
-                key={filter}
-                onClick={() => { setActiveFilter(filter); setActiveVenue(null); setActiveGift(null); }}
-                className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
-                    activeFilter === filter
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                    : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
-                }`}
-            >
-                View {filter}
-            </button>
-        ))}
+      <div className="flex flex-col gap-3 shrink-0 border-b border-gray-800 pb-4">
+          <div className="flex justify-between items-center">
+              <div className="flex overflow-x-auto hide-scrollbar gap-2">
+                {['All', 'Venues', 'Events', 'Geo-Gifts', 'Hotspots'].map(filter => (
+                    <button
+                        key={filter}
+                        onClick={() => { setActiveFilter(filter); setActiveVenue(null); setActiveGift(null); }}
+                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
+                            activeFilter === filter
+                            ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]'
+                            : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
+                        }`}
+                    >
+                        View {filter}
+                    </button>
+                ))}
+              </div>
+          </div>
+          
+          {/* ADMIN ONLY DROP BUTTON */}
+          {currentUser?.account_type === 'Admin' && (
+              <button 
+                  onClick={openAdminModal} 
+                  className="w-full bg-red-900/30 border border-red-500/50 text-red-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-900/50 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+              >
+                  + Admin: Place Custom Geo-Gift Here
+              </button>
+          )}
       </div>
 
-      {/* THE MERGED MAP & JOURNAL HUD */}
       <div className="relative w-full rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col bg-[#050505]">
-
-        {/* Map Viewport */}
         <div className="relative w-full h-[60vh] min-h-[450px]">
             {!mapInstance && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
@@ -302,7 +353,6 @@ export default function Map({ currentUser, onViewEntity }) {
             )}
             <div ref={mapRef} className="absolute inset-0 bg-[#090812] z-0"></div>
 
-            {/* Venue Info Overlay */}
             {activeVenue && (
                 <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
                     <div className="flex justify-between items-start mb-2">
@@ -323,7 +373,6 @@ export default function Map({ currentUser, onViewEntity }) {
                 </div>
             )}
 
-            {/* 🟢 Geo-Gift Claim Overlay */}
             {activeGift && (
                 <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-[#090812]/95 backdrop-blur-md border-2 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.3)] z-30 pointer-events-auto text-center">
                     <div className="flex justify-between items-start mb-1 absolute right-4 top-4">
@@ -343,10 +392,8 @@ export default function Map({ currentUser, onViewEntity }) {
                 </div>
             )}
         </div>
-
       </div>
 
-      {/* THE JOURNAL WIDGET */}
       <div className="pb-32">
           <div className="text-center mb-6">
               {config.journal_title_visible !== false && (
@@ -363,6 +410,86 @@ export default function Map({ currentUser, onViewEntity }) {
           
           <JournalFeed currentUser={currentUser} />
       </div>
+
+      {/* 🟢 ADMIN CUSTOM GEO-GIFT MODAL */}
+      {showAdminGiftModal && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+              <div className="w-full max-w-md bg-gray-900 border border-red-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.2)] my-10">
+                  <div className="flex justify-between items-start mb-6">
+                      <h2 className="text-2xl font-['Bebas_Neue'] text-red-400 tracking-widest">Deploy Custom Geo-Gift</h2>
+                      <button onClick={() => setShowAdminGiftModal(false)} className="text-gray-500 hover:text-white font-bold">✕</button>
+                  </div>
+
+                  <form onSubmit={handleAdminGiftSubmit} className="space-y-4">
+                      <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Gift Title</label>
+                          <input required type="text" value={adminGift.title} onChange={e => setAdminGift({...adminGift, title: e.target.value})} className="w-full bg-black border border-gray-700 text-white p-3 rounded-xl focus:border-red-500 outline-none" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Latitude (Auto-filled)</label>
+                              <input required type="number" step="any" value={adminGift.lat} onChange={e => setAdminGift({...adminGift, lat: e.target.value})} className="w-full bg-black border border-gray-700 text-gray-400 p-3 rounded-xl outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Longitude (Auto-filled)</label>
+                              <input required type="number" step="any" value={adminGift.lng} onChange={e => setAdminGift({...adminGift, lng: e.target.value})} className="w-full bg-black border border-gray-700 text-gray-400 p-3 rounded-xl outline-none" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-blue-400 mb-1 block">Reward L$</label>
+                              <input type="number" min="0" value={adminGift.lp} onChange={e => setAdminGift({...adminGift, lp: e.target.value})} className="w-full bg-black border border-blue-900 p-3 rounded-xl focus:border-blue-500 outline-none text-white" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Expiration Date/Time</label>
+                              <input type="datetime-local" value={adminGift.expiresAt} onChange={e => setAdminGift({...adminGift, expiresAt: e.target.value})} className="w-full bg-black border border-gray-700 p-3 rounded-xl outline-none text-white text-xs" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-1 block">Wood</label>
+                              <input type="number" min="0" value={adminGift.wood} onChange={e => setAdminGift({...adminGift, wood: e.target.value})} className="w-full bg-black border border-amber-900 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Stone</label>
+                              <input type="number" min="0" value={adminGift.stone} onChange={e => setAdminGift({...adminGift, stone: e.target.value})} className="w-full bg-black border border-slate-700 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-300 mb-1 block">Iron</label>
+                              <input type="number" min="0" value={adminGift.iron} onChange={e => setAdminGift({...adminGift, iron: e.target.value})} className="w-full bg-black border border-gray-600 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pb-4">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Include Rare Gem</label>
+                              <select value={adminGift.gemType} onChange={e => setAdminGift({...adminGift, gemType: e.target.value})} className="w-full bg-black border border-pink-900/50 p-3 rounded-xl text-white outline-none text-sm">
+                                  <option value="None">None</option>
+                                  <option value="Quartz">Quartz</option>
+                                  <option value="Amethyst">Amethyst</option>
+                                  <option value="Jade">Jade</option>
+                                  <option value="Emerald">Emerald</option>
+                                  <option value="Sapphire">Sapphire</option>
+                                  <option value="Ruby">Ruby</option>
+                                  <option value="Diamond">Diamond</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Gem Qty</label>
+                              <input type="number" min="1" value={adminGift.gemQty} onChange={e => setAdminGift({...adminGift, gemQty: e.target.value})} className="w-full bg-black border border-pink-900/50 p-3 rounded-xl text-white outline-none" disabled={adminGift.gemType === 'None'} />
+                          </div>
+                      </div>
+
+                      <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-lg shadow-red-500/20">
+                          Deploy Cache to Coordinates
+                      </button>
+                  </form>
+              </div>
+          </div>
+      )}
     </div>
   )
 }

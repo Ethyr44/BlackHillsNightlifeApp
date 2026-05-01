@@ -3,7 +3,6 @@ import { supabase } from './supabaseClient'
 import JournalFeed from './JournalFeed'
 import { useAppConfig } from './useAppConfig'
 
-// Haversine Formula to accurately calculate distance between two GPS coordinates in feet
 function getDistanceInFeet(lat1, lon1, lat2, lon2) {
     const R = 3958.8;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -21,12 +20,10 @@ export default function Map({ currentUser, onViewEntity }) {
   const [mapInstance, setMapInstance] = useState(null)
   const config = useAppConfig()
 
-  // Map Data
   const [venues, setVenues] = useState([])
   const [geoGifts, setGeoGifts] = useState([])
   const [activeUsers, setActiveUsers] = useState([])
   
-  // UI State
   const [activeFilter, setActiveFilter] = useState('All')
   const [activeVenue, setActiveVenue] = useState(null)
   const [activeGift, setActiveGift] = useState(null)
@@ -34,6 +31,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
   // 🟢 ADMIN STATE
   const [showAdminGiftModal, setShowAdminGiftModal] = useState(false)
+  const [isPlacingGift, setIsPlacingGift] = useState(false)
   const [adminGift, setAdminGift] = useState({
       title: 'Admin Test Drop',
       lat: '',
@@ -104,24 +102,6 @@ export default function Map({ currentUser, onViewEntity }) {
     init()
   }, [])
 
-  useEffect(() => {
-      const fetchUsers = async () => {
-          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-          const { data } = await supabase.from('profiles').select('id, current_lat, current_lng').not('current_lat', 'is', null).gte('last_active', twoHoursAgo)
-          if (data) setActiveUsers(data)
-      }
-      fetchUsers()
-      const sub = supabase.channel('public-users-location').on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
-              setActiveUsers(prev => {
-                  const exists = prev.find(u => u.id === payload.new.id)
-                  if (exists) return prev.map(u => u.id === payload.new.id ? payload.new : u)
-                  else if (payload.new.current_lat) return [...prev, payload.new]
-                  return prev
-              })
-          }).subscribe()
-      return () => supabase.removeChannel(sub)
-  }, [])
-
   function initializeMap() {
     if (!mapRef.current || !window.google) return
     const map = new window.google.maps.Map(mapRef.current, {
@@ -133,6 +113,26 @@ export default function Map({ currentUser, onViewEntity }) {
     })
     setMapInstance(map)
   }
+
+  // 🟢 "TAP-TO-PLACE" MAP CLICK LISTENER
+  useEffect(() => {
+      if (!mapInstance || !window.google) return
+      
+      const clickListener = mapInstance.addListener('click', (e) => {
+          if (isPlacingGift) {
+              setAdminGift(prev => ({
+                  ...prev,
+                  lat: e.latLng.lat().toFixed(6),
+                  lng: e.latLng.lng().toFixed(6)
+              }))
+              setIsPlacingGift(false)
+              setShowAdminGiftModal(true)
+          }
+      })
+
+      return () => window.google.maps.event.removeListener(clickListener)
+  }, [mapInstance, isPlacingGift])
+
 
   useEffect(() => {
       if (!mapInstance || !window.google) return
@@ -167,6 +167,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
               const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: venue.name, content: dotDiv })
               marker.addListener('gmp-click', () => {
+                  if (isPlacingGift) return // Prevent opening venue if placing gift
                   setActiveGift(null)
                   setActiveVenue(venue)
                   mapInstance.panTo(position)
@@ -182,8 +183,6 @@ export default function Map({ currentUser, onViewEntity }) {
       if (activeFilter === 'All' || activeFilter === 'Geo-Gifts') {
           geoGifts.forEach(gift => {
               if (gift.claimed_by?.includes(currentUser?.id)) return 
-              
-              // Hide if expired
               if (gift.expires_at && new Date(gift.expires_at) < new Date()) return
 
               const position = { lat: parseFloat(gift.lat), lng: parseFloat(gift.lng) }
@@ -194,6 +193,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
               const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: gift.title, content: dotDiv })
               marker.addListener('gmp-click', () => {
+                  if (isPlacingGift) return // Prevent opening gift if placing gift
                   setActiveVenue(null)
                   setActiveGift(gift)
                   mapInstance.panTo(position)
@@ -207,7 +207,25 @@ export default function Map({ currentUser, onViewEntity }) {
       }
 
       if (pointsPlotted && activeFilter !== 'All') mapInstance.fitBounds(bounds)
-  }, [mapInstance, venues, geoGifts, activeFilter, currentUser])
+  }, [mapInstance, venues, geoGifts, activeFilter, currentUser, isPlacingGift])
+
+  useEffect(() => {
+      const fetchUsers = async () => {
+          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+          const { data } = await supabase.from('profiles').select('id, current_lat, current_lng').not('current_lat', 'is', null).gte('last_active', twoHoursAgo)
+          if (data) setActiveUsers(data)
+      }
+      fetchUsers()
+      const sub = supabase.channel('public-users-location').on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+              setActiveUsers(prev => {
+                  const exists = prev.find(u => u.id === payload.new.id)
+                  if (exists) return prev.map(u => u.id === payload.new.id ? payload.new : u)
+                  else if (payload.new.current_lat) return [...prev, payload.new]
+                  return prev
+              })
+          }).subscribe()
+      return () => supabase.removeChannel(sub)
+  }, [])
 
   useEffect(() => {
       if (!mapInstance || !window.google) return
@@ -266,7 +284,6 @@ export default function Map({ currentUser, onViewEntity }) {
       setClaiming(false)
   }
 
-  // 🟢 ADMIN: CREATE CUSTOM GEO-GIFT
   const handleAdminGiftSubmit = async (e) => {
       e.preventDefault()
       const payload = {
@@ -293,14 +310,18 @@ export default function Map({ currentUser, onViewEntity }) {
       }
   }
 
-  // Helper to open the admin modal and snap to current GPS
-  const openAdminModal = () => {
-      setAdminGift(prev => ({
-          ...prev,
-          lat: currentUser?.current_lat || '',
-          lng: currentUser?.current_lng || ''
-      }))
-      setShowAdminGiftModal(true)
+  // 🟢 FORCE RESPAWN ALL GIFTS
+  const handleForceRegenerate = async () => {
+      if (!window.confirm("This will wipe all current Geo-Gifts and spawn 7 new ones at random locations. Proceed?")) return;
+      
+      const { error } = await supabase.rpc('regenerate_daily_gifts')
+      if (error) {
+          alert("Error regenerating: " + error.message)
+      } else {
+          alert("Success! 7 new caches have dropped.")
+          const { data } = await supabase.from('geo_gifts').select('*')
+          if (data) setGeoGifts(data)
+      }
   }
 
   return (
@@ -333,27 +354,44 @@ export default function Map({ currentUser, onViewEntity }) {
               </div>
           </div>
           
-          {/* ADMIN ONLY DROP BUTTON */}
+          {/* ADMIN ONLY DROP & RESPAWN BUTTONS */}
           {currentUser?.account_type === 'Admin' && (
-              <button 
-                  onClick={openAdminModal} 
-                  className="w-full bg-red-900/30 border border-red-500/50 text-red-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-900/50 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-              >
-                  + Admin: Place Custom Geo-Gift Here
-              </button>
+              <div className="flex gap-2">
+                  <button 
+                      onClick={() => setIsPlacingGift(true)} 
+                      className="flex-1 bg-red-900/30 border border-red-500/50 text-red-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-900/50 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+                  >
+                      + Tap-to-Place Cache
+                  </button>
+                  <button 
+                      onClick={handleForceRegenerate} 
+                      className="flex-1 bg-green-900/30 border border-green-500/50 text-green-400 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-green-900/50 transition-colors shadow-[0_0_15px_rgba(34,197,94,0.2)]"
+                  >
+                      🔄 Force Respawn
+                  </button>
+              </div>
           )}
       </div>
 
       <div className="relative w-full rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col bg-[#050505]">
+        
+        {/* 🟢 PLACEMENT BANNER */}
+        {isPlacingGift && (
+            <div className="absolute top-4 left-4 right-4 bg-red-600 text-white p-3 rounded-xl z-50 text-center shadow-xl animate-pulse flex justify-between items-center pointer-events-auto">
+                <span className="text-xs font-bold uppercase tracking-widest">📍 Tap anywhere on map</span>
+                <button onClick={() => setIsPlacingGift(false)} className="bg-black/30 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-black/50">Cancel</button>
+            </div>
+        )}
+
         <div className="relative w-full h-[60vh] min-h-[450px]">
             {!mapInstance && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
                     Initializing Radar...
                 </div>
             )}
-            <div ref={mapRef} className="absolute inset-0 bg-[#090812] z-0"></div>
+            <div ref={mapRef} className={`absolute inset-0 bg-[#090812] z-0 ${isPlacingGift ? 'cursor-crosshair' : ''}`}></div>
 
-            {activeVenue && (
+            {activeVenue && !isPlacingGift && (
                 <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
                     <div className="flex justify-between items-start mb-2">
                         <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{activeVenue.name}</h3>
@@ -373,7 +411,7 @@ export default function Map({ currentUser, onViewEntity }) {
                 </div>
             )}
 
-            {activeGift && (
+            {activeGift && !isPlacingGift && (
                 <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-[#090812]/95 backdrop-blur-md border-2 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.3)] z-30 pointer-events-auto text-center">
                     <div className="flex justify-between items-start mb-1 absolute right-4 top-4">
                         <button onClick={() => setActiveGift(null)} className="text-gray-500 hover:text-white">✕</button>
@@ -398,7 +436,7 @@ export default function Map({ currentUser, onViewEntity }) {
           <div className="text-center mb-6">
               {config.journal_title_visible !== false && (
                   <h2 className="text-4xl font-['Bebas_Neue'] text-gray-300 tracking-wider">
-                      {config.journal_title || 'The Void'}
+                      {config.journal_title || 'Live Journal Chat'}
                   </h2>
               )}
               {config.journal_subtitle_visible !== false && (
@@ -407,11 +445,9 @@ export default function Map({ currentUser, onViewEntity }) {
                   </p>
               )}
           </div>
-          
           <JournalFeed currentUser={currentUser} />
       </div>
 
-      {/* 🟢 ADMIN CUSTOM GEO-GIFT MODAL */}
       {showAdminGiftModal && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
               <div className="w-full max-w-md bg-gray-900 border border-red-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.2)] my-10">
@@ -428,12 +464,12 @@ export default function Map({ currentUser, onViewEntity }) {
 
                       <div className="grid grid-cols-2 gap-3">
                           <div>
-                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Latitude (Auto-filled)</label>
-                              <input required type="number" step="any" value={adminGift.lat} onChange={e => setAdminGift({...adminGift, lat: e.target.value})} className="w-full bg-black border border-gray-700 text-gray-400 p-3 rounded-xl outline-none" />
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Latitude</label>
+                              <input readOnly type="text" value={adminGift.lat} className="w-full bg-black/50 border border-gray-800 text-gray-500 p-3 rounded-xl outline-none cursor-not-allowed" />
                           </div>
                           <div>
-                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Longitude (Auto-filled)</label>
-                              <input required type="number" step="any" value={adminGift.lng} onChange={e => setAdminGift({...adminGift, lng: e.target.value})} className="w-full bg-black border border-gray-700 text-gray-400 p-3 rounded-xl outline-none" />
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Longitude</label>
+                              <input readOnly type="text" value={adminGift.lng} className="w-full bg-black/50 border border-gray-800 text-gray-500 p-3 rounded-xl outline-none cursor-not-allowed" />
                           </div>
                       </div>
 

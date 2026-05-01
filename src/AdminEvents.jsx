@@ -94,6 +94,12 @@ export default function AdminEvents() {
       fetchData()
   }
 
+  const handleArchiveEvent = async (eventId) => {
+      if (!window.confirm("Archive this event? It will be hidden from the public feed.")) return;
+      await supabase.from('events').update({ status: 'archived' }).eq('id', eventId);
+      fetchData(); // Refresh the list
+  }
+
   const deleteEvent = async (id) => {
       if(window.confirm("Permanently delete this event?")) {
           await supabase.from('events').delete().eq('id', id)
@@ -160,10 +166,11 @@ export default function AdminEvents() {
               <span className="text-[10px] text-gray-400 uppercase tracking-widest">{new Date(e.event_date).toLocaleString()} • {e.address || e.venue || 'No Location'}</span>
             </div>
             <div className="flex gap-2">
-                <button onClick={() => toggleApproval(e)} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${e.status === 'pending' ? 'bg-green-600 hover:bg-green-500 text-white' : 'border border-gray-700 text-gray-400 hover:text-white'}`}>
+                <button onClick={() => toggleApproval(e.id, e.status)} className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${e.status === 'pending' ? 'bg-green-600 hover:bg-green-500 text-white' : 'border border-gray-700 text-gray-400 hover:text-white'}`}>
                     {e.status === 'pending' ? 'Approve' : 'Un-Approve'}
                 </button>
                 <button onClick={() => editEvent(e)} className="text-gray-400 hover:text-white border border-gray-700 hover:border-blue-500 px-3 py-2 rounded-lg text-xs font-bold transition-all">✏️</button>
+                <button onClick={() => handleArchiveEvent(e.id)} className="bg-orange-900/30 text-orange-400 border border-orange-500/30 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-colors">Archive</button>
                 <button onClick={() => deleteEvent(e.id)} className="text-gray-400 hover:text-white border border-gray-700 hover:border-red-500 hover:bg-red-900/20 px-3 py-2 rounded-lg text-xs font-bold transition-all">🗑️</button>
             </div>
           </div>

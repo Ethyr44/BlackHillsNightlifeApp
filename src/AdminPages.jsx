@@ -5,7 +5,6 @@ export default function AdminPages() {
   const [pages, setPages] = useState([])
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [backfillStatus, setBackfillStatus] = useState('')
 
   const [pageName, setPageName] = useState('')
   const [pageType, setPageType] = useState('Venue')
@@ -42,56 +41,6 @@ export default function AdminPages() {
     } finally {
       setUploading(false)
     }
-  }
-
-  const handleBackfill = async () => {
-    setBackfillStatus('Starting backfill...');
-    setLoading(true);
-
-    try {
-        // 1. Get all venues that have an address but are missing GPS coordinates
-        const { data: venuesToFix, error: fetchError } = await supabase
-            .from('pages')
-            .select('id, address')
-            .eq('page_type', 'Venue')
-            .not('address', 'is', null)
-            .or('lat.is.null,lng.is.null');
-
-        if (fetchError) throw fetchError;
-
-        if (venuesToFix.length === 0) {
-            setBackfillStatus('✅ No venues needed backfilling. All are up to date!');
-            setTimeout(() => setBackfillStatus(''), 5000);
-            setLoading(false);
-            return;
-        }
-
-        setBackfillStatus(`Found ${venuesToFix.length} venues to update. Processing...`);
-
-        let updatedCount = 0;
-        for (const venue of venuesToFix) {
-            try {
-                const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(venue.address)}`);
-                const geoData = await res.json();
-
-                if (geoData && geoData.length > 0) {
-                    const { error: updateError } = await supabase.from('pages').update({ lat: parseFloat(geoData[0].lat), lng: parseFloat(geoData[0].lon) }).eq('id', venue.id);
-                    if (!updateError) updatedCount++;
-                }
-                
-                // Delay for 1 second to comply with OpenStreetMap/Nominatim's strict usage policy
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } catch (err) {
-                console.error(`Error processing venue ${venue.id}:`, err);
-            }
-        }
-
-        setBackfillStatus(`✅ Backfill complete! Successfully updated ${updatedCount} of ${venuesToFix.length} venues.`);
-        fetchPages(); // Refresh the list of pages
-    } catch (error) {
-        setBackfillStatus(`⚠️ Error during backfill: ${error.message}`);
-    }
-    setLoading(false);
   }
 
   const resetForm = () => {
@@ -142,15 +91,6 @@ export default function AdminPages() {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-        <h3 className="text-2xl font-['Bebas_Neue'] text-orange-400 mb-4 tracking-wider">Data Maintenance</h3>
-        <p className="text-xs text-gray-400 mb-4">If map pins are missing, use this tool to automatically find and save GPS coordinates for all venues that have an address but no pin.</p>
-        <button onClick={handleBackfill} disabled={loading} className="w-full bg-orange-600/20 text-orange-400 border border-orange-500/50 py-3 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-orange-600 hover:text-black transition-colors disabled:opacity-50">
-            {loading ? 'Working...' : 'Backfill Missing GPS Data'}
-        </button>
-        {backfillStatus && <p className="text-center text-xs mt-4 text-orange-300 animate-fade-in">{backfillStatus}</p>}
-      </div>
-
       <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
         <h3 className="text-2xl font-['Bebas_Neue'] text-blue-400 mb-4 tracking-wider">{editingPageId ? 'Edit Directory Page' : 'Create New Page'}</h3>
         

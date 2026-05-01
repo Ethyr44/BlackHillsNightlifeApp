@@ -2,17 +2,26 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
 export default function AdminConfig() {
+  // --- App Config State ---
   const [configs, setConfigs] = useState([])
   const [savingKey, setSavingKey] = useState(null)
 
-  useEffect(() => { fetchConfigs() }, [])
+  // --- Ticker State ---
+  const [messages, setMessages] = useState([])
+  const [newMessage, setNewMessage] = useState('')
 
+  useEffect(() => { 
+      fetchConfigs() 
+      fetchMessages()
+  }, [])
+
+  // --- CONFIG LOGIC ---
   const fetchConfigs = async () => {
     const { data } = await supabase.from('app_config').select('*').order('config_key')
     if (data) setConfigs(data)
   }
 
-  const handleUpdate = async (key, newValue) => {
+  const handleUpdateConfig = async (key, newValue) => {
     setSavingKey(key)
     await supabase.from('app_config').update({ config_value: newValue }).eq('config_key', key)
     setTimeout(() => setSavingKey(null), 1000)
@@ -25,19 +34,76 @@ export default function AdminConfig() {
     setTimeout(() => setSavingKey(null), 1000)
   }
 
+  // --- TICKER LOGIC ---
+  const fetchMessages = async () => {
+    const { data } = await supabase.from('ticker_messages').select('*').order('created_at', { ascending: false })
+    if (data) setMessages(data)
+  }
+
+  const handleAddTicker = async (e) => {
+    e.preventDefault()
+    if (!newMessage) return
+    await supabase.from('ticker_messages').insert([{ message: newMessage }])
+    setNewMessage('')
+    fetchMessages()
+  }
+
+  const toggleTickerActive = async (id, currentStatus) => {
+    await supabase.from('ticker_messages').update({ is_active: !currentStatus }).eq('id', id)
+    fetchMessages()
+  }
+
+  const handleDeleteTicker = async (id) => {
+    if (!window.confirm("Delete this message?")) return
+    await supabase.from('ticker_messages').delete().eq('id', id)
+    fetchMessages()
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in pb-20">
+        
+        {/* SECTION 1: LIVE TICKER BROADCAST */}
+        <div className="bg-gray-900 p-6 rounded-xl border border-[#00f5ff]/30 shadow-[0_0_15px_rgba(0,245,255,0.1)]">
+            <h3 className="text-xl font-['Bebas_Neue'] text-[#00f5ff] tracking-widest mb-4">Live Ticker Broadcast</h3>
+            
+            <form onSubmit={handleAddTicker} className="flex gap-2 mb-6">
+                <input 
+                    type="text" 
+                    value={newMessage} 
+                    onChange={e => setNewMessage(e.target.value)} 
+                    placeholder="Type a new broadcast message..." 
+                    className="flex-1 bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-[#00f5ff] outline-none"
+                    maxLength={100}
+                />
+                <button type="submit" className="bg-[#00f5ff] text-black px-6 rounded-lg font-bold uppercase tracking-widest text-xs hover:bg-[#00d5dd]">Broadcast</button>
+            </form>
+
+            <div className="space-y-2 max-h-[250px] overflow-y-auto hide-scrollbar">
+                {messages.map(msg => (
+                    <div key={msg.id} className={`flex items-center justify-between p-3 rounded-lg border ${msg.is_active ? 'bg-black/50 border-[#00f5ff]/30' : 'bg-black/20 border-gray-800 opacity-50'}`}>
+                        <div className="flex-1 text-white text-sm mr-4">{msg.message}</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => toggleTickerActive(msg.id, msg.is_active)} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest ${msg.is_active ? 'bg-orange-900/30 text-orange-400' : 'bg-green-900/30 text-green-400'}`}>
+                                {msg.is_active ? 'Disable' : 'Enable'}
+                            </button>
+                            <button onClick={() => handleDeleteTicker(msg.id)} className="px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest bg-red-900/30 text-red-400 hover:bg-red-900/50">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+
+        {/* SECTION 2: MASTER UI OVERRIDES */}
         <div className="bg-gray-900 p-6 rounded-xl border border-gray-800">
-            <h3 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-2 tracking-wider">App Text Manager</h3>
-            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-6">Uncheck the box to hide the text element entirely.</p>
+            <h3 className="text-xl font-['Bebas_Neue'] text-blue-400 tracking-widest mb-1">Master UI Overrides</h3>
+            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-6">Toggle visibility or rename core app components.</p>
             
             <div className="space-y-4">
                 {configs.map(item => (
-                    <div key={item.id} className={`bg-black border p-4 rounded-xl transition-all ${item.is_visible === false ? 'border-red-900/50 opacity-60' : 'border-gray-800'}`}>
-                        <div className="flex justify-between items-start mb-2">
-                            <label className="text-blue-400 font-bold uppercase tracking-widest text-[10px]">{item.config_key}</label>
-                            <span className="text-gray-600 text-[9px] uppercase tracking-widest">{item.description}</span>
-                        </div>
+                    <div key={item.id} className="bg-black/50 p-4 rounded-xl border border-gray-800">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">{item.config_key.replace(/_/g, ' ')}</label>
                         <div className="flex gap-3 items-center">
                             <input 
                                 type="checkbox"
@@ -51,7 +117,7 @@ export default function AdminConfig() {
                                 defaultValue={item.config_value} 
                                 onBlur={(e) => {
                                     if (e.target.value !== item.config_value) {
-                                        handleUpdate(item.config_key, e.target.value)
+                                        handleUpdateConfig(item.config_key, e.target.value)
                                     }
                                 }}
                                 className="flex-1 bg-gray-900 border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" 

@@ -7,6 +7,7 @@ import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
 import TopNav from './TopNav'
+import Ticker from './Ticker'
 
 // THE GLOBAL BACKGROUND
 import Moonshower from './backgrounds/Moonshower'
@@ -308,7 +309,10 @@ function MainApp() {
           viewingEntity={viewingEntity}
       />
 
-      <main className="max-w-2xl mx-auto relative z-10">
+      <main 
+        className="max-w-2xl mx-auto relative z-10"
+        style={{ paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' }}
+      >
         {viewingEntity ? (
           <PublicProfile 
               entity={viewingEntity} 
@@ -350,6 +354,8 @@ function MainApp() {
       </main>
 
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
+
+      <Ticker />
 
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>

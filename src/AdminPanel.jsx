@@ -6,6 +6,7 @@ import AdminEconomy from './AdminEconomy'
 import AdminSocial from './AdminSocial'
 import AdminCategories from './AdminCategories'
 import AdminConfig from './AdminConfig'
+import AdminTicker from './AdminTicker'
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState('Pages')

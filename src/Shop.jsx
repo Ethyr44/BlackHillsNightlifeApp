@@ -40,11 +40,86 @@ export default function Shop({ currentUser }) {
       }
   }
 
-  const handlePurchase = (item) => {
+  const handlePurchase = async (item) => {
+    // 1. Double-check affordability using your existing logic
     if (!checkAffordability(item)) {
-        alert(`You don't have enough resources to unlock the ${item.name}! Keep hitting the circuit!`)
+        return alert(`Transaction Failed: You don't have enough resources to unlock ${item.name}!`);
+    }
+
+    // 2. Prevent double-clicking
+    if (!window.confirm(`Purchase ${item.name}?`)) return;
+
+    // 🟢 THE FIX: Fetch the absolute freshest profile data directly from the database first
+    const { data: freshUser, error: fetchError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+
+    if (fetchError || !freshUser) {
+        return alert("Could not access your Vault data. Please try again.");
+    }
+
+    // Load the fresh data into our math variables
+    let newLp = freshUser.lifestyle_points || 0;
+    let newIron = freshUser.cur_iron || 0;
+    let newWood = freshUser.cur_wood || 0;
+    let newStone = freshUser.cur_stone || 0;
+
+    // 3. Do the Math locally to DEDUCT costs based on FRESH data
+    if (item.payment_logic === 'AND') {
+        newLp -= (item.cost_lp || 0);
+        newIron -= (item.cost_iron || 0);
+        newWood -= (item.cost_wood || 0);
+        newStone -= (item.cost_stone || 0);
     } else {
-        alert(`Purchase processing for ${item.name}. (Deduction logic will be wired next!)`)
+        // OR logic: Try LP first, then resources
+        if (item.cost_lp > 0 && newLp >= item.cost_lp) {
+            newLp -= item.cost_lp;
+        } else if (item.cost_iron > 0 || item.cost_wood > 0 || item.cost_stone > 0) {
+            newIron -= (item.cost_iron || 0);
+            newWood -= (item.cost_wood || 0);
+            newStone -= (item.cost_stone || 0);
+        }
+    }
+    
+    // 4. THE SORTING HAT: Add the purchased item to the correct category
+    const newInventory = { ...(freshUser.inv_items || {}) };
+    const newGems = { ...(freshUser.inv_gems || {}) };
+
+    // Route the purchase based on its name or type
+    if (item.name === 'Wood' || (item.item_type === 'Resource' && item.name.includes('Wood'))) {
+        newWood += 1;
+    } else if (item.name === 'Stone' || (item.item_type === 'Resource' && item.name.includes('Stone'))) {
+        newStone += 1;
+    } else if (item.name === 'Iron' || (item.item_type === 'Resource' && item.name.includes('Iron'))) {
+        newIron += 1;
+    } else if (['Quartz', 'Amethyst', 'Jade', 'Emerald', 'Sapphire', 'Ruby', 'Diamond'].includes(item.name) || item.item_type === 'Gem') {
+        newGems[item.name] = (newGems[item.name] || 0) + 1;
+    } else {
+        // Standard Items (Pickaxe, Vouchers, etc.) go into standard inventory
+        newInventory[item.name] = (newInventory[item.name] || 0) + 1;
+    }
+
+    // 5. Send the updated balances and inventories to Supabase
+    const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+            lifestyle_points: newLp,
+            cur_iron: newIron,
+            cur_wood: newWood,
+            cur_stone: newStone,
+            inv_items: newInventory,
+            inv_gems: newGems 
+        })
+        .eq('id', currentUser.id);
+
+    // 6. Handle the result
+    if (updateError) {
+        console.error("Database Error:", updateError);
+        alert("Transaction Error: " + updateError.message);
+    } else {
+        alert(`Success! ${item.name} has been added to your Vault.`);
     }
   }
 

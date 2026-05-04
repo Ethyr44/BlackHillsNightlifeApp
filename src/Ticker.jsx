@@ -31,13 +31,9 @@ export default function Ticker() {
   const tickerText = messages.join('   •   ')
 
   return (
-    // 'fixed' locks it to the screen. 
-    // 'bottom-[65px]' hovers it just above a standard bottom nav (change to 'bottom-0' if you don't have a nav bar).
-    // 'z-40' keeps it above the map, but below critical modals.
-    <div 
-      className="fixed left-0 right-0 w-full bg-[#00f5ff]/10 border-t border-[#00f5ff]/30 text-[#00f5ff] text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2 overflow-hidden z-40 backdrop-blur-md pointer-events-none"
-      style={{ bottom: 'calc(65px + env(safe-area-inset-bottom, 0px))' }}
-    >
+    // THE FIX: Removed "fixed", "left-0", "right-0", and the style tag. 
+    // It is now a standard, static block element that will naturally stack in your layout.
+    <div className="w-full bg-[#00f5ff]/10 border-b border-[#00f5ff]/30 text-[#00f5ff] text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2 overflow-hidden backdrop-blur-md pointer-events-none z-40">
       <div className="whitespace-nowrap animate-ticker inline-block">
         <span className="mr-8">{tickerText}</span>
         {/* We duplicate the text once so the scrolling loop is perfectly seamless */}

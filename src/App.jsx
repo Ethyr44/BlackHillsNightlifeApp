@@ -331,6 +331,8 @@ function MainApp() {
           viewingEntity={viewingEntity}
       />
 
+      <Ticker />
+
       <main 
         className="max-w-2xl mx-auto relative z-10"
         style={{ paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' }}
@@ -376,8 +378,6 @@ function MainApp() {
       </main>
 
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
-
-      <Ticker />
 
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>

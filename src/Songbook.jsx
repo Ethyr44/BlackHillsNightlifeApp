@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import SongRow from './SongRow'
 
-export default function SongBook({ currentUser }) {
+export default function SongBook({ currentUser, profileUser, isOwnProfile = true, embedded = false }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -43,11 +43,49 @@ export default function SongBook({ currentUser }) {
     }
   }
 
+  const handleSuggestSong = async (song) => {
+      if (isOwnProfile) return; // Failsafe
+
+      if (!window.confirm(`Suggest "${song.title}" for ${profileUser.username} to sing?`)) return;
+
+      // Push the song to your FRIEND'S user_songs table, stamping your name on it
+      const { error } = await supabase
+          .from('user_songs')
+          .insert({
+              user_id: profileUser.id, // The friend's ID
+              song_id: song.id,        // The global song ID
+              suggested_by_id: currentUser.id,
+              suggested_by_username: currentUser.username,
+              category: 'Suggested'
+          });
+
+      if (error) {
+          if (error.code === '23505') alert(`They already have "${song.title}" in their Repertoire!`)
+          else alert("Error suggesting song: " + error.message);
+      } else {
+          alert(`Awesome! You suggested ${song.title} to ${profileUser.username}.`);
+          
+          // Trigger a notification to the friend
+          await supabase.from('notifications').insert([{
+              user_id: profileUser.id, 
+              title: 'Song Suggestion', 
+              content: `${currentUser.username} suggested you sing "${song.title}"!`
+          }]);
+      }
+  }
+
   return (
-    <div className="max-w-2xl mx-auto p-4 animate-fade-in pb-32">
-        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider mb-8 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)] text-center">
-            Global Songbook
-        </h2>
+    <div className={`${embedded ? '' : 'max-w-2xl mx-auto p-4 animate-fade-in pb-32'}`}>
+        {!embedded && (
+            <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider mb-8 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)] text-center">
+                Global Songbook
+            </h2>
+        )}
+        {embedded && (
+            <h2 className="text-3xl font-['Bebas_Neue'] tracking-widest text-green-400 mb-6 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)] text-center">
+                Suggest a New Song
+            </h2>
+        )}
 
         {/* Search Bar */}
         <div className="relative mb-6">
@@ -69,6 +107,7 @@ export default function SongBook({ currentUser }) {
                   title={song.title}
                   artist={song.artist}
                   actions={
+                      isOwnProfile ? (
                       <>
                           <button onClick={() => handleSaveToVault(song.id, song.title, 'Fave')} className="flex-1 sm:flex-none bg-yellow-900/20 text-yellow-500 border border-yellow-500/50 hover:bg-yellow-500 hover:text-black py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1">
                               🌟 Fave
@@ -80,6 +119,11 @@ export default function SongBook({ currentUser }) {
                               🕒 Sung
                           </button>
                       </>
+                      ) : (
+                          <button onClick={() => handleSuggestSong(song)} className="flex-1 sm:flex-none bg-green-900/20 text-green-400 border border-green-500/50 hover:bg-green-500 hover:text-black py-2 px-3 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1">
+                              Suggest
+                          </button>
+                      )
                   }
               />
           ))}

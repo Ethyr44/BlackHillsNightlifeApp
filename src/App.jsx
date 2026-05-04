@@ -72,6 +72,15 @@ function MainApp() {
       }
   }
 
+  // Add this navigation helper function right above your useEffects
+  const navigateToProfile = async (userId) => {
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (profile) {
+          setViewingEntity(profile);
+          setSearchParams({ tab: activeTab, view: 'profile' });
+      }
+  };
+
   // 2. Auth Listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -90,6 +99,19 @@ function MainApp() {
             }
         })
     }
+
+    // THE 40-SECOND SILENT POLL
+    // This updates their L$, Inventory, and database status in the background
+    const pollInterval = setInterval(() => {
+      if (session?.user?.id) {
+        supabase.from('profiles').select('*').eq('id', session.user.id).single()
+          .then(({ data }) => {
+            if (data) setCurrentUser(data);
+          });
+      }
+    }, 40000); // 40 seconds
+
+    return () => clearInterval(pollInterval);
   }, [session])
 
   // 4. FIX #1 & #3: Hardware Back Button Interceptor (React Router Native)

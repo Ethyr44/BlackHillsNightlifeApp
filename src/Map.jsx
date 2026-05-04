@@ -48,6 +48,20 @@ export default function Map({ currentUser, onViewEntity }) {
   const markersRef = useRef([])
   const userMarkersRef = useRef([])
 
+  // Default to User's location immediately if available, otherwise fallback to Rapid City
+  const [mapCenter, setMapCenter] = useState(
+      currentUser?.current_lat && currentUser?.current_lng 
+      ? { lat: parseFloat(currentUser.current_lat), lng: parseFloat(currentUser.current_lng) } 
+      : { lat: 44.0805, lng: -103.2310 }
+  );
+
+  // Force re-center if the user's location updates after initial load
+  useEffect(() => {
+      if (currentUser?.current_lat && currentUser?.current_lng) {
+          setMapCenter({ lat: parseFloat(currentUser.current_lat), lng: parseFloat(currentUser.current_lng) });
+      }
+  }, [currentUser?.current_lat, currentUser?.current_lng]);
+
   useEffect(() => {
     async function init() {
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
@@ -102,10 +116,17 @@ export default function Map({ currentUser, onViewEntity }) {
     init()
   }, [])
 
+  // Pan to mapCenter when the center coordinates change
+  useEffect(() => {
+      if (mapInstance && mapCenter) {
+          mapInstance.panTo(mapCenter);
+      }
+  }, [mapCenter, mapInstance]);
+
   function initializeMap() {
     if (!mapRef.current || !window.google) return
     const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 44.0805, lng: -103.2310 },
+      center: mapCenter,
       zoom: 13,
       disableDefaultUI: true,
       zoomControl: true,
@@ -383,7 +404,8 @@ export default function Map({ currentUser, onViewEntity }) {
             </div>
         )}
 
-        <div className="relative w-full h-[60vh] min-h-[450px]">
+        {/* THE FIX: Changed h-[60vh] to h-[85vh] to force it to fill the device screen */}
+        <div className="relative w-full h-[85vh] z-0">
             {!mapInstance && (
                 <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
                     Initializing Radar...

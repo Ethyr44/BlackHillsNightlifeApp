@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import SongRow from './SongRow'
 
-export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTrigger }) {
+export default function Repertoire({ userId, isOwner, canSuggest, currentUser, profileUser, trigger, setTrigger }) {
   const [songs, setSongs] = useState([])
   const [activeSetlist, setActiveSetlist] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -77,9 +77,16 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
 
   const handleSuggestSong = async (songId, title) => {
       const { error } = await supabase.from('notifications').insert([{
-          user_id: userId, title: 'Song Suggestion', content: `Someone suggested you sing "${title}"!`
+          user_id: userId, title: 'Song Suggestion', content: `${currentUser?.username || 'A friend'} suggested you sing "${title}"!`
       }])
       if (!error) alert(`Suggested "${title}"!`)
+  }
+
+  const handleReject = async (entryId) => {
+      if (!window.confirm("Reject this song suggestion?")) return;
+      
+      await supabase.from('user_songs').delete().eq('id', entryId);
+      fetchSonglist();
   }
 
   const displayList = searchQuery.length >= 2 ? searchResults : songs
@@ -111,6 +118,9 @@ export default function Repertoire({ userId, isOwner, canSuggest, trigger, setTr
                       title={entry.songs.title}
                       artist={entry.songs.artist}
                       indexLabel={<span className="text-2xl">{catIcons[entry.category] || '🎵'}</span>}
+                      isSuggestion={entry.category === 'Suggested'}
+                      suggestedBy={entry.suggested_by_username}
+                      onReject={isOwner && entry.category === 'Suggested' ? () => handleReject(entry.id) : null}
                       actions={
                           <>
                               {isOwner ? (

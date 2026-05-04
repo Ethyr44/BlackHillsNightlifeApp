@@ -231,7 +231,7 @@ export default function Profile({ session }) {
         {showKaraokeFeatures && (
             <>
               <Setlist session={session} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} currentUser={profile} profileUser={profile} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
             </>
         )}
       </div>

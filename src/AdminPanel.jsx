@@ -9,15 +9,21 @@ import AdminConfig from './AdminConfig'
 import AdminTicker from './AdminTicker'
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('Pages')
+  const [activeTab, setActiveTab] = useState('Shop')
+  const [activeModal, setActiveModal] = useState(null) // 'categories', 'venues', 'events'
 
   return (
     <div className="p-4 mt-4 animate-fade-in pb-12">
       
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <button onClick={() => setActiveModal('categories')} className="bg-gray-800 p-4 rounded-xl text-blue-400 font-bold">Manage Categories</button>
+        <button onClick={() => setActiveModal('venues')} className="bg-gray-800 p-4 rounded-xl text-blue-400 font-bold">Manage Venues</button>
+        <button onClick={() => setActiveModal('events')} className="bg-gray-800 p-4 rounded-xl text-blue-400 font-bold">Manage Events</button>
+      </div>
+
       {/* Tab Navigation */}
       <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 mb-8 overflow-x-auto hide-scrollbar">
-        {/* 🟢 ADDED 'Categories' TO THIS ARRAY */}
-        {['Pages', 'Events', 'Shop', 'Economy', 'Social', 'Categories', 'App Text'].map(tab => (
+        {['Shop', 'Economy', 'Social', 'App Text'].map(tab => (
           <button 
             key={tab} onClick={() => setActiveTab(tab)}
             className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
@@ -32,14 +38,29 @@ export default function AdminPanel() {
       </div>
 
       {/* Component Rendering */}
-      {activeTab === 'Pages' && <AdminPages />}
-      {activeTab === 'Events' && <AdminEvents />}
       {activeTab === 'Shop' && <AdminShop />}
       {activeTab === 'Economy' && <AdminEconomy />}
       {activeTab === 'Social' && <AdminSocial />}
-      {/* 🟢 ADDED THIS RENDER CONDITION */}
-      {activeTab === 'Categories' && <AdminCategories />}
       {activeTab === 'App Text' && <AdminConfig />}
+
+      {activeModal && (
+        <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#090812] w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-gray-800 p-6 relative hide-scrollbar">
+            {/* Close Button */}
+            <button 
+              onClick={() => setActiveModal(null)} 
+              className="absolute top-4 right-4 bg-red-900/30 text-red-500 px-4 py-2 rounded-lg font-bold uppercase tracking-widest text-xs z-10"
+            >
+              Close
+            </button>
+
+            {/* Render the specific component */}
+            {activeModal === 'categories' && <AdminCategories />}
+            {activeModal === 'venues' && <AdminPages />}
+            {activeModal === 'events' && <AdminEvents />}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

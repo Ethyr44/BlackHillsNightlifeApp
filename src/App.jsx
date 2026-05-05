@@ -28,7 +28,6 @@ const Projector = lazy(() => import('./Projector'))
 // Calculate Splash Screen status synchronously to prevent initial UI flash
 const getInitialSplash = () => {
     const hour = new Date().getHours()
-    const date = new Date().toDateString()
     let currentPhase = 'Midnight'
     
     if (hour >= 6 && hour < 10) currentPhase = 'Morning'
@@ -38,14 +37,9 @@ const getInitialSplash = () => {
     else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
     else if (hour >= 20 && hour < 24) currentPhase = 'Night'
 
-    const timeBlockKey = `${date}-${currentPhase}`
-    const lastSeen = localStorage.getItem('bhnl_last_splash')
-
-    if (lastSeen !== timeBlockKey) {
-        localStorage.setItem('bhnl_last_splash', timeBlockKey)
-        return currentPhase
-    }
-    return false
+    // THE FIX: We removed the localStorage check entirely. 
+    // It now ALWAYS returns the phase string (which evaluates to true for rendering!)
+    return currentPhase
 }
 
 // --- INNER APP LOGIC ---

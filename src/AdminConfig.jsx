@@ -36,7 +36,7 @@ export default function AdminConfig() {
 
   // --- TICKER LOGIC ---
   const fetchMessages = async () => {
-    const { data } = await supabase.from('ticker_messages').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('ticker_messages').select('*').order('sort_order', { ascending: true })
     if (data) setMessages(data)
   }
 
@@ -59,6 +59,28 @@ export default function AdminConfig() {
     fetchMessages()
   }
 
+  // --- TICKER DRAG AND DROP ---
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('dragIndex', index);
+  };
+
+  const handleDrop = async (e, dropIndex) => {
+    const dragIndex = Number(e.dataTransfer.getData('dragIndex'));
+    if (dragIndex === dropIndex) return; // Didn't move
+
+    // Reorder locally first for instant UI response
+    const newMessages = [...messages];
+    const [draggedItem] = newMessages.splice(dragIndex, 1);
+    newMessages.splice(dropIndex, 0, draggedItem);
+    setMessages(newMessages);
+
+    // Save the new sort_order to Supabase
+    const updates = newMessages.map((msg, idx) => ({ id: msg.id, sort_order: idx }));
+    for (const update of updates) {
+      await supabase.from('ticker_messages').update({ sort_order: update.sort_order }).eq('id', update.id);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-20">
         
@@ -79,8 +101,16 @@ export default function AdminConfig() {
             </form>
 
             <div className="space-y-2 max-h-[250px] overflow-y-auto hide-scrollbar">
-                {messages.map(msg => (
-                    <div key={msg.id} className={`flex items-center justify-between p-3 rounded-lg border ${msg.is_active ? 'bg-black/50 border-[#00f5ff]/30' : 'bg-black/20 border-gray-800 opacity-50'}`}>
+                {messages.map((msg, index) => (
+                    <div 
+                        key={msg.id} 
+                        draggable 
+                        onDragStart={(e) => handleDragStart(e, index)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => handleDrop(e, index)}
+                        className={`flex items-center justify-between p-3 rounded-lg border cursor-grab active:cursor-grabbing ${msg.is_active ? 'bg-black/50 border-[#00f5ff]/30' : 'bg-black/20 border-gray-800 opacity-50'}`}
+                    >
+                        <div className="text-gray-500 mr-3 text-lg">☰</div>
                         <div className="flex-1 text-white text-sm mr-4">{msg.message}</div>
                         <div className="flex gap-2">
                             <button onClick={() => toggleTickerActive(msg.id, msg.is_active)} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest ${msg.is_active ? 'bg-orange-900/30 text-orange-400' : 'bg-green-900/30 text-green-400'}`}>

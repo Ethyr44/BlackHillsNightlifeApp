@@ -24,7 +24,14 @@ export default function Map({ currentUser, onViewEntity }) {
   const [geoGifts, setGeoGifts] = useState([])
   const [activeUsers, setActiveUsers] = useState([])
   
-  const [activeFilter, setActiveFilter] = useState('All')
+  // 1. Replace activeFilter with this object
+  const [filters, setFilters] = useState({
+    venues: true,
+    events: true,
+    users: true,
+    geoGifts: true
+  });
+
   const [activeVenue, setActiveVenue] = useState(null)
   const [activeGift, setActiveGift] = useState(null)
   const [claiming, setClaiming] = useState(false)
@@ -61,6 +68,11 @@ export default function Map({ currentUser, onViewEntity }) {
           setMapCenter({ lat: parseFloat(currentUser.current_lat), lng: parseFloat(currentUser.current_lng) });
       }
   }, [currentUser?.current_lat, currentUser?.current_lng]);
+
+  // 2. Add this quick toggle function
+  const toggleFilter = (key) => {
+    setFilters(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   useEffect(() => {
     async function init() {
@@ -166,9 +178,11 @@ export default function Map({ currentUser, onViewEntity }) {
 
       venues.forEach(venue => {
           let show = false
-          if (activeFilter === 'All' || activeFilter === 'Venues') show = true
-          if (activeFilter === 'Events' && venue.eventToday) show = true
-          if (activeFilter === 'Hotspots' && venue.is_hotspot) show = true
+          if (venue.eventToday) {
+              if (filters.events) show = true
+          } else {
+              if (filters.venues) show = true
+          }
 
           if (show) {
               const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
@@ -201,7 +215,7 @@ export default function Map({ currentUser, onViewEntity }) {
           }
       })
 
-      if (activeFilter === 'All' || activeFilter === 'Geo-Gifts') {
+      if (filters.geoGifts) {
           geoGifts.forEach(gift => {
               if (gift.claimed_by?.includes(currentUser?.id)) return 
               if (gift.expires_at && new Date(gift.expires_at) < new Date()) return
@@ -227,8 +241,9 @@ export default function Map({ currentUser, onViewEntity }) {
           })
       }
 
-      if (pointsPlotted && activeFilter !== 'All') mapInstance.fitBounds(bounds)
-  }, [mapInstance, venues, geoGifts, activeFilter, currentUser, isPlacingGift])
+      const allTrue = filters.venues && filters.events && filters.users && filters.geoGifts;
+      if (pointsPlotted && !allTrue) mapInstance.fitBounds(bounds)
+  }, [mapInstance, venues, geoGifts, filters, currentUser, isPlacingGift])
 
   useEffect(() => {
       const fetchUsers = async () => {
@@ -253,15 +268,17 @@ export default function Map({ currentUser, onViewEntity }) {
       userMarkersRef.current.forEach(marker => { marker.map = null })
       userMarkersRef.current = []
 
-      activeUsers.forEach(user => {
-          if (!user.current_lat || !user.current_lng) return
-          const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
-          const dotDiv = document.createElement('div')
-          dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
-          const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
-          userMarkersRef.current.push(marker)
-      })
-  }, [activeUsers, mapInstance])
+      if (filters.users) {
+          activeUsers.forEach(user => {
+              if (!user.current_lat || !user.current_lng) return
+              const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
+              const dotDiv = document.createElement('div')
+              dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
+              const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
+              userMarkersRef.current.push(marker)
+          })
+      }
+  }, [activeUsers, mapInstance, filters.users])
 
   const handleClaimGift = async () => {
       if (!currentUser?.current_lat || !currentUser?.current_lng) {
@@ -358,21 +375,22 @@ export default function Map({ currentUser, onViewEntity }) {
 
       <div className="flex flex-col gap-3 shrink-0 border-b border-gray-800 pb-4">
           <div className="flex justify-between items-center">
-              <div className="flex overflow-x-auto hide-scrollbar gap-2">
-                {['All', 'Venues', 'Events', 'Geo-Gifts', 'Hotspots'].map(filter => (
-                    <button
-                        key={filter}
-                        onClick={() => { setActiveFilter(filter); setActiveVenue(null); setActiveGift(null); }}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
-                            activeFilter === filter
-                            ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]'
-                            : 'bg-gray-900 border border-gray-800 text-gray-500 hover:text-white'
-                        }`}
-                    >
-                        View {filter}
-                    </button>
-                ))}
-              </div>
+            {/* Replace your existing filter buttons with these toggles */}
+            <div className="flex gap-2 overflow-x-auto p-2">
+              {Object.keys(filters).map(key => (
+                <button 
+                  key={key}
+                  onClick={() => toggleFilter(key)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
+                    filters[key] 
+                      ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
+                      : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
+                  }`}
+                >
+                  {key === 'geoGifts' ? 'Geo-Gifts' : key}
+                </button>
+              ))}
+            </div>
           </div>
           
           {/* ADMIN ONLY DROP & RESPAWN BUTTONS */}

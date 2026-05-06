@@ -12,11 +12,11 @@ export default function FYP({ currentUser, onViewEntity }) {
       <div className="p-4 pt-6 sticky top-[68px] sm:top-[76px] bg-[#030712]/95 backdrop-blur-xl z-40 border-b border-gray-800 shadow-xl">
          <h2 className="text-5xl font-['Bebas_Neue'] text-white tracking-wider drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
             {activeMiniPage === 'Feed' && 'THE FEED'}
-            {activeMiniPage === 'Events' && 'THE LINEUP'}
+            {activeMiniPage === 'Venues' && 'VENUES'}
          </h2>
          
          <div className="flex gap-2 mt-4 bg-gray-900 p-1.5 rounded-xl border border-gray-800 shadow-inner">
-            {['Feed', 'Events'].map(tab => (
+            {['Feed', 'Venues'].map(tab => (
                <button 
                  key={tab} 
                  onClick={() => setActiveMiniPage(tab)}
@@ -34,7 +34,7 @@ export default function FYP({ currentUser, onViewEntity }) {
 
       <div className="p-4 mt-2">
          {activeMiniPage === 'Feed' && <MainFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
-         {activeMiniPage === 'Events' && <EventsFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
+         {activeMiniPage === 'Venues' && <EventsFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
       </div>
     </div>
   )

@@ -384,6 +384,21 @@ export default function Map({ currentUser, onViewEntity }) {
         }
     }
 
+    // 🟢 NEW: Clear All GeoGifts
+    const handleClearAllGeoGifts = async () => {
+        if (!window.confirm("WARNING: Are you sure you want to delete ALL active GeoGifts from the map?")) return
+        
+        // Supabase requires a filter for deletes. .not('id', 'is', null) safely selects every row.
+        const { error } = await supabase.from('geo_gifts').delete().not('id', 'is', null)
+        
+        if (error) {
+            alert("Error clearing map: " + error.message)
+        } else {
+            alert("Map wiped clean!")
+            setGeoGifts([])
+        }
+    }
+
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
 
@@ -518,18 +533,27 @@ export default function Map({ currentUser, onViewEntity }) {
                       <button onClick={() => setShowAdminGiftModal(false)} className="text-gray-500 hover:text-white font-bold">✕</button>
                   </div>
 
-                  {/* 🟢 NEW: Smart Spawn Button */}
+                  {/* 🟢 FIX: Renamed to GeoGifts */}
                   <button 
                       type="button" 
                       onClick={handleSpawnSmartCaches}
-                      className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)] mb-4"
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)] mb-2"
                   >
-                      Deploy 10 Venue Caches
+                      Deploy 10 Venue GeoGifts
+                  </button>
+
+                  {/* 🟢 NEW: The Nuke Button */}
+                  <button 
+                      type="button" 
+                      onClick={handleClearAllGeoGifts}
+                      className="w-full bg-red-900/30 text-red-500 border border-red-500/50 hover:bg-red-600 hover:text-white py-3 rounded-xl font-bold uppercase tracking-widest transition-colors mb-4"
+                  >
+                      🗑️ Clear All GeoGifts
                   </button>
 
                   <div className="relative py-4 mb-2">
                       <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-red-900/50"></div></div>
-                      <div className="relative flex justify-center text-sm"><span className="px-3 bg-gray-900 text-red-500 font-bold uppercase tracking-widest text-[10px]">Or Manual Drop</span></div>
+                      <div className="relative flex justify-center text-sm"><span className="px-3 bg-[#090812] text-red-500 font-bold uppercase tracking-widest text-[10px]">Or Manual Drop</span></div>
                   </div>
 
                   <form onSubmit={handleAdminGiftSubmit} className="space-y-4">
@@ -596,7 +620,7 @@ export default function Map({ currentUser, onViewEntity }) {
                       </div>
 
                       <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-lg shadow-red-500/20">
-                          Deploy Cache to Coordinates
+                          Deploy GeoGift to Coordinates
                       </button>
                   </form>
               </div>

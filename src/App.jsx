@@ -207,6 +207,16 @@ function MainApp() {
     };
   }, [currentUser]);
 
+  // 8. SECURITY TRAPDOOR for Temp Users
+  useEffect(() => {
+      if (currentUser?.account_type === 'Temp_Crawl' && activeTab !== 'Live') {
+          // Security Breach Detected: Nuke the session and redirect
+          supabase.auth.signOut().then(() => {
+              window.location.href = '/?mode=login'
+          })
+      }
+  }, [activeTab, currentUser])
+
   // Helpers
   async function checkDailyBonus(userProfile) {
       if (!userProfile) return
@@ -281,8 +291,9 @@ function MainApp() {
     return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
   }
 
-  const baseTabs = ["What's Boppin", "Profile", "Songbook", "Leagues", "Live", "Settings"]
-  const tabs = currentUser?.account_type === 'Admin' ? ["Admin Console", ...baseTabs] : baseTabs
+  const tabs = currentUser?.account_type === 'Admin' 
+    ? ['Admin Console', 'Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
+    : ['Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
 
   return (
     <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">

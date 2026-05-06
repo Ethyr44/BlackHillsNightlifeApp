@@ -17,6 +17,10 @@ export default function TopNav({
 }) {
   const config = useAppConfig()
 
+  const displayTabs = currentUser?.account_type === 'Temp_Crawl' 
+      ? ['Live'] 
+      : tabs;
+
   return (
     <nav className="bg-gray-900/95 backdrop-blur-md sticky top-0 z-50 border-b border-gray-800 shadow-[0_4px_30px_rgba(0,0,0,0.5)]">
       <div className="max-w-2xl mx-auto p-4 flex gap-3 items-center justify-between">
@@ -59,7 +63,7 @@ export default function TopNav({
       
       <div className="max-w-2xl mx-auto px-4 flex overflow-x-auto hide-scrollbar border-t border-gray-800">
         <div className="flex gap-1 py-2">
-          {tabs.map(tab => (
+          {displayTabs.map(tab => (
             <button
               key={tab} 
               onClick={() => changeTab(tab)}

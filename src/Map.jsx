@@ -281,45 +281,52 @@ export default function Map({ currentUser, onViewEntity }) {
   }, [activeUsers, mapInstance, filters.users])
 
   const handleClaimGift = async () => {
-      if (!currentUser?.current_lat || !currentUser?.current_lng) {
-          return alert("Radar Offline. Ensure location services are enabled to claim Geo-Gifts.")
-      }
-
-      const dist = getDistanceInFeet(currentUser.current_lat, currentUser.current_lng, activeGift.lat, activeGift.lng)
-
-      if (dist > 25) {
-          return alert(`Too far! You are ${Math.round(dist)} feet away. Get within 25 feet to claim.`)
-      }
-
       setClaiming(true)
 
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single()
-      
-      const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
-      const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
-      const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
-      const newIron = (p.cur_iron || 0) + (activeGift.reward_resources?.Iron || 0)
-      
-      const newGems = { ...(p.inv_gems || {}) }
-      for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
-           newGems[gem] = (newGems[gem] || 0) + amt
-      }
+      // Get current location...
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+          const userLat = pos.coords.latitude
+          const userLng = pos.coords.longitude
+          const dist = getDistanceInFeet(userLat, userLng, activeGift.lat, activeGift.lng)
 
-      await supabase.from('profiles').update({
-          lifestyle_points: newLp,
-          cur_wood: newWood,
-          cur_stone: newStone,
-          cur_iron: newIron,
-          inv_gems: newGems
-      }).eq('id', currentUser.id)
+          // 🟢 FIX: Increased range to 100 feet
+          if (dist > 100) {
+              alert(`You are too far away! Get within 100 feet. (Currently ${Math.round(dist)}ft away)`)
+              setClaiming(false)
+              return
+          }
+          
+          const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single()
+          
+          const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
+          const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
+          const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
+          const newIron = (p.cur_iron || 0) + (activeGift.reward_resources?.Iron || 0)
+          
+          const newGems = { ...(p.inv_gems || {}) }
+          for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
+               newGems[gem] = (newGems[gem] || 0) + amt
+          }
 
-      const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
-      await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
+          await supabase.from('profiles').update({
+              lifestyle_points: newLp,
+              cur_wood: newWood,
+              cur_stone: newStone,
+              cur_iron: newIron,
+              inv_gems: newGems
+          }).eq('id', currentUser.id)
 
-      alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp} L$.`)
-      setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
-      setActiveGift(null)
-      setClaiming(false)
+          const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
+          await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
+
+          alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp} L$.`)
+          setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
+          setActiveGift(null)
+          setClaiming(false)
+      }, (err) => {
+          alert("Radar Offline. Ensure location services are enabled to claim Geo-Gifts.")
+          setClaiming(false)
+      }, { enableHighAccuracy: true })
   }
 
   const handleAdminGiftSubmit = async (e) => {
@@ -361,6 +368,21 @@ export default function Map({ currentUser, onViewEntity }) {
           if (data) setGeoGifts(data)
       }
   }
+
+    // 🟢 NEW: Trigger the Smart Venue Spawner
+    const handleSpawnSmartCaches = async () => {
+        if (!window.confirm("Deploy 10 random GeoGifts near active venues?")) return
+        
+        const { error } = await supabase.rpc('spawn_smart_geogifts', { spawn_count: 10 })
+        
+        if (error) {
+            alert("Error spawning caches: " + error.message)
+        } else {
+            alert("Successfully deployed 10 new GeoGifts!")
+            const { data } = await supabase.from('geo_gifts').select('*')
+            if (data) setGeoGifts(data)
+        }
+    }
 
   return (
     <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
@@ -465,7 +487,7 @@ export default function Map({ currentUser, onViewEntity }) {
                         disabled={claiming}
                         className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors shadow-lg"
                     >
-                        {claiming ? 'Extracting...' : 'Claim Reward (Must be within 25ft)'}
+                        {claiming ? 'Extracting...' : 'Claim Reward (Must be within 100ft)'}
                     </button>
                 </div>
             )}
@@ -494,6 +516,20 @@ export default function Map({ currentUser, onViewEntity }) {
                   <div className="flex justify-between items-start mb-6">
                       <h2 className="text-2xl font-['Bebas_Neue'] text-red-400 tracking-widest">Deploy Custom Geo-Gift</h2>
                       <button onClick={() => setShowAdminGiftModal(false)} className="text-gray-500 hover:text-white font-bold">✕</button>
+                  </div>
+
+                  {/* 🟢 NEW: Smart Spawn Button */}
+                  <button 
+                      type="button" 
+                      onClick={handleSpawnSmartCaches}
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)] mb-4"
+                  >
+                      Deploy 10 Venue Caches
+                  </button>
+
+                  <div className="relative py-4 mb-2">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-red-900/50"></div></div>
+                      <div className="relative flex justify-center text-sm"><span className="px-3 bg-gray-900 text-red-500 font-bold uppercase tracking-widest text-[10px]">Or Manual Drop</span></div>
                   </div>
 
                   <form onSubmit={handleAdminGiftSubmit} className="space-y-4">

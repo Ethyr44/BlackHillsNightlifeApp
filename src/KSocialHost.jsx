@@ -8,6 +8,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [isLoading, setIsLoading] = useState(true)
     
     const [showQR, setShowQR] = useState(false)
+    const [showCrawlQR, setShowCrawlQR] = useState(false)
     const [showSettingsModal, setShowSettingsModal] = useState(false)
     
     const [incomingRequest, setIncomingRequest] = useState(null)
@@ -21,6 +22,10 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [supervotes, setSupervotes] = useState(1)
 
     const [singers, setSingers] = useState([])
+
+    // 🟢 NEW: Timer State for Voting
+    const [votingTimeLeft, setVotingTimeLeft] = useState(0)
+    const [activeVotingSinger, setActiveVotingSinger] = useState(null)
 
     useEffect(() => {
         const checkExistingSession = async () => {
@@ -78,12 +83,76 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         }
     }, [activeSession?.id])
 
-    const endSession = async () => {
-        if(window.confirm("Are you sure you want to completely end this session? All scores will be finalized.")) {
-            await supabase.from('active_sessions').delete().eq('id', activeSession.id)
-            await supabase.from('session_singers').delete().eq('session_id', activeSession.id)
-            onExit()
+    // 🟢 NEW: 60-Second Voting Countdown Hook
+    useEffect(() => {
+        if (votingTimeLeft > 0 && activeVotingSinger) {
+            const timer = setTimeout(() => setVotingTimeLeft(prev => prev - 1), 1000)
+            return () => clearTimeout(timer)
+        } else if (votingTimeLeft === 0 && activeVotingSinger) {
+            // Timer Hit Zero! Move to Results & Burn the Song
+            finalizeVoting(activeVotingSinger)
         }
+    }, [votingTimeLeft, activeVotingSinger])
+
+    // 🟢 REPLACED: Progressive Stage Loop
+    const handleStageProgression = async (singer) => {
+        let nextStatus = 'queued'
+        
+        if (singer.status === 'queued') {
+            nextStatus = 'standby' // Triggers "Up Next" on Projector
+        } 
+        else if (singer.status === 'standby') {
+            nextStatus = 'singing' // Triggers "Live" on Projector
+        } 
+        else if (singer.status === 'singing') {
+            nextStatus = 'voting' // Triggers Voting controls for users
+            setActiveVotingSinger(singer)
+            setVotingTimeLeft(60) // Start the 60-second clock
+        }
+
+        await supabase.from('session_singers').update({ status: nextStatus }).eq('id', singer.id)
+        fetchSingers(activeSession.id)
+    }
+
+    // 🟢 NEW: Finalize Votes & Burn the Song to the Passport
+    const finalizeVoting = async (singer) => {
+        setActiveVotingSinger(null)
+        
+        // 1. Write to the Tournament History (The Passport Burn)
+        // We only do this if they are an app user with a BHNL ID and an active tournament is running
+        if (activeSession.tournament_id && singer.bhnl_id && singer.song_id) {
+            await supabase.from('tournament_history').insert([{
+                tournament_id: activeSession.tournament_id,
+                bhnl_id: singer.bhnl_id,
+                song_id: singer.song_id,
+                venue_name: activeSession.venue_name,
+                points_earned: singer.total_points
+            }])
+        }
+
+        // 2. Move singer to "results" status so the UI shows the final score
+        await supabase.from('session_singers').update({ status: 'results' }).eq('id', singer.id)
+        
+        // 3. Update the session's last activity timestamp for the Admin Hub
+        await supabase.from('active_sessions').update({ last_stage_time: new Date().toISOString() }).eq('id', activeSession.id)
+
+        fetchSingers(activeSession.id)
+    }
+
+    const handleEndSession = async () => {
+        if (!window.confirm("End the night? All singer points will be converted to Lifestyle Points (L$).")) return
+        
+        setIsLoading(true)
+        // 1. Pay everyone out
+        await supabase.rpc('payout_session_points', { p_session_id: activeSession.id })
+        
+        // 2. Close the stage
+        await supabase.from('active_sessions').delete().eq('id', activeSession.id)
+        
+        setActiveSession(null)
+        setView('start_menu')
+        setIsLoading(false)
+        alert("Session complete! Points deposited to user wallets.")
     }
 
     const openProjector = () => {
@@ -114,7 +183,9 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             is_active: true,
             voting_style: votingStyle,
             voting_icon: votingIcon,
-            supervotes: parseInt(supervotes)
+            supervotes: parseInt(supervotes),
+            // 🟢 NEW: Auto-link to the Crawl if one is active
+            tournament_id: activeCrawl ? activeCrawl.id : null 
         }
         const { data, error } = await supabase.from('active_sessions').insert([payload]).select().single()
         
@@ -151,16 +222,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             e.target.reset()
             fetchSingers(activeSession.id) // INSTANT REFRESH
         }
-    }
-
-    const handleToggleLive = async (singer) => {
-        if (singer.status === 'singing') {
-            await supabase.from('session_singers').update({ status: 'queued' }).eq('id', singer.id)
-        } else {
-            await supabase.from('session_singers').update({ status: 'queued' }).eq('session_id', activeSession.id).eq('status', 'singing')
-            await supabase.from('session_singers').update({ status: 'singing' }).eq('id', singer.id)
-        }
-        fetchSingers(activeSession.id) // INSTANT REFRESH
     }
 
     const handleDeleteSinger = async (id, name, skipConfirm = false) => {
@@ -253,7 +314,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     if (view === 'dashboard') {
         const liveSinger = singers.find(s => s.status === 'singing')
-        const activeQueue = singers.filter(s => s.status === 'queued' || s.status === 'singing').sort((a,b) => b.total_points - a.total_points)
+        const activeQueue = singers.filter(s => s.status !== 'pending').sort((a,b) => b.total_points - a.total_points)
         const pendingQueue = singers.filter(s => s.status === 'pending')
 
         return (
@@ -291,6 +352,16 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         </div>
                     </div>
 
+                    {/* Add this inside the activeSession dashboard view */}
+                    {currentUser.account_type === 'Admin' && (
+                        <button 
+                            onClick={() => setShowCrawlQR(true)} 
+                            className="bg-blue-900/30 text-blue-400 border border-blue-500/50 hover:bg-blue-600 hover:text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors mb-4 w-full"
+                        >
+                            📱 Display Temp QR Code
+                        </button>
+                    )}
+
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         <button onClick={() => setShowQR(true)} className="bg-blue-900/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all">
                             <span className="text-xl">📱</span>
@@ -308,7 +379,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                             <span className="text-xl">⚙️</span>
                             <span className="text-[9px] font-bold uppercase tracking-widest">Session Settings</span>
                         </button>
-                        <button onClick={endSession} className="bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all sm:col-span-2 col-span-2">
+                        <button onClick={handleEndSession} className="bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 py-3 rounded-xl flex flex-col items-center justify-center gap-1 transition-all sm:col-span-2 col-span-2">
                             <span className="text-xl">⏹</span>
                             <span className="text-[9px] font-bold uppercase tracking-widest">End Session</span>
                         </button>
@@ -360,6 +431,18 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                 <button onClick={() => setShowSettingsModal(false)} className="flex-1 bg-gray-800 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-gray-700">Cancel</button>
                                 <button onClick={saveSessionSettings} className="flex-1 bg-blue-600 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-blue-500">Save</button>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* The QR Modal */}
+                {showCrawlQR && (
+                    <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                        <div className="bg-white p-8 rounded-3xl text-center relative">
+                            <button onClick={() => setShowCrawlQR(false)} className="absolute -top-4 -right-4 bg-red-500 text-white w-10 h-10 rounded-full font-bold shadow-lg">✕</button>
+                            <h3 className="text-black font-['Bebas_Neue'] text-3xl mb-2">Scan to Join</h3>
+                            <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-6">Karaoke Crawl Master Hub</p>
+                            <QRCode value={`${window.location.origin}/crawl`} size={250} />
                         </div>
                     </div>
                 )}
@@ -428,13 +511,23 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                             <button onClick={() => handleDeleteSinger(singer.id, singer.name)} disabled={isActive} className="w-8 h-8 rounded bg-red-900/20 hover:bg-red-900/40 text-red-500 flex items-center justify-center text-sm disabled:opacity-50">
                                                 🗑️
                                             </button>
-                                            <button 
-                                                onClick={() => handleToggleLive(singer)} 
-                                                disabled={isBlocked}
-                                                className={`w-12 h-10 rounded-lg flex items-center justify-center text-xl ml-1 transition-all ${isActive ? 'bg-[#ff2d78] text-white shadow-[0_0_15px_rgba(255,45,120,0.5)]' : isBlocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white'}`}
-                                            >
-                                                {isActive ? '⏸' : '▶'}
-                                            </button>
+                                        <button 
+                                            onClick={() => handleStageProgression(singer)} 
+                                            disabled={isBlocked || singer.status === 'voting'}
+                                            className={`w-16 h-10 rounded-lg flex items-center justify-center text-xs font-bold uppercase tracking-widest ml-1 transition-all 
+                                                ${singer.status === 'standby' ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 
+                                                  singer.status === 'singing' ? 'bg-[#ff2d78] text-white shadow-[0_0_15px_rgba(255,45,120,0.5)]' : 
+                                                  singer.status === 'voting' ? 'bg-blue-600 text-white animate-pulse' :
+                                                  singer.status === 'results' ? 'bg-gray-700 text-gray-400' :
+                                                  isBlocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 
+                                                  'bg-green-600/20 text-green-500 border border-green-500/30 hover:bg-green-600 hover:text-white'}`}
+                                        >
+                                            {singer.status === 'queued' ? 'Ready' : 
+                                             singer.status === 'standby' ? 'Play' : 
+                                             singer.status === 'singing' ? 'Vote' : 
+                                             singer.status === 'voting' ? `${votingTimeLeft}s` : 
+                                             singer.status === 'results' ? 'Done' : '▶'}
+                                        </button>
                                         </div>
 
                                     </div>

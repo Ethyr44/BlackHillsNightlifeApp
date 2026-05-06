@@ -16,6 +16,12 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [singerAlias, setSingerAlias] = useState(currentUser?.username || '')
     const [prevStatus, setPrevStatus] = useState(null)
 
+    // 🟢 NEW STATES FOR THE PASSPORT CHECK
+    const [userSetlist, setUserSetlist] = useState([])
+    const [burnedSongIds, setBurnedSongIds] = useState([])
+    const [selectedSongId, setSelectedSongId] = useState(null)
+    const [isFetchingPassport, setIsFetchingPassport] = useState(false)
+
     useEffect(() => {
         const fetchSingers = async () => {
             const { data } = await supabase.from('session_singers')
@@ -64,23 +70,47 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         setPrevStatus(currentStatus)
     }, [currentStatus, prevStatus])
 
-    const handleRequestJoin = async (e) => {
-        e.preventDefault()
-        if (!singerAlias.trim()) return
-        
-        const { error } = await supabase.from('session_singers').insert([{
-            session_id: sessionId,
-            name: singerAlias.trim(),
-            status: 'pending',
-            total_points: 0,
-            bhnl_id: currentUser.id
-        }])
-        
-        if (error) {
-            alert(`Failed to send request: ${error.message}`)
-            return
+    // 🟢 MODIFIED: When they click "Request to Sing", fetch their passport
+    const handleOpenJoinModal = async () => {
+        setIsFetchingPassport(true)
+        setShowJoinModal(true)
+
+        // 1. Fetch their active setlist songs
+        const { data: profile } = await supabase.from('profiles').select('active_setlist').eq('id', currentUser.id).single()
+        if (profile?.active_setlist?.length > 0) {
+            const { data: songs } = await supabase.from('songs').select('id, title, artist').in('id', profile.active_setlist)
+            if (songs) setUserSetlist(songs)
         }
-        
+
+        // 2. Fetch their burned songs for this specific tournament
+        if (session?.tournament_id) {
+            const { data: history } = await supabase.from('tournament_history')
+                .select('song_id')
+                .eq('tournament_id', session.tournament_id)
+                .eq('bhnl_id', currentUser.id)
+            
+            if (history) setBurnedSongIds(history.map(h => h.song_id))
+        }
+        setIsFetchingPassport(false)
+    }
+
+    // 🟢 MODIFIED: Submit the request with the specific song
+    const handleJoinSession = async (e) => {
+        e.preventDefault()
+        if (currentUser.account_type !== 'Voter' && !selectedSongId) {
+            return alert("You must select a song from your setlist!")
+        }
+
+        const payload = {
+            session_id: sessionId,
+            bhnl_id: currentUser.id,
+            name: singerAlias,
+            song_id: selectedSongId, // Passes the song to the KJ
+            status: 'pending',
+            total_points: 0
+        }
+
+        await supabase.from('session_singers').insert([payload])
         setShowJoinModal(false)
     }
 
@@ -257,7 +287,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 </div>
 
                 {!currentStatus && (
-                    <button onClick={() => setShowJoinModal(true)} className="w-full bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
+                    <button onClick={handleOpenJoinModal} className="w-full bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30 py-3.5 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors">
                         🎙️ Request to Sing
                     </button>
                 )}
@@ -268,27 +298,66 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 )}
             </div>
 
+            {/* THE JOIN SESSION MODAL */}
             {showJoinModal && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <form onSubmit={handleRequestJoin} className="bg-gray-900 border-2 border-purple-500/30 p-8 rounded-3xl w-full max-w-sm shadow-[0_0_50px_rgba(147,51,234,0.2)] animate-slide-up-fast">
-                        <div className="text-4xl mb-4 text-center">🎙️</div>
-                        <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-white text-center">Hit the Stage</h3>
-                        <p className="text-gray-400 text-xs mb-6 uppercase tracking-widest text-center">What alias should the host call you?</p>
-                        
-                        <input 
-                            type="text" 
-                            value={singerAlias} 
-                            onChange={e => setSingerAlias(e.target.value)} 
-                            placeholder="Your Stage Name..." 
-                            className="w-full bg-black border border-gray-700 text-white rounded-xl p-4 focus:border-purple-500 outline-none mb-6"
-                            required
-                        />
-
-                        <div className="flex gap-3">
-                            <button type="button" onClick={() => setShowJoinModal(false)} className="flex-1 border border-gray-700 text-gray-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white py-3">Cancel</button>
-                            <button type="submit" className="flex-1 bg-purple-600 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)] py-3">Submit Request</button>
-                        </div>
-                    </form>
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-gray-900 border-2 border-purple-500/50 rounded-3xl w-full max-w-md p-6 shadow-2xl">
+                        <form onSubmit={handleJoinSession}>
+                            <div className="text-4xl mb-4 text-center">🎙️</div>
+                            <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-2 text-white text-center">Hit the Stage</h3>
+                            
+                            <input 
+                                type="text" 
+                                value={singerAlias} 
+                                onChange={e => setSingerAlias(e.target.value)} 
+                                placeholder="Your Stage Name..." 
+                                className="w-full bg-black border border-gray-700 text-white rounded-xl p-4 focus:border-purple-500 outline-none mb-6"
+                                required
+                            />
+            
+                            {/* 🟢 NEW: The Karaoke Passport UI */}
+                            {currentUser.account_type !== 'Voter' && (
+                                <div className="mb-6">
+                                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest mb-2">Select Your Track</p>
+                                    {isFetchingPassport ? (
+                                        <div className="text-center p-4 text-purple-400 text-xs animate-pulse font-bold tracking-widest uppercase">Checking Passport...</div>
+                                    ) : userSetlist.length === 0 ? (
+                                        <p className="text-red-400 text-xs text-center p-4 bg-red-900/20 rounded-xl">Your setlist is empty! Add songs via the Songbook first.</p>
+                                    ) : (
+                                        <div className="max-h-48 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                            {userSetlist.map(song => {
+                                                const isBurned = burnedSongIds.includes(song.id)
+                                                return (
+                                                    <button
+                                                        key={song.id}
+                                                        type="button"
+                                                        disabled={isBurned}
+                                                        onClick={() => setSelectedSongId(song.id)}
+                                                        className={`w-full text-left p-3 rounded-xl border flex justify-between items-center transition-all ${
+                                                            isBurned ? 'bg-gray-800/50 border-gray-700 opacity-50 cursor-not-allowed' :
+                                                            selectedSongId === song.id ? 'bg-purple-900/40 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.3)]' :
+                                                            'bg-black border-gray-700 hover:border-purple-500/50'
+                                                        }`}
+                                                    >
+                                                        <div className="truncate pr-4">
+                                                            <p className={`font-bold text-sm truncate ${isBurned ? 'text-gray-500' : 'text-white'}`}>{song.title}</p>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest truncate">{song.artist}</p>
+                                                        </div>
+                                                        {isBurned && <span className="text-[9px] bg-red-900/50 text-red-400 px-2 py-1 rounded font-bold uppercase tracking-widest">Burned</span>}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+            
+                            <div className="flex gap-3">
+                                <button type="button" onClick={() => setShowJoinModal(false)} className="flex-1 border border-gray-700 text-gray-400 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white py-3">Cancel</button>
+                                <button type="submit" disabled={currentUser.account_type !== 'Voter' && !selectedSongId} className="flex-1 bg-purple-600 disabled:bg-gray-800 disabled:text-gray-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-purple-500 shadow-[0_0_15px_rgba(147,51,234,0.4)] py-3 transition-all">Submit Request</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>

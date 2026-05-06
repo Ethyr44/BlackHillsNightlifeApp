@@ -42,6 +42,7 @@ export default function Ticker() {
 
   // Join all active messages with a bullet point separator
   const tickerText = messages.join('   •   ')
+  const scrollSpeed = Math.max(tickerText.length * 0.15, 10) // 0.15s per char, minimum 10 seconds
 
   return (
     // THE FIX: Removed "fixed", "left-0", "right-0", and the style tag. 
@@ -50,7 +51,10 @@ export default function Ticker() {
       className="w-full border-b overflow-hidden backdrop-blur-md pointer-events-none z-40 text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2"
       style={{ backgroundColor: bgColor, color: textColor, borderColor: textColor }}
     >
-      <div className="whitespace-nowrap animate-ticker inline-block">
+      <div 
+         className="whitespace-nowrap animate-ticker inline-block"
+         style={{ animationDuration: `${scrollSpeed}s` }} 
+      >
         <span className="mr-8">{tickerText}</span>
         {/* We duplicate the text once so the scrolling loop is perfectly seamless */}
         <span>{tickerText}</span>

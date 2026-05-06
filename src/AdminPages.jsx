@@ -16,12 +16,25 @@ export default function AdminPages() {
   const [website, setWebsite] = useState('')
   const [facebook, setFacebook] = useState('')
   const [cost, setCost] = useState('$$')
+  
+  // Add these states at the top of AdminPages.jsx
+  const [availableTags, setAvailableTags] = useState([])
+  const [selectedTags, setSelectedTags] = useState([])
 
   useEffect(() => { fetchPages() }, [])
 
   const fetchPages = async () => {
-    const { data } = await supabase.from('pages').select('*').order('created_at', { ascending: false })
-    if (data) setPages(data)
+    const { data: pData } = await supabase.from('pages').select('*').order('created_at', { ascending: false })
+    if (pData) setPages(pData)
+    
+    // 🟢 NEW: Fetch available venue styles
+    const { data: catData } = await supabase.from('system_categories').select('*').eq('category_type', 'venue')
+    if (catData) setAvailableTags(catData.map(c => c.name))
+  }
+
+  // Helper to toggle tags
+  const toggleTag = (tag) => {
+      setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
   const handleImageUpload = async (event, type) => {
@@ -46,6 +59,7 @@ export default function AdminPages() {
   const resetForm = () => {
     setEditingPageId(null); setPageName(''); setProfilePic(''); setSlideshowUrls([]); 
     setAddress(''); setPhone(''); setWebsite(''); setFacebook(''); setCost('$$');
+    setSelectedTags([]);
   }
 
   const savePage = async () => {
@@ -74,7 +88,8 @@ export default function AdminPages() {
         name: pageName, page_type: pageType, profile_pic: profilePic, slideshow_urls: slideshowUrls,
         address: pageType === 'Venue' ? address : null, phone: pageType === 'Venue' ? phone : null,
         website: pageType === 'Venue' ? website : null, facebook: pageType === 'Venue' ? facebook : null,
-        cost: pageType === 'Venue' ? cost : null, lat: lat, lng: lng
+        cost: pageType === 'Venue' ? cost : null, lat: lat, lng: lng,
+        tags: selectedTags
     }
     
     if (editingPageId) await supabase.from('pages').update(payload).eq('id', editingPageId)
@@ -87,6 +102,7 @@ export default function AdminPages() {
     setEditingPageId(p.id); setPageName(p.name); setPageType(p.page_type); setProfilePic(p.profile_pic || ''); 
     setSlideshowUrls(p.slideshow_urls || []); setAddress(p.address || ''); setPhone(p.phone || ''); 
     setWebsite(p.website || ''); setFacebook(p.facebook || ''); setCost(p.cost || '$$'); 
+    setSelectedTags(p.tags || []);
   }
 
   return (
@@ -138,6 +154,22 @@ export default function AdminPages() {
                     <select value={cost} onChange={e => setCost(e.target.value)} className="bg-black border border-gray-700 text-white rounded p-3 text-sm focus:border-blue-500 outline-none w-full">
                         <option value="$">Cost: $ (Cheap)</option><option value="$$">Cost: $$ (Moderate)</option><option value="$$$">Cost: $$$ (Expensive)</option>
                     </select>
+                </div>
+
+                <div className="mb-4">
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2 block">Venue Style Tags</label>
+                    <div className="flex flex-wrap gap-2">
+                        {availableTags.map(tag => (
+                            <button
+                                key={tag}
+                                type="button"
+                                onClick={() => toggleTag(tag)}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${selectedTags.includes(tag) ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)]' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Live Google Map Preview right inside the Admin form! */}

@@ -2,9 +2,22 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import VenueCard, { EVENT_EMOJIS } from './VenueCard'
 
+// 🟢 NEW: Distance Calculator
+function getDistanceInFeet(lat1, lon1, lat2, lon2) {
+    const R = 3958.8;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c) * 5280;
+}
+
 export default function EventsFeed({ currentUser, onViewEntity }) {
   const [venueLineups, setVenueLineups] = useState([])
   const [loading, setLoading] = useState(true)
+  const [userLoc, setUserLoc] = useState(null) // 🟢 NEW: Store user location
 
   const [selectedVenueInfo, setSelectedVenueInfo] = useState(null)
   const [selectedEventInfo, setSelectedEventInfo] = useState(null)
@@ -12,6 +25,13 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   const fetchEvents = async () => {
     setLoading(true)
+
+    // 🟢 NEW: Grab user location for distance scoring
+    navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        (err) => console.log("Location denied, skipping distance sorting.")
+    )
+
     const { data: venues } = await supabase.from('pages').select('*').eq('page_type', 'Venue')
     
     const startOfToday = new Date()
@@ -70,13 +90,48 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
         }
     })
 
-    processedLineups.sort((a, b) => {
-        if (a.hasAnyEvent && !b.hasAnyEvent) return -1;
-        if (!a.hasAnyEvent && b.hasAnyEvent) return 1;
-        return a.name.localeCompare(b.name);
-    })
+    // 🟢 THE SMART ALGORITHM: Score and Sort the Venues
+    const scoredVenues = processedLineups.map(item => {
+        let score = 0;
+        const todayEvent = item.schedule[0]?.event;
+        const tomorrowEvent = item.schedule[1]?.event;
 
-    setVenueLineups(processedLineups)
+        // 1. Hotspots / Featured / Major Events
+        if (item.is_featured || todayEvent?.event_type === 'KSocial' || todayEvent?.event_type === 'Karaoke Crawl') {
+            score += 1000;
+        }
+
+        // 2. Events Happening Today
+        if (todayEvent) score += 500;
+
+        // 3 & 4. Proximity (If user allowed location)
+        if (userLoc && item.lat && item.lng) {
+            const dist = getDistanceInFeet(userLoc.lat, userLoc.lng, item.lat, item.lng);
+            if (dist < 5280) { // Within 1 mile radius
+                if (todayEvent) score += 300; // Event near user
+                else score += 200; // Venue near user
+            }
+        }
+
+        // 5. Events Happening Tomorrow
+        if (tomorrowEvent) score += 100;
+
+        // 6. User Preferences Match
+        const userPreferences = [
+            ...(currentUser?.pref_venues || []), 
+            ...(currentUser?.pref_events || []), 
+            ...(currentUser?.pref_genres || [])
+        ];
+        
+        if (userPreferences.length > 0 && item.tags) {
+            const matches = item.tags.some(tag => userPreferences.includes(tag));
+            if (matches) score += 50;
+        }
+
+        return { ...item, priorityScore: score };
+    }).sort((a, b) => b.priorityScore - a.priorityScore || a.name.localeCompare(b.name)); // Sort Highest Score to Lowest
+
+    setVenueLineups(scoredVenues)
     setLoading(false)
   }
 

@@ -32,7 +32,7 @@ export default function FYP({ currentUser, onViewEntity }) {
          </div>
       </div>
 
-      <div className="p-4 mt-2">
+      <div className="mt-4">
          {activeMiniPage === 'Feed' && <MainFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
          {activeMiniPage === 'Venues' && <EventsFeed currentUser={currentUser} onViewEntity={onViewEntity} />}
       </div>

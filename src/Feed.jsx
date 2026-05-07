@@ -21,7 +21,7 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
         *,
         profiles:author_id (username, profile_pic, account_type),
         likes (id, user_id),
-        comments (id, text, user_id, created_at)
+        comments (id, content, user_id, created_at)
       `)
       .order('created_at', { ascending: false })
 

@@ -4,6 +4,7 @@ import KSocialHost from './KSocialHost'
 import KSocialUser from './KSocialUser'
 import Map from './Map'
 import Shop from './Shop'
+import KCrawlManager from './KCrawlManager'
 
 export default function Live({ currentUser, onViewEntity }) {
     const [activeMiniPage, setActiveMiniPage] = useState('KSocial')
@@ -74,6 +75,8 @@ export default function Live({ currentUser, onViewEntity }) {
                     <div className="space-y-6">
                         {joinedSessionId ? (
                             <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={() => { localStorage.removeItem('bhnl_joined_session'); setJoinedSessionId(null); }} />
+                        ) : hostMode === 'crawl' ? (
+                            <KCrawlManager session={{ user: currentUser }} />
                         ) : hostMode || existingSession ? (
                             <KSocialHost currentUser={currentUser} mode={existingSession ? existingSession.mode : hostMode} onExit={() => {setHostMode(null); setExistingSession(null); fetchActiveSessions()}} />
                         ) : (
@@ -111,13 +114,23 @@ export default function Live({ currentUser, onViewEntity }) {
                                     <div className="mt-12 pt-8 border-t border-gray-800">
                                         <div className="bg-purple-900/10 border border-purple-500/30 p-6 rounded-3xl text-center">
                                             <h3 className="text-purple-400 text-sm font-bold uppercase tracking-widest mb-4">Admin Command</h3>
-                                            <button 
-                                                onClick={() => setHostMode('league')} // Directly launches the KSocialHost component
-                                                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)]"
-                                            >
-                                                🎙️ Launch League Stage
-                                            </button>
-                                            <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-3">Karaoke Crawl Master Hub must be launched from the Admin Console.</p>
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <button 
+                                                    onClick={() => setHostMode('league')} 
+                                                    className="w-full bg-blue-900/30 border border-blue-500/50 hover:bg-blue-600 text-blue-400 hover:text-white py-4 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-colors"
+                                                >
+                                                    🎙️ League Stage
+                                                </button>
+                                                <button 
+                                                    onClick={() => setHostMode('crawl')} 
+                                                    className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-[10px] transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)]"
+                                                >
+                                                    🏆 Karaoke Crawl
+                                                </button>
+                                            </div>
+                                            
+                                            <p className="text-[9px] text-gray-500 uppercase tracking-widest mt-4">Select a mode to initialize the Master Hub.</p>
                                         </div>
                                     </div>
                                 )}

@@ -34,14 +34,11 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
     const { data: venues } = await supabase.from('pages').select('*').eq('page_type', 'Venue')
     
-    const startOfToday = new Date()
-    startOfToday.setHours(0, 0, 0, 0)
-
-    const { data: upcomingEvents } = await supabase.from('events')
+    // 🟢 FIX: Fetch ALL approved events, not just ones strictly >= today, 
+    // so we can catch older events that are set to recur.
+    const { data: allEvents } = await supabase.from('events')
         .select('*')
         .eq('status', 'approved')
-        .gte('event_date', startOfToday.toISOString())
-        .order('event_date', { ascending: true })
 
     const days = []
     const today = new Date()
@@ -50,7 +47,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
     for(let i = 0; i < 7; i++) {
         const d = new Date(today)
         d.setDate(today.getDate() + i)
-        days.push({ dateString: d.toDateString(), dayOfWeek: d.getDay(), dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase().substring(0,3), rawDate: d })
+        days.push({ dateString: d.toISOString().split('T')[0], dayOfWeek: d.getDay(), dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase().substring(0,3), rawDate: d })
     }
 
     const processedLineups = (venues || []).map(v => {
@@ -58,11 +55,22 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
         let hasAnyEvent = false
 
         const schedule = days.map(dayObj => {
-            const eventToday = upcomingEvents?.find(e => {
-                if (e.venue !== v.name) return false
-                const eDate = new Date(e.event_date)
-                if (e.recurring_weekly) return eDate.getDay() === dayObj.dayOfWeek
-                return eDate.toDateString() === dayObj.dateString
+            // 🟢 FIX: The Smart Roll-Over Matcher
+            const eventToday = allEvents?.find(e => {
+                if (e.venue !== v.name) return false;
+                
+                // Direct date match
+                if (e.event_date.startsWith(dayObj.dateString)) return true;
+                
+                // Recurring check: If recurring_weekly is true, match the Day of the Week
+                if (e.recurring_weekly) {
+                    const eventStartDate = new Date(e.event_date);
+                    // Ensure the recurring event actually started on or before this day
+                    if (eventStartDate.getDay() === dayObj.dayOfWeek && eventStartDate <= dayObj.rawDate) {
+                        return true;
+                    }
+                }
+                return false;
             })
             
             if (eventToday) {

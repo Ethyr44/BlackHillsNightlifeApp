@@ -35,6 +35,7 @@ export default function Map({ currentUser, onViewEntity }) {
   const [activeVenue, setActiveVenue] = useState(null)
   const [activeGift, setActiveGift] = useState(null)
   const [claiming, setClaiming] = useState(false)
+  const [linkingVenue, setLinkingVenue] = useState(false)
 
   // 🟢 ADMIN STATE
   const [showAdminGiftModal, setShowAdminGiftModal] = useState(false)
@@ -329,6 +330,50 @@ export default function Map({ currentUser, onViewEntity }) {
       }, { enableHighAccuracy: true })
   }
 
+  // 🟢 NEW: The Venue Link Check-in System
+  const handleVenueLink = async (venue) => {
+      setLinkingVenue(true)
+
+      navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+              const userLat = pos.coords.latitude
+              const userLng = pos.coords.longitude
+              const dist = getDistanceInFeet(userLat, userLng, venue.lat, venue.lng)
+
+              // 1. Enforce the 100ft Perimeter
+              if (dist > 100) {
+                  alert(`You are too far away! Get within 100 feet of ${venue.name} to Link. (Currently ${Math.round(dist)}ft away)`)
+                  setLinkingVenue(false)
+                  return
+              }
+
+              // 2. Trigger the Server-Side Engine
+              const { data: pointsEarned, error } = await supabase.rpc('link_venue', {
+                  p_user_id: currentUser.id,
+                  p_username: currentUser.username,
+                  p_venue_name: venue.name
+              })
+
+              if (error) {
+                  alert("Link Failed: " + error.message)
+              } else {
+                  // Success!
+                  if (pointsEarned === 44) {
+                      alert(`🎉 NEW DISCOVERY! You successfully Linked with ${venue.name} for the first time and earned 44 L$!`)
+                  } else {
+                      alert(`✅ Welcome back to ${venue.name}! You earned 22 L$ for Linking.`)
+                  }
+              }
+              setLinkingVenue(false)
+          },
+          (error) => {
+              alert("Failed to get location signal. Please check your device's location permissions.")
+              setLinkingVenue(false)
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      )
+  }
+
   const handleAdminGiftSubmit = async (e) => {
       e.preventDefault()
       const payload = {
@@ -482,9 +527,21 @@ export default function Map({ currentUser, onViewEntity }) {
                     ) : (
                         <span className="text-purple-400 text-[9px] font-bold uppercase tracking-widest block mb-3">Official BHNL Venue</span>
                     )}
-                    <button onClick={() => onViewEntity(activeVenue.name)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-colors shadow-lg">
-                        Full Profile
-                    </button>
+                    <div className="mt-4 pt-4 border-t border-gray-800 flex gap-2">
+                        <button 
+                            onClick={() => onViewEntity(activeVenue.name)} 
+                            className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+                        >
+                            View Page
+                        </button>
+                        <button 
+                            onClick={() => handleVenueLink(activeVenue)} 
+                            disabled={linkingVenue}
+                            className="flex-1 bg-cyan-900/30 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-600 hover:text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                        >
+                            {linkingVenue ? 'Linking...' : '📍 Venue Link'}
+                        </button>
+                    </div>
                 </div>
             )}
 

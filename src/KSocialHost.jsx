@@ -179,7 +179,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             biz_name: bizName,
             venue_name: venueName,
             session_title: sessionTitle,
-            mode: mode,
+            mode: 'league', // Hardcoded safely!
             is_active: true,
             voting_style: votingStyle,
             voting_icon: votingIcon,
@@ -250,63 +250,51 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     if (view === 'start_menu') {
         return (
-            <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 shadow-xl animate-fade-in">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest">Launch Stage</h2>
-                    <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${mode === 'league' ? 'bg-[#00f5ff]/20 text-[#00f5ff] border border-[#00f5ff]/30' : 'bg-[#b347ff]/20 text-[#b347ff] border border-[#b347ff]/30'}`}>
-                        {mode} Mode
-                    </span>
+            <div className="max-w-md mx-auto animate-fade-in p-6 bg-[#090812] border-2 border-purple-500/30 rounded-3xl shadow-2xl mt-4">
+                
+                <div className="text-center mb-6">
+                    <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-widest">Stage Setup</h2>
+                    <p className="text-purple-400 text-[10px] font-bold uppercase tracking-widest bg-purple-900/30 inline-block px-3 py-1 rounded-full mt-2 border border-purple-500/30">
+                        Official League Session
+                    </p>
                 </div>
 
-                <div className="space-y-4 mb-8">
+                <div className="space-y-4">
                     <div>
-                        <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Session Title</label>
-                        <input type="text" value={sessionTitle} onChange={e => setSessionTitle(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Host Name</label>
-                            <input type="text" value={hostName} onChange={e => setHostName(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Venue Name</label>
-                            <input type="text" value={venueName} onChange={e => setVenueName(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" />
-                        </div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 ml-1">Session Title</label>
+                        <input type="text" value={sessionTitle} onChange={e => setSessionTitle(e.target.value)} className="w-full bg-black border border-gray-800 text-white rounded-xl p-4 mt-1 outline-none focus:border-purple-500 transition-colors" />
                     </div>
                     
-                    <div className="pt-4 border-t border-gray-800">
-                        <h4 className="text-xs text-blue-400 font-bold uppercase tracking-widest mb-3">Voting Rules</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Voting Style</label>
-                                <select value={votingStyle} onChange={e => setVotingStyle(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-[#ff2d78] outline-none">
-                                    <option value="normal">Tap to Vote (Standard)</option>
-                                    <option value="1to5">5-Star Rating (Single)</option>
-                                    <option value="multi">Multi-Category (Perf/Wow/Orig)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Button Icon</label>
-                                <select value={votingIcon} onChange={e => setVotingIcon(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-[#ff2d78] outline-none">
-                                    <option value="star">⭐ Star</option>
-                                    <option value="fire">🔥 Fire</option>
-                                    <option value="clap">👏 Clap</option>
-                                </select>
-                            </div>
+                    <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 ml-1">Venue Name</label>
+                        <input type="text" value={venueName} onChange={e => setVenueName(e.target.value)} placeholder="e.g. The Firehouse" className="w-full bg-black border border-gray-800 text-white rounded-xl p-4 mt-1 outline-none focus:border-purple-500 transition-colors" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 ml-1">Voting Style</label>
+                            <select value={votingStyle} onChange={e => setVotingStyle(e.target.value)} className="w-full bg-black border border-gray-800 text-white rounded-xl p-4 mt-1 outline-none focus:border-purple-500">
+                                <option value="normal">Standard (1 Pt)</option>
+                                <option value="1to5">1 to 5 Stars</option>
+                                <option value="multi">Categories</option>
+                            </select>
                         </div>
-                        {mode === 'league' && (
-                            <div className="mt-4">
-                                <label className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">Audience Supervotes</label>
-                                <input type="number" min="0" max="5" value={supervotes} onChange={e => setSupervotes(e.target.value)} className="w-full bg-black border border-yellow-500/50 text-white rounded-lg p-3 text-sm focus:border-yellow-400 outline-none" />
-                                <p className="text-[9px] text-gray-500 mt-1 uppercase tracking-widest">How many double-point votes each user gets.</p>
-                            </div>
-                        )}
+                        <div>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 ml-1">Supervotes / User</label>
+                            <input type="number" min="1" max="5" value={supervotes} onChange={e => setSupervotes(e.target.value)} className="w-full bg-black border border-gray-800 text-white rounded-xl p-4 mt-1 outline-none focus:border-purple-500" />
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex gap-2">
-                    <button onClick={onExit} className="px-6 py-3 border border-gray-700 text-gray-400 hover:text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">Cancel</button>
-                    <button onClick={startSession} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(59,130,246,0.4)]">Go Live</button>
+                <div className="mt-8 flex gap-3">
+                    <button onClick={onExit} className="flex-1 py-4 rounded-xl border border-gray-700 text-gray-400 font-bold uppercase tracking-widest text-xs hover:bg-gray-800 transition-colors">Cancel</button>
+                    <button 
+                        onClick={startSession} 
+                        disabled={isLoading || !venueName}
+                        className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs transition-colors shadow-[0_0_15px_rgba(147,51,234,0.4)]"
+                    >
+                        {isLoading ? 'Booting...' : 'Go Live'}
+                    </button>
                 </div>
             </div>
         )

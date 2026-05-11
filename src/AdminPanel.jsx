@@ -7,8 +7,10 @@ import AdminSocial from './AdminSocial'
 import AdminCategories from './AdminCategories'
 import AdminConfig from './AdminConfig'
 import AdminTicker from './AdminTicker'
+import AdminDebug from './AdminDebug'
+import AdminUsers from './AdminUsers'
 
-export default function AdminPanel() {
+export default function AdminPanel({ session, setSimulatedRole, setShowSplash, setTestOnboardingType }) {
   const [activeTab, setActiveTab] = useState('Shop')
   const [activeModal, setActiveModal] = useState(null) // 'categories', 'venues', 'events'
 
@@ -23,10 +25,10 @@ export default function AdminPanel() {
 
       {/* Tab Navigation */}
       <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 mb-8 overflow-x-auto hide-scrollbar">
-        {['Shop', 'Economy', 'Social', 'App Text'].map(tab => (
+        {['Shop', 'Economy', 'Social', 'App Text', 'Users', 'Debug'].map(tab => (
           <button 
             key={tab} onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-4 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+            className={`flex-1 py-3 px-6 rounded-lg text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
                 activeTab === tab 
                 ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' 
                 : 'text-gray-500 hover:text-gray-300'
@@ -42,6 +44,8 @@ export default function AdminPanel() {
       {activeTab === 'Economy' && <AdminEconomy />}
       {activeTab === 'Social' && <AdminSocial />}
       {activeTab === 'App Text' && <AdminConfig />}
+      {activeTab === 'Users' && <AdminUsers />}
+      {activeTab === 'Debug' && <AdminDebug setSimulatedRole={setSimulatedRole} setShowSplash={setShowSplash} setTestOnboardingType={setTestOnboardingType} />}
 
       {activeModal && (
         <div className="fixed inset-0 bg-black/90 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">

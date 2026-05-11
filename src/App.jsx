@@ -59,6 +59,9 @@ function MainApp() {
   const [showNotifications, setShowNotifications] = useState(false) 
   const [forceFriendView, setForceFriendView] = useState(false)
 
+  const [simulatedRole, setSimulatedRole] = useState(null)
+  const [testOnboardingType, setTestOnboardingType] = useState(null)
+
   const showReward = (title, points) => {
       if (points > 0) {
           setRewardToast({ title, points })
@@ -75,6 +78,16 @@ function MainApp() {
       }
   };
 
+  const fetchUser = async () => {
+    if (session?.user?.id) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      if (data) {
+        setCurrentUser(data);
+        checkDailyBonus(data);
+      }
+    }
+  };
+
   // 2. Auth Listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -85,13 +98,7 @@ function MainApp() {
   // 3. User Fetch & Daily Bonus Trigger
   useEffect(() => {
     if (session) {
-      supabase.from('profiles').select('*').eq('id', session.user.id).single()
-        .then(({ data }) => {
-            if (data) {
-              setCurrentUser(data)
-              checkDailyBonus(data)
-            }
-        })
+      fetchUser();
     }
 
     // THE 40-SECOND SILENT POLL
@@ -287,16 +294,64 @@ function MainApp() {
   // Pre-Render Checks
   if (!session) return <Auth />
   if (session && !currentUser) return <div className="flex justify-center mt-32"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
-  if (currentUser && currentUser.onboarding_complete === false) {
-    return <Onboarding session={session} onComplete={() => setCurrentUser({...currentUser, onboarding_complete: true})} />
+  if (!currentUser?.onboarding_complete || testOnboardingType) {
+    return (
+        <Onboarding 
+            session={session} 
+            forcedType={testOnboardingType}
+            onComplete={() => {
+                if (testOnboardingType) {
+                    setTestOnboardingType(null) // Simply close the tester
+                } else {
+                    fetchUser() // Standard real-user onboarding completion
+                }
+            }} 
+        />
+    )
   }
 
-  const tabs = currentUser?.account_type === 'Admin' 
+  // 🟢 FIXED: The Pending Status Trapdoor (Admins are immune!)
+  if (currentUser?.account_status === 'pending' && currentUser?.account_type !== 'Admin') {
+      return (
+          <div className="min-h-screen bg-[#030712] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#090812] border border-yellow-500/30 p-8 rounded-3xl max-w-md text-center shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+                  <div className="text-6xl mb-6 animate-pulse">⏳</div>
+                  <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-4">Account Pending</h2>
+                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                      Account Registration Request Submitted! App Access Pending Admin Approval.
+                  </p>
+                  <p className="text-yellow-500/80 text-xs font-bold uppercase tracking-widest bg-yellow-900/20 p-4 rounded-xl border border-yellow-500/20">
+                      This process usually takes about 5-10 minutes. Thank you for your patience!
+                  </p>
+                  <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="mt-8 text-gray-500 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors">
+                      Sign Out
+                  </button>
+              </div>
+          </div>
+      )
+  }
+
+  // 🟢 NEW: If simulating a role, inject it. Otherwise use the real user.
+  const effectiveUser = simulatedRole 
+    ? { ...currentUser, account_type: simulatedRole } 
+    : currentUser;
+
+  const tabs = effectiveUser?.account_type === 'Admin' 
     ? ['Admin Console', 'Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
     : ['Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
 
   return (
     <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
+
+      {/* 🟢 NEW: The Simulation Escape Hatch */}
+      {simulatedRole && (
+          <button 
+              onClick={() => setSimulatedRole(null)}
+              className="fixed bottom-24 right-4 z-[999] bg-red-600 text-white px-4 py-3 rounded-full font-bold uppercase tracking-widest text-xs shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-bounce"
+          >
+              Exit {simulatedRole} View
+          </button>
+      )}
       
       <Moonshower />
 
@@ -323,7 +378,7 @@ function MainApp() {
       )}
 
       <TopNav 
-          currentUser={currentUser}
+          currentUser={effectiveUser}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           executeSearch={executeSearch}
@@ -346,7 +401,7 @@ function MainApp() {
           <PublicProfile 
               entity={viewingEntity} 
               onClose={() => { setSearchParams({ tab: activeTab }) }} 
-              currentUser={currentUser} 
+              currentUser={effectiveUser} 
               forceAccess={forceFriendView ? 'friend' : null} 
           />
         ) : (
@@ -367,16 +422,16 @@ function MainApp() {
                   </div>
                 </div>
               )}
-              {activeTab === "What's Boppin" && <FYP currentUser={currentUser} onViewEntity={onViewEntity} />}
-              {activeTab === 'Admin Console' && <AdminPanel session={session} />}
+              {activeTab === "What's Boppin" && <FYP currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              {activeTab === 'Admin Console' && <AdminPanel session={session} setSimulatedRole={setSimulatedRole} setShowSplash={setShowSplash} setTestOnboardingType={setTestOnboardingType} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
               {activeTab === 'Leagues' && <Leaderboard onViewEntity={onViewEntity} />}
-              {activeTab === 'Songbook' && <SongBook currentUser={currentUser} />}
-              {activeTab === 'Settings' && <Settings currentUser={currentUser} setCurrentUser={setCurrentUser} />}
-              {activeTab === 'Map' && <Map currentUser={currentUser} onViewEntity={onViewEntity} />}
-              {activeTab === 'Live' && <Live currentUser={currentUser} onViewEntity={onViewEntity} />}
-              {activeTab === 'Shop' && <Shop currentUser={currentUser} />}
+              {activeTab === 'Songbook' && <SongBook currentUser={effectiveUser} />}
+              {activeTab === 'Settings' && <Settings currentUser={effectiveUser} setCurrentUser={setCurrentUser} />}
+              {activeTab === 'Map' && <Map currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              {activeTab === 'Live' && <Live currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              {activeTab === 'Shop' && <Shop currentUser={effectiveUser} />}
             </div>
           </Suspense>
         )}

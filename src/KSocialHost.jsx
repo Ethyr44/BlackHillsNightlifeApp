@@ -173,13 +173,20 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     const startSession = async () => {
         setIsLoading(true)
+        
+        const { data: activeCrawl } = await supabase
+            .from('active_tournaments')
+            .select('id')
+            .eq('status', 'active')
+            .maybeSingle()
+
         const payload = {
             host_id: currentUser.id,
             host_name: hostName,
             biz_name: bizName,
             venue_name: venueName,
             session_title: sessionTitle,
-            mode: 'league', // Hardcoded safely!
+            mode: mode,
             is_active: true,
             voting_style: votingStyle,
             voting_icon: votingIcon,

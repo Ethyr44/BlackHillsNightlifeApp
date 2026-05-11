@@ -20,7 +20,7 @@ export default function KCrawlSignup() {
         setLoading(true)
         
         // 1. Generate Ghost Credentials
-        const dummyEmail = `crawler_${Date.now()}_${Math.floor(Math.random() * 1000)}@bhnltemp.local`
+        const dummyEmail = `crawler_${Date.now()}_${Math.floor(Math.random() * 1000)}@bhnltemp.com`
         const dummyPassword = Math.random().toString(36).slice(-10) + 'A1!'
 
         // 2. Sign up securely behind the scenes

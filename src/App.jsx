@@ -57,6 +57,7 @@ function MainApp() {
   
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [viewingEntity, setViewingEntity] = useState(null)
   const [showSplash, setShowSplash] = useState(getInitialSplash)
   const [searchQuery, setSearchQuery] = useState('')
@@ -69,6 +70,10 @@ function MainApp() {
 
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
+
+  // 🟢 NEW: URL Interceptor for Deep Links & QR Codes
+  const joinSessionId = searchParams.get('join')
+  const isGuestMode = searchParams.get('guest') === 'true'
 
   // 🟢 NEW: When splash mounts, save it to local storage so it doesn't run again this phase
   useEffect(() => {
@@ -100,14 +105,28 @@ function MainApp() {
       if (data) {
         setCurrentUser(data);
         checkDailyBonus(data);
+        
+        // 🟢 BHNL USER QR JOIN ROUTING
+        if (joinSessionId && !isGuestMode) {
+            localStorage.setItem('bhnl_joined_session', joinSessionId)
+            localStorage.setItem('bhnl_live_tab', 'KSocial')
+            setSearchParams({ tab: 'Live' }, { replace: true })
+        }
       }
+      setLoading(false);
     }
   };
 
   // 2. Auth Listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session))
+    supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session)
+        if (!session) setLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        setSession(session)
+        if (!session) setLoading(false)
+    })
     return () => subscription.unsubscribe()
   }, [])
 
@@ -306,6 +325,24 @@ function MainApp() {
     }
     alert("This entity hasn't been added to the directory yet!")
   }
+
+  // 🟢 TEMP/GUEST QR JOIN ROUTING (Bypasses the BHNL App Shell completely!)
+  if (joinSessionId && isGuestMode) {
+      return (
+          <div className="min-h-screen bg-[#090812] font-sans selection:bg-yellow-500/30">
+              <Moonshower />
+              <GlobalToast />
+              <div className="pt-8">
+                  {/* We render KSocialUser standalone. We will modularize this later! */}
+                  <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
+                      <Live currentUser={null} forceJoinId={joinSessionId} forceGuest={true} />
+                  </Suspense>
+              </div>
+          </div>
+      )
+  }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#030712]"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
   // Pre-Render Checks
   if (!session) return <Auth />

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import VenueCard, { EVENT_EMOJIS } from './VenueCard'
+import { toast } from './GlobalToast'
 
 // 🟢 NEW: Distance Calculator
 function getDistanceInFeet(lat1, lon1, lat2, lon2) {
@@ -191,6 +192,23 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       fetchEvents() 
   }
 
+  // 🟢 NEW: Delete Event Logic
+  const handleDeleteEvent = async () => {
+      if (!selectedEventInfo?.slot?.event?.id) return
+      if (!window.confirm("Are you sure you want to permanently delete this event?")) return
+      
+      const { error } = await supabase.from('events').delete().eq('id', selectedEventInfo.slot.event.id)
+      
+      if (error) {
+          toast.error(`Error deleting event: ${error.message}`)
+      } else {
+          toast.success("Event deleted successfully!")
+          setIsEditingEvent(false)
+          setSelectedEventInfo(null)
+          window.location.reload() // Easiest way to safely refresh the feed data
+      }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
   const loadMore = () => {
@@ -287,10 +305,17 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                                 <label htmlFor="recurring" className="text-xs text-gray-300 font-bold uppercase tracking-widest">Recurring Weekly Event</label>
                             </div>
 
-                            <div className="flex gap-2 pt-4">
-                                <button type="button" onClick={() => setIsEditingEvent(false)} className="px-6 py-3 border border-gray-700 text-gray-400 hover:text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">Cancel</button>
+                            <div className="flex gap-2 mt-4">
+                                <button type="button" onClick={() => setIsEditingEvent(false)} className="flex-1 border border-gray-700 text-gray-400 py-3 rounded-xl text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">Cancel</button>
                                 <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-lg">Save Event</button>
                             </div>
+                            
+                            {/* 🟢 NEW: Delete Event Button */}
+                            {selectedEventInfo?.slot?.event && (
+                                <button type="button" onClick={handleDeleteEvent} className="w-full mt-2 bg-red-900/20 border border-red-900/50 text-red-500 hover:bg-red-500 hover:text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-lg">
+                                    Delete Event
+                                </button>
+                            )}
                         </form>
                     ) : (
                         <div>

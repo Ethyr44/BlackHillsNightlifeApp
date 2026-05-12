@@ -7,25 +7,67 @@ export default function Ticker() {
   const [textColor, setTextColor] = useState('#00f5ff')
 
   useEffect(() => {
-    fetchMessages()
+    fetchTickerData()
     fetchColors()
     
     // Listen for Admins changing the messages in real-time
     const sub = supabase.channel('ticker-updates')
-      .on('postgres', { event: '*', schema: 'public', table: 'ticker_messages' }, fetchMessages)
+      .on('postgres', { event: '*', schema: 'public', table: 'ticker_messages' }, fetchTickerData)
       .subscribe()
 
     return () => supabase.removeChannel(sub)
   }, [])
 
-  const fetchMessages = async () => {
-    const { data } = await supabase
+  const fetchTickerData = async () => {
+    // 1. Fetch Manual Messages from Admin Panel
+    const { data: manualData } = await supabase
       .from('ticker_messages')
       .select('message')
       .eq('is_active', true)
       .order('sort_order', { ascending: true })
+
+    let manualMsgs = manualData ? manualData.map(m => m.message) : []
+
+    // 2. Fetch TODAY'S Events
+    const startOfDay = new Date()
+    startOfDay.setHours(0, 0, 0, 0)
     
-    if (data) setMessages(data.map(d => d.message))
+    const endOfDay = new Date()
+    endOfDay.setHours(23, 59, 59, 999)
+
+    const { data: eventsData } = await supabase
+      .from('events')
+      .select('title, venue, event_type')
+      .eq('status', 'approved')
+      .gte('event_date', startOfDay.toISOString())
+      .lte('event_date', endOfDay.toISOString())
+
+    // 3. Group events by type (e.g., Karaoke, Trivia)
+    const groupedEvents = {}
+    if (eventsData) {
+        eventsData.forEach(ev => {
+            const type = ev.event_type ? ev.event_type.toUpperCase() : 'EVENT'
+            if (!groupedEvents[type]) groupedEvents[type] = []
+            
+            // Only add the venue if it isn't already in the list for this type
+            if (!groupedEvents[type].includes(ev.venue)) {
+                groupedEvents[type].push(ev.venue)
+            }
+        })
+    }
+
+    // 4. Format the automated string (e.g. "KARAOKE TODAY: Cheers, The Iron Phnx")
+    const autoMsgs = Object.entries(groupedEvents).map(([type, venues]) => {
+        return `${type} TODAY: ${venues.join(', ')}`
+    })
+
+    // Combine Automated Events + Manual Admin Messages
+    const combined = [...autoMsgs, ...manualMsgs]
+    
+    // Fallback if absolutely nothing is happening and no manual messages exist
+    if (combined.length === 0) combined.push("WELCOME TO BLACK HILLS NIGHTLIFE")
+
+    setMessages(combined)
   }
 
   const fetchColors = async () => {
@@ -45,8 +87,6 @@ export default function Ticker() {
   const scrollSpeed = Math.max(tickerText.length * 0.15, 10) // 0.15s per char, minimum 10 seconds
 
   return (
-    // THE FIX: Removed "fixed", "left-0", "right-0", and the style tag. 
-    // It is now a standard, static block element that will naturally stack in your layout.
     <div 
       className="w-full border-b overflow-hidden backdrop-blur-md pointer-events-none z-40 text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2"
       style={{ backgroundColor: bgColor, color: textColor, borderColor: textColor }}
@@ -61,12 +101,13 @@ export default function Ticker() {
       </div>
 
       <style>{`
-        @keyframes ticker {
+        @keyframes ticker-scroll {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
         .animate-ticker {
-          animation: ticker 20s linear infinite;
+          animation: ticker-scroll linear infinite;
+          padding-left: 100vw; /* Ensures it starts off screen initially */
         }
       `}</style>
     </div>

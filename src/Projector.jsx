@@ -8,8 +8,17 @@ export default function Projector() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
 
-    // 🟢 The Auto-Cycle State
-    const [cycleView, setCycleView] = useState('scoreboard') // 'scoreboard', 'stage', 'qr'
+    const [cycleView, setCycleView] = useState('scoreboard')
+
+    const fetchAll = async (sessionId) => {
+        const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).single()
+        if (sessData) setSession(sessData)
+
+        const { data: singerData } = await supabase.from('session_singers').select('*').eq('session_id', sessionId)
+        if (singerData) setSingers(singerData)
+
+        setIsLoading(false)
+    }
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -21,45 +30,54 @@ export default function Projector() {
             return
         }
 
-        const fetchAll = async () => {
-            const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).single()
-            if (sessData) setSession(sessData)
+        fetchAll(sessionId)
 
-            const { data: singerData } = await supabase.from('session_singers').select('*').eq('session_id', sessionId)
-            if (singerData) setSingers(singerData)
-
-            setIsLoading(false)
-        }
-
-        fetchAll()
-        const queueSub = supabase.channel('projector-channel').on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchAll).subscribe()
+        // 🟢 THE SMOOTH SYNC FIX (No page reloading)
+        const queueSub = supabase.channel(`projector-channel-${sessionId}`)
+            .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, () => fetchAll(sessionId))
+            .on('broadcast', { event: 'force-reload' }, () => fetchAll(sessionId))
+            .subscribe()
+            
         return () => supabase.removeChannel(queueSub)
     }, [])
 
-    // 🟢 The 10-Second Auto-Cycler
     useEffect(() => {
         const views = ['scoreboard', 'stage', 'qr']
         let i = 0
         const interval = setInterval(() => {
             i = (i + 1) % views.length
             setCycleView(views[i])
-        }, 10000) // Switches every 10 seconds
+        }, 10000) 
         return () => clearInterval(interval)
     }, [])
 
     if (error) return <div className="min-h-screen bg-black text-red-500 flex items-center justify-center text-2xl font-bold uppercase tracking-widest">{error}</div>
     if (isLoading) return <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center text-4xl font-['Bebas_Neue'] tracking-widest animate-pulse">Initializing Display...</div>
 
-    // 🟢 SMART VIEW LOGIC: Force the 'Stage' view if a singer is currently active!
     const activeSinger = singers.find(s => s.status === 'singing' || s.status === 'voting' || s.status === 'results')
     const currentView = activeSinger ? 'stage' : cycleView
     const sortedSingers = singers.filter(s => s.status !== 'pending').sort((a,b)=>((b.total_points || b.score_performance || 0))-((a.total_points || a.score_performance || 0)))
 
+    const getMedal = (index) => {
+        if (index === 0) return '🥇'
+        if (index === 1) return '🥈'
+        if (index === 2) return '🥉'
+        return index + 1
+    }
+
+    const getMedalStyle = (index) => {
+        if (index === 0) return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.3)]'
+        if (index === 1) return 'bg-gray-400/20 text-gray-300 border-gray-400/50'
+        if (index === 2) return 'bg-amber-700/20 text-amber-500 border-amber-600/50'
+        return 'bg-white/5 text-gray-500 border-gray-700'
+    }
+
     return (
         <div className="min-h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30 flex flex-col">
             
-            {/* PROJECTOR HEADER */}
-            <div className="px-12 py-6 border-b-2 border-gray-900 bg-gradient-to-b from-blue-900/10 to-transparent flex justify-between items-center shadow-2xl">
+            {/* 🟢 STYLED FROM projector.js */}
+            <div className="px-12 py-6 border-b border-gray-800 bg-gradient-to-b from-blue-900/20 to-black flex justify-between items-center shadow-2xl relative">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#00f5ff] to-[#ff2d78]"></div>
                 <div>
                     <h1 className="text-5xl font-['Bebas_Neue'] tracking-[0.05em] text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-[#ff2d78] drop-shadow-[0_0_15px_rgba(0,245,255,0.4)]">
                         {session?.title || 'KSocial LIVE!'}
@@ -72,10 +90,8 @@ export default function Projector() {
                 </div>
             </div>
 
-            {/* PROJECTOR BODY */}
             <div className="flex-1 p-12 flex flex-col justify-center relative">
                 
-                {/* VIEW 1: SCOREBOARD */}
                 {currentView === 'scoreboard' && (
                     <div className="animate-fade-in max-w-5xl mx-auto w-full">
                         <h2 className="text-center font-['Bebas_Neue'] text-6xl text-yellow-500 tracking-widest mb-12 drop-shadow-[0_0_20px_rgba(234,179,8,0.3)]">🏆 LEADERBOARD</h2>
@@ -85,10 +101,10 @@ export default function Projector() {
                         ) : (
                             <div className="space-y-4">
                                 {sortedSingers.slice(0, 5).map((singer, index) => (
-                                    <div key={singer.id} className="bg-gray-900/50 border border-gray-800 rounded-3xl p-6 flex items-center justify-between">
+                                    <div key={singer.id} className="bg-gray-900/50 border border-gray-800 rounded-3xl p-6 flex items-center justify-between shadow-lg">
                                         <div className="flex items-center gap-6">
-                                            <div className="w-16 h-16 rounded-2xl bg-black border border-gray-700 flex items-center justify-center font-['Bebas_Neue'] text-4xl text-gray-400 shadow-inner">
-                                                #{index + 1}
+                                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-['Bebas_Neue'] text-4xl border-2 ${getMedalStyle(index)}`}>
+                                                {getMedal(index)}
                                             </div>
                                             <div>
                                                 <h4 className="font-bold text-white text-4xl tracking-wide truncate">{singer.singer_name}</h4>
@@ -107,7 +123,6 @@ export default function Projector() {
                     </div>
                 )}
 
-                {/* VIEW 2: THE STAGE */}
                 {currentView === 'stage' && (
                     <div className="animate-fade-in text-center w-full max-w-6xl mx-auto">
                         {activeSinger ? (
@@ -148,21 +163,19 @@ export default function Projector() {
                     </div>
                 )}
 
-                {/* VIEW 3: QR CODE */}
                 {currentView === 'qr' && (
                     <div className="animate-fade-in max-w-3xl mx-auto w-full text-center">
-                        <h2 className="text-6xl font-['Bebas_Neue'] text-white tracking-widest mb-4">WANT TO SING?</h2>
-                        <p className="text-gray-500 text-2xl font-bold uppercase tracking-widest mb-12">Scan to enter the queue directly from your phone!</p>
+                        <h2 className="text-6xl font-['Bebas_Neue'] text-[#ff2d78] tracking-widest mb-4">WANT TO SING?</h2>
+                        <p className="text-gray-400 text-2xl font-bold uppercase tracking-widest mb-12">Scan to enter the queue directly from your phone!</p>
                         
-                        <div className="inline-block bg-white p-12 rounded-[3rem] shadow-[0_0_50px_rgba(255,255,255,0.1)]">
+                        <div className="inline-block bg-white p-12 rounded-[3rem] shadow-[0_0_50px_rgba(255,45,120,0.3)] border-4 border-white/20">
                             <QRCode value={`${window.location.origin}/?join=${session?.id}`} size={350} />
                         </div>
                         
-                        <p className="text-gray-600 text-xl font-bold uppercase tracking-widest mt-12">No App Download Required</p>
+                        <p className="text-gray-500 text-xl font-bold uppercase tracking-widest mt-12">No App Download Required</p>
                     </div>
                 )}
             </div>
-            
         </div>
     )
 }

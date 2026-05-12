@@ -8,36 +8,35 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [activeSession, setActiveSession] = useState(null)
     const [isLoading, setIsLoading] = useState(true)
     
-    // UI Modals & Toggles
     const [showQR, setShowQR] = useState(false)
-    const [showTempQR, setShowTempQR] = useState(false) // 🟢 Restored Temp QR Button
+    const [showTempQR, setShowTempQR] = useState(false) 
     const [showSettingsModal, setShowSettingsModal] = useState(false)
-    const [expandedContender, setExpandedContender] = useState(null) // 🟢 The Eyeball Modal
+    const [expandedContender, setExpandedContender] = useState(null) 
 
-    // Validation Lists
     const [officialVenues, setOfficialVenues] = useState([])
     const [officialAgencies, setOfficialAgencies] = useState(['Independent', 'Black Hills Nightlife', 'Dakota Entertainment'])
 
-    // Session Config
     const [sessionTitle, setSessionTitle] = useState('KSocial LIVE!')
-    const [stageName, setStageName] = useState(currentUser.username)
+    const [stageName, setStageName] = useState(currentUser?.username || '')
     const [agencyName, setAgencyName] = useState('Independent')
     const [venueName, setVenueName] = useState('')
-    const [sessionType, setSessionType] = useState('Casual') // Casual, League, Crawl
-    const [votingStyle, setVotingStyle] = useState('normal')
+    const [sessionType, setSessionType] = useState('Casual') 
+    const [votingStyle, setVotingStyle] = useState('tap') 
     const [votingIcon, setVotingIcon] = useState('star')
-    const [supervotes, setSupervotes] = useState(1)
 
     const [singers, setSingers] = useState([])
-
-    // Voting Engine State
     const [votingTimeLeft, setVotingTimeLeft] = useState(0)
     const [activeVotingSinger, setActiveVotingSinger] = useState(null)
 
-    // Segment the singers (Pending vs Active)
     const pendingSingers = singers.filter(s => s.status === 'pending')
-    // 🟢 Upgrade: Sort Active Singers by Total Points to determine Leaderboard Position!
     const activeSingers = singers.filter(s => s.status !== 'pending').sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
+
+    // 🟢 THE SMOOTH SYNC ENGINE (No Reloads!)
+    const triggerGlobalSync = async (silent = false) => {
+        if (!silent) toast.success("Syncing network...")
+        await supabase.channel(`public-ksocial-${activeSession.id}`).send({ type: 'broadcast', event: 'force-reload', payload: {} })
+        fetchSingers(activeSession.id) // Smoothly refresh Host data locally
+    }
 
     useEffect(() => {
         fetchValidationData()
@@ -47,10 +46,13 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     useEffect(() => {
         if (!activeSession?.id) return
         fetchSingers(activeSession.id)
+        
+        // Listen for standard updates AND force sync requests
         const sub = supabase.channel(`host-room-${activeSession.id}`)
-            .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${activeSession.id}` }, () => {
-                fetchSingers(activeSession.id)
-            }).subscribe()
+            .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${activeSession.id}` }, () => fetchSingers(activeSession.id))
+            .on('broadcast', { event: 'force-reload' }, () => fetchSingers(activeSession.id))
+            .subscribe()
+            
         return () => supabase.removeChannel(sub)
     }, [activeSession?.id])
 
@@ -76,9 +78,8 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             setActiveSession(data)
             setView('dashboard')
             setSessionTitle(data.title || 'KSocial LIVE!')
-            setVotingStyle(data.voting_style || 'normal')
+            setVotingStyle(data.voting_style || 'tap')
             setVotingIcon(data.voting_icon || 'star')
-            setSupervotes(data.supervotes_allowed || 1)
         }
         setIsLoading(false)
     }
@@ -98,39 +99,32 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             host_id: currentUser.id, session_code: newCode, title: sessionTitle,
             host_name: stageName, business_name: agencyName, venue_name: venueName,
             status: 'active', voting_style: sessionType === 'Casual' ? 'none' : votingStyle, 
-            voting_icon: votingIcon, supervotes_allowed: supervotes, session_type: sessionType
+            voting_icon: votingIcon, supervotes_allowed: 1, session_type: sessionType
         }
         
         const { data, error } = await supabase.from('active_sessions').insert([payload]).select().single()
         
         if (error) toast.error(`Launch Error: ${error.message}`)
         else if (data) {
-            toast.success("Stage Initialized!")
             setActiveSession(data)
             setView('dashboard')
-            
-            // 🟢 THE FYP & MAP BRIDGE: Create a Live Event instantly
             await supabase.from('events').insert([{
-                title: sessionTitle,
-                venue: venueName,
-                event_type: 'Karaoke',
-                event_date: new Date().toISOString(),
-                end_date: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // Closes in 4 hours
-                host_id: currentUser.id,
-                created_by: currentUser.id,
-                status: 'approved',
+                title: sessionTitle, venue: venueName, event_type: 'Karaoke',
+                event_date: new Date().toISOString(), end_date: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
+                host_id: currentUser.id, created_by: currentUser.id, status: 'approved',
                 description: `🎤 LIVE NOW! The Stage is open at ${venueName}. Join the queue!`
             }])
+            triggerGlobalSync(true)
         }
         setIsLoading(false)
     }
 
     const updateSessionSettings = async () => {
-        const payload = { title: sessionTitle, voting_style: votingStyle, voting_icon: votingIcon, supervotes_allowed: supervotes }
+        const payload = { title: sessionTitle, voting_style: votingStyle, voting_icon: votingIcon }
         await supabase.from('active_sessions').update(payload).eq('id', activeSession.id)
         setActiveSession({ ...activeSession, ...payload })
         setShowSettingsModal(false)
-        toast.success("Stage Settings Updated!")
+        triggerGlobalSync(true) 
     }
 
     const closeSession = async () => {
@@ -145,12 +139,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const handleApproveRequest = async (id, isApproved) => {
         if (isApproved) {
             await supabase.from('session_singers').update({ status: 'queued' }).eq('id', id)
-            toast.success("Contender added to stage rotation!")
+            toast.success("Contender added to stage!")
         } else {
             await supabase.from('session_singers').delete().eq('id', id)
-            toast.error("Request rejected.")
         }
-        fetchSingers(activeSession.id)
+        triggerGlobalSync(true) // Auto Sync
     }
 
     const handleSingerAction = async (singerId, action) => {
@@ -158,44 +151,33 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             setActiveVotingSinger(singerId)
             setVotingTimeLeft(30)
             await supabase.from('session_singers').update({ status: 'voting' }).eq('id', singerId)
+            triggerGlobalSync(true) 
         } 
         else if (action === 'complete') {
             const singer = singers.find(s => s.id === singerId)
-            
-            // 🟢 THE VAULT BRIDGE: Save to their Repertoire automatically
-            if (singer.user_id) {
-                await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
-            }
+            if (singer.user_id) await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
 
             let currentSetlist = Array.isArray(singer.setlist) ? singer.setlist : []
-            
             if (currentSetlist.length > 1) {
                 const nextSetlist = currentSetlist.slice(1)
                 const nextSong = nextSetlist[0]
                 
-                // 🟢 FIX: Added error catcher to prevent silent button sticking!
+                // 🟢 FIX: Session Score Accumulation! (total_points is NO LONGER reset)
                 const { error } = await supabase.from('session_singers').update({
                     status: 'queued', song_id: nextSong.id, song_title: nextSong.title, song_artist: nextSong.artist,
-                    setlist: nextSetlist, 
-                    previous_score: singer.total_points || singer.score_performance || 0,
-                    score_performance: 0, score_wow: 0, score_originality: 0, total_points: 0, super_votes: 0
+                    setlist: nextSetlist, previous_score: singer.score_performance || 0,
+                    score_performance: 0, score_wow: 0, score_originality: 0, super_votes: 0
                 }).eq('id', singerId)
-                
-                if (error) {
-                    toast.error("Failed to cycle: " + error.message)
-                    console.error("DB Cycle Error:", error)
-                } else {
-                    toast.success(`${singer.singer_name} cycled to next song.`)
-                }
+                if (error) return toast.error("Failed to cycle: " + error.message)
             } else {
                 await supabase.from('session_singers').delete().eq('id', singerId)
-                toast.success(`${singer.singer_name} completed their set.`)
             }
+            triggerGlobalSync(true) 
         } 
         else {
             await supabase.from('session_singers').update({ status: action }).eq('id', singerId)
+            triggerGlobalSync(true) 
         }
-        fetchSingers(activeSession.id)
     }
 
     if (isLoading) return <div className="text-white text-center py-20 animate-pulse">Initializing System...</div>
@@ -240,8 +222,9 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                 <div>
                                     <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">Voting Style</label>
                                     <select value={votingStyle} onChange={e=>setVotingStyle(e.target.value)} className="w-full bg-black border border-gray-700 text-white p-2 rounded-lg outline-none focus:border-blue-500">
-                                        <option value="normal">Normal (Tap)</option>
-                                        <option value="vibe_check">Vibe Check</option>
+                                        <option value="tap">Tap-to-Vote (Multi-tap)</option>
+                                        <option value="stars">1-5 Rating (Classic)</option>
+                                        <option value="vibe">Vibe Check (Categories)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -267,40 +250,23 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     return (
         <div className="animate-fade-in pb-20 flex flex-col lg:flex-row gap-6 p-4 max-w-7xl mx-auto">
-            
-            {/* LEFT COLUMN: THE COMMAND CENTER */}
             <div className="flex-1 space-y-6">
                 
-                {/* 🟢 HUD: Missing Buttons Restored */}
                 <div className="bg-[#090812] border-2 border-blue-900/30 p-4 rounded-3xl flex flex-wrap justify-between items-center shadow-lg gap-4">
                     <div>
                         <h2 className="font-['Bebas_Neue'] text-3xl text-white tracking-widest leading-none">{activeSession.title}</h2>
                         <span className="text-[10px] text-green-400 font-bold uppercase tracking-widest animate-pulse">● {activeSession.session_type} Live</span>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 items-center">
                         <button onClick={() => setShowSettingsModal(true)} className="text-gray-400 hover:text-white text-xl mr-2">⚙️</button>
-                        
-                        {/* 🟢 NEW: Projector Button */}
-                        <button onClick={() => window.open(`/?tab=Projector&session=${activeSession.id}`, '_blank')} className="bg-white/10 text-white border border-white/20 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-colors">
-                            Projector
-                        </button>
-                        
-                        {/* 🟢 NEW: Temp/Guest QR Button */}
-                        <button onClick={() => setShowTempQR(true)} className="bg-yellow-900/30 text-yellow-500 border border-yellow-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-colors">
-                            Temp QR
-                        </button>
-                        
-                        <button onClick={() => setShowQR(true)} className="bg-blue-900/30 text-blue-400 border border-blue-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-colors">
-                            BHNL QR
-                        </button>
-                        
-                        <button onClick={closeSession} className="bg-red-900/30 text-red-500 border border-red-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-colors">
-                            End
-                        </button>
+                        <button onClick={() => window.open(`/?tab=Projector&session=${activeSession.id}`, 'Projector', 'width=1280,height=720,popup=yes,menubar=no,toolbar=no')} className="bg-white/10 text-white border border-white/20 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-colors">Projector</button>
+                        <button onClick={() => setShowTempQR(true)} className="bg-yellow-900/30 text-yellow-500 border border-yellow-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-colors">Temp QR</button>
+                        <button onClick={() => setShowQR(true)} className="bg-blue-900/30 text-blue-400 border border-blue-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-colors">BHNL QR</button>
+                        <button onClick={() => triggerGlobalSync()} className="bg-orange-900/30 text-orange-400 border border-orange-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-orange-600 hover:text-white transition-colors">Force Sync</button>
+                        <button onClick={closeSession} className="bg-red-900/30 text-red-500 border border-red-500/50 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-red-600 hover:text-white transition-colors">End</button>
                     </div>
                 </div>
 
-                {/* APPROVALS QUEUE */}
                 {pendingSingers.length > 0 && (
                     <div className="bg-yellow-900/10 border border-yellow-500/30 rounded-3xl p-4 shadow-[0_0_15px_rgba(234,179,8,0.1)]">
                         <h4 className="text-yellow-500 font-bold uppercase tracking-widest text-[10px] mb-3">Pending Contenders ({pendingSingers.length})</h4>
@@ -321,7 +287,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                     </div>
                 )}
 
-                {/* 🟢 UPGRADED: CONTENDER CARDS */}
                 <div className="bg-black/40 border border-gray-800 rounded-3xl p-4 sm:p-6">
                     <h3 className="text-sm text-gray-500 font-bold uppercase tracking-widest mb-4 flex justify-between">
                         Contender Rotation
@@ -340,7 +305,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                         singer.status === 'results' ? 'bg-gray-900 border-gray-700' : 'bg-[#090812] border-gray-800'
                                     }`}>
                                         <div className="flex items-center gap-4 truncate">
-                                            {/* Leaderboard Position */}
                                             <div className="w-10 h-10 rounded-xl bg-black border border-gray-700 flex items-center justify-center text-gray-400 font-['Bebas_Neue'] text-2xl flex-shrink-0 shadow-inner">
                                                 #{index + 1}
                                             </div>
@@ -356,15 +320,13 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                         </div>
 
                                         <div className="flex gap-2 w-full sm:w-auto mt-2 sm:mt-0 flex-shrink-0 justify-end items-center">
-                                            
-                                            {/* EYEBALL BUTTON */}
                                             <button onClick={() => setExpandedContender(singer)} className="w-10 h-10 rounded-xl bg-gray-800 text-gray-400 flex items-center justify-center hover:bg-gray-700 hover:text-white transition-colors border border-gray-700 shadow-md">
                                                 👁️
                                             </button>
 
                                             <div className="flex flex-col items-end mr-2 ml-2">
-                                                <span className="text-2xl font-['Bebas_Neue'] text-blue-400 leading-none">{singer.total_points || singer.score_performance || 0}</span>
-                                                <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest leading-tight">Session<br/>Score</span>
+                                                <span className="text-2xl font-['Bebas_Neue'] text-blue-400 leading-none">{singer.total_points || 0}</span>
+                                                <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest leading-tight">Total<br/>Score</span>
                                             </div>
 
                                             <button 
@@ -394,30 +356,24 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                 </div>
             </div>
 
-            {/* RIGHT COLUMN: 🟢 NEW PROJECTOR MINI-VIEWPORT */}
             <div className="hidden lg:block w-[400px] flex-shrink-0">
                 <h3 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3 ml-2">Projector Output Monitor</h3>
                 <div className="w-[400px] h-[225px] bg-black rounded-2xl border-4 border-gray-800 shadow-[0_0_30px_rgba(0,0,0,0.8)] overflow-hidden relative group">
-                    
                     <div className="absolute inset-0 bg-[#090812] pointer-events-none flex flex-col items-center justify-center p-4 text-center">
-                         {/* Mini-Projector Simulation */}
                          <h2 className="text-4xl font-['Bebas_Neue'] text-blue-400 tracking-widest mb-2 opacity-50">{activeSession.title}</h2>
                          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Screen Cast Ready</p>
                          <div className="mt-4 flex items-center justify-center gap-2 text-[#ff2d78] animate-pulse">
                              <span className="w-2 h-2 bg-[#ff2d78] rounded-full"></span> Live
                          </div>
                     </div>
-                    
                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                         <button onClick={() => window.open(`/?tab=Projector&session=${activeSession.id}`, '_blank')} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg hover:bg-blue-500 transition-colors">
+                         <button onClick={() => window.open(`/?tab=Projector&session=${activeSession.id}`, 'Projector', 'width=1280,height=720,popup=yes,menubar=no,toolbar=no')} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg hover:bg-blue-500 transition-colors">
                              Open Fullscreen
                          </button>
                     </div>
                 </div>
-                <p className="text-[9px] text-gray-600 uppercase tracking-widest mt-4 ml-2">Note: Click to launch the actual 4K Projector display in a new tab for your external monitor.</p>
             </div>
 
-            {/* 🟢 NEW: EXPANDED DETAILS (EYEBALL MODAL) */}
             {expandedContender && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-md">
                     <div className="bg-[#090812] p-6 rounded-3xl border-2 border-gray-800 w-full max-w-lg shadow-2xl relative">
@@ -431,7 +387,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                 <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest leading-none">{expandedContender.singer_name}</h3>
                                 <div className="mt-2 flex gap-2">
                                     <span className="text-[9px] bg-blue-900/30 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest">{expandedContender.user_type || 'BHNL User'}</span>
-                                    <span className="text-[9px] bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Points: {expandedContender.total_points || 0}</span>
+                                    <span className="text-[9px] bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded font-bold uppercase tracking-widest">Total Score: {expandedContender.total_points || 0}</span>
                                 </div>
                             </div>
                         </div>
@@ -444,23 +400,13 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                         <p className={`font-bold text-sm ${i === 0 ? 'text-[#00f5ff]' : 'text-white'}`}>{i + 1}. {song.title}</p>
                                         <p className="text-[9px] text-gray-500 uppercase tracking-widest font-bold">{song.artist}</p>
                                     </div>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button className="w-8 h-8 rounded-lg bg-gray-800 text-gray-400 hover:text-white text-xs border border-gray-700 transition-colors">↕</button>
-                                        <button className="w-8 h-8 rounded-lg bg-red-900/20 text-red-500 border border-red-900/50 hover:bg-red-500 hover:text-white text-xs transition-colors">✕</button>
-                                    </div>
                                 </div>
                             ))}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-gray-800">
-                             <button className="w-full bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors border border-gray-700 border-dashed">
-                                 + Append Song to Setlist
-                             </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* MODALS */}
             {showSettingsModal && (
                 <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
                     <div className="bg-[#090812] border border-gray-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl">
@@ -473,25 +419,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                             <div>
                                 <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">Voting Style</label>
                                 <select value={votingStyle} onChange={e=>setVotingStyle(e.target.value)} className="w-full bg-black border border-gray-700 text-white p-3 rounded-lg outline-none focus:border-blue-500">
-                                    <option value="normal">Normal (Tap to Vote)</option>
-                                    <option value="vibe_check">Vibe Check (Multi-Category)</option>
+                                    <option value="tap">Tap-to-Vote (Multi-tap)</option>
+                                    <option value="stars">1-5 Rating (Classic)</option>
+                                    <option value="vibe">Vibe Check (Categories)</option>
                                 </select>
                             </div>
-                            {votingStyle === 'normal' && (
-                                <div>
-                                    <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">Voting Icon</label>
-                                    <select value={votingIcon} onChange={e=>setVotingIcon(e.target.value)} className="w-full bg-black border border-gray-700 text-white p-3 rounded-lg outline-none focus:border-blue-500">
-                                        <option value="star">⭐ Stars</option>
-                                        <option value="fire">🔥 Fire</option>
-                                        <option value="beer">🍻 Cheers</option>
-                                    </select>
-                                </div>
-                            )}
-                            <div>
-                                <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">SuperVotes Allowed</label>
-                                <input type="number" min="0" max="5" value={supervotes} onChange={e=>setSupervotes(parseInt(e.target.value))} className="w-full bg-black border border-gray-700 text-white p-3 rounded-lg outline-none focus:border-blue-500" />
-                            </div>
-                            
                             <div className="flex gap-2 mt-4 pt-4 border-t border-gray-800">
                                 <button onClick={() => setShowSettingsModal(false)} className="flex-1 bg-gray-800 text-gray-400 py-3 rounded-lg text-xs font-bold uppercase hover:text-white transition-colors">Cancel</button>
                                 <button onClick={updateSessionSettings} className="flex-1 bg-blue-600 text-white py-3 rounded-lg text-xs font-bold uppercase hover:bg-blue-500 transition-colors">Save</button>
@@ -501,7 +433,6 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                 </div>
             )}
 
-            {/* BHNL QR Modal */}
             {showQR && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
                     <div className="bg-white p-8 rounded-3xl text-center relative max-w-sm w-full">
@@ -511,15 +442,10 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <div className="flex justify-center bg-gray-100 p-4 rounded-2xl mb-6">
                             <QRCode value={`${window.location.origin}/?join=${activeSession.id}`} size={200} />
                         </div>
-                        <div className="bg-gray-100 py-3 rounded-xl border-2 border-gray-200">
-                            <span className="text-gray-500 text-[10px] font-bold uppercase tracking-widest block mb-1">Room Code</span>
-                            <span className="text-blue-600 font-['Bebas_Neue'] text-4xl tracking-[0.2em]">{activeSession.session_code}</span>
-                        </div>
                     </div>
                 </div>
             )}
 
-            {/* 🟢 NEW: TEMP/GUEST QR Modal */}
             {showTempQR && (
                 <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
                     <div className="bg-yellow-500 p-8 rounded-3xl text-center relative max-w-sm w-full shadow-[0_0_50px_rgba(234,179,8,0.3)]">
@@ -527,10 +453,8 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <h3 className="text-3xl font-['Bebas_Neue'] text-black mb-1 tracking-widest">Guest Access</h3>
                         <p className="text-yellow-900 font-bold uppercase tracking-widest text-[10px] mb-6">Scan with native camera for Temp Passport</p>
                         <div className="flex justify-center bg-white p-4 rounded-2xl mb-6">
-                            {/* Will route to the Temp Onboarding flow in Phase 3 */}
                             <QRCode value={`${window.location.origin}/?join=${activeSession.id}&guest=true`} size={200} fgColor="#000000" />
                         </div>
-                        <p className="text-[10px] text-yellow-900 font-bold uppercase tracking-widest">No account required</p>
                     </div>
                 </div>
             )}

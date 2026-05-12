@@ -1,20 +1,24 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { toast } from './GlobalToast'
 
 export default function HostTracker({ session }) {
     const [hostEvents, setHostEvents] = useState([])
     const [venues, setVenues] = useState([])
+    const [eventTypes, setEventTypes] = useState([]) // 🟢 NEW: Fetches official types
+    
     const [reqTitle, setReqTitle] = useState('')
     const [reqVenue, setReqVenue] = useState('')
+    const [reqEventType, setReqEventType] = useState('')
     const [reqDate, setReqDate] = useState('')
+    const [reqEndDate, setReqEndDate] = useState('')
     
-    // 🟢 NEW: Feedback state for the Submit button
-    const [statusMsg, setStatusMsg] = useState({ text: '', type: '' })
     const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         fetchEvents()
         fetchVenues()
+        fetchEventTypes()
     }, [session])
 
     const fetchEvents = async () => {
@@ -22,43 +26,46 @@ export default function HostTracker({ session }) {
         if (data) setHostEvents(data)
     }
 
-    // 🟢 NEW: Fetch official venues to populate the dropdown
     const fetchVenues = async () => {
         const { data } = await supabase.from('pages').select('name').eq('page_type', 'Venue').order('name', { ascending: true })
         if (data) setVenues(data)
     }
 
+    const fetchEventTypes = async () => {
+        const { data } = await supabase.from('system_categories').select('name').eq('category_type', 'event')
+        if (data) setEventTypes(data)
+    }
+
     const submitEventRequest = async () => {
-        if (!reqTitle || !reqDate || !reqVenue) {
-            setStatusMsg({ text: 'Please fill out all fields.', type: 'error' })
+        if (!reqTitle || !reqDate || !reqEndDate || !reqVenue || !reqEventType) {
+            toast.error('Please fill out all required fields.')
+            return
+        }
+        
+        if (new Date(reqEndDate) <= new Date(reqDate)) {
+            toast.error('End Time must be after Start Time.')
             return
         }
         
         setLoading(true)
         
-        // 🟢 FIX: Properly format the date for PostgreSQL
-        const formattedDate = new Date(reqDate).toISOString()
-
         const { error } = await supabase.from('events').insert([{
             title: reqTitle, 
             venue: reqVenue, 
-            event_date: formattedDate, 
+            event_type: reqEventType,
+            event_date: new Date(reqDate).toISOString(), 
+            end_date: new Date(reqEndDate).toISOString(),
             host_id: session.user.id, 
-            created_by: session.user.id, // 🟢 THE FIX
-            status: 'pending', 
-            event_type: 'Karaoke'
+            created_by: session.user.id,
+            status: 'pending'
         }])
         
         if (!error) {
-            setStatusMsg({ text: '✅ Event Submitted for Admin Approval!', type: 'success' })
-            setReqTitle(''); setReqVenue(''); setReqDate('');
+            toast.success('Event Submitted for Admin Approval!')
+            setReqTitle(''); setReqVenue(''); setReqDate(''); setReqEndDate(''); setReqEventType('');
             fetchEvents()
-            
-            // Clear message after 4 seconds
-            setTimeout(() => setStatusMsg({ text: '', type: '' }), 4000)
         } else {
-            // 🟢 FIX: Spit out the EXACT error from Supabase so we know what failed
-            setStatusMsg({ text: `Error: ${error.message}`, type: 'error' })
+            toast.error(`Error: ${error.message}`)
             console.error("Event Insert Error:", error)
         }
         setLoading(false)
@@ -71,47 +78,32 @@ export default function HostTracker({ session }) {
             <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest mb-4">Event Creator</h3>
             
             <div className="bg-black/40 p-4 rounded-2xl border border-orange-900/30 mb-6 space-y-3">
-                <input 
-                    type="text" 
-                    placeholder="Event Title (e.g. Friday Night Karaoke)" 
-                    value={reqTitle} 
-                    onChange={e => setReqTitle(e.target.value)} 
-                    className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none" 
-                />
+                <input type="text" placeholder="Event Title (e.g. Friday Night Karaoke)" value={reqTitle} onChange={e => setReqTitle(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none" />
                 
-                {/* 🟢 NEW: Dropdown bound to the database pages */}
-                <select 
-                    value={reqVenue} 
-                    onChange={e => setReqVenue(e.target.value)} 
-                    className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none"
-                >
-                    <option value="" disabled>Select Official Venue</option>
-                    {venues.map(v => (
-                        <option key={v.name} value={v.name}>{v.name}</option>
-                    ))}
+                <select value={reqVenue} onChange={e => setReqVenue(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none">
+                    <option value="" disabled>Select Official Venue *</option>
+                    {venues.map(v => <option key={v.name} value={v.name}>{v.name}</option>)}
                 </select>
 
-                <input 
-                    type="datetime-local" 
-                    value={reqDate} 
-                    onChange={e => setReqDate(e.target.value)} 
-                    className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none" 
-                />
+                <select value={reqEventType} onChange={e => setReqEventType(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none">
+                    <option value="" disabled>Select Event Type *</option>
+                    {eventTypes.map(type => <option key={type.name} value={type.name}>{type.name}</option>)}
+                </select>
+
+                <div className="grid grid-cols-2 gap-2">
+                    <div>
+                        <label className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Start Time *</label>
+                        <input type="datetime-local" value={reqDate} onChange={e => setReqDate(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none" />
+                    </div>
+                    <div>
+                        <label className="text-[9px] text-gray-500 font-bold uppercase tracking-widest block mb-1">End Time *</label>
+                        <input type="datetime-local" value={reqEndDate} onChange={e => setReqEndDate(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-orange-500 outline-none" />
+                    </div>
+                </div>
                 
-                <button 
-                    onClick={submitEventRequest} 
-                    disabled={loading}
-                    className="w-full bg-orange-600/20 text-orange-400 border border-orange-500/50 py-3 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-orange-600 hover:text-black transition-colors"
-                >
+                <button onClick={submitEventRequest} disabled={loading} className="w-full bg-orange-600/20 text-orange-400 border border-orange-500/50 py-3 mt-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-orange-600 hover:text-black transition-colors">
                     {loading ? 'Submitting...' : 'Submit for Approval'}
                 </button>
-                
-                {/* 🟢 NEW: Status Message Display */}
-                {statusMsg.text && (
-                    <p className={`text-center text-[10px] font-bold uppercase tracking-widest mt-2 ${statusMsg.type === 'success' ? 'text-green-400' : 'text-red-500'}`}>
-                        {statusMsg.text}
-                    </p>
-                )}
             </div>
 
             <div className="space-y-3">

@@ -55,22 +55,21 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
         let hasAnyEvent = false
 
         const schedule = days.map(dayObj => {
-            // 🟢 FIX: The Smart Roll-Over Matcher
+            // Find matching event for this specific slot day
             const eventToday = allEvents?.find(e => {
                 if (e.venue !== v.name) return false;
                 
-                // Direct date match
-                if (e.event_date.startsWith(dayObj.dateString)) return true;
+                // 🟢 FIX: Ensure raw DB dates are parsed as UTC to prevent timezone drifting
+                const rawDate = e.event_date;
+                const safeDateStr = rawDate.includes('Z') || rawDate.includes('+') ? rawDate : rawDate + 'Z';
+                const eDate = new Date(safeDateStr);
                 
-                // Recurring check: If recurring_weekly is true, match the Day of the Week
                 if (e.recurring_weekly) {
-                    const eventStartDate = new Date(e.event_date);
-                    // Ensure the recurring event actually started on or before this day
-                    if (eventStartDate.getDay() === dayObj.dayOfWeek && eventStartDate <= dayObj.rawDate) {
-                        return true;
-                    }
+                    return eDate.getDay() === dayObj.rawDate.getDay();
                 }
-                return false;
+                return eDate.getFullYear() === dayObj.rawDate.getFullYear() &&
+                       eDate.getMonth() === dayObj.rawDate.getMonth() &&
+                       eDate.getDate() === dayObj.rawDate.getDate();
             })
             
             if (eventToday) {

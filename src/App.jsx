@@ -8,6 +8,7 @@ import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
 import TopNav from './TopNav'
 import Ticker from './Ticker'
+import { GlobalToast } from './GlobalToast'
 
 // THE GLOBAL BACKGROUND
 import Moonshower from './backgrounds/Moonshower'
@@ -369,6 +370,7 @@ function MainApp() {
       )}
       
       <Moonshower />
+      <GlobalToast /> {/* 🟢 INJECTED HERE */}
 
       {/* 🎁 REWARD TOASTS 🎁 */}
       {rewardToast && (

@@ -37,8 +37,15 @@ const getInitialSplash = () => {
     else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
     else if (hour >= 20 && hour < 24) currentPhase = 'Night'
 
-    // THE FIX: We removed the localStorage check entirely. 
-    // It now ALWAYS returns the phase string (which evaluates to true for rendering!)
+    // 🟢 NEW: Check if they've already seen this specific phase today
+    const todayStr = new Date().toDateString()
+    const cacheKey = `bhnl_splash_${todayStr}`
+    const lastPhase = localStorage.getItem(cacheKey)
+
+    if (lastPhase === currentPhase) {
+        return false // Skip splash, already saw it for this time of day!
+    }
+
     return currentPhase
 }
 
@@ -61,6 +68,14 @@ function MainApp() {
 
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
+
+  // 🟢 NEW: When splash mounts, save it to local storage so it doesn't run again this phase
+  useEffect(() => {
+      if (showSplash && typeof showSplash === 'string') {
+          const todayStr = new Date().toDateString()
+          localStorage.setItem(`bhnl_splash_${todayStr}`, showSplash)
+      }
+  }, [showSplash])
 
   const showReward = (title, points) => {
       if (points > 0) {

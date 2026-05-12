@@ -300,9 +300,15 @@ export default function Profile({ session }) {
                       </div>
                   </div>
 
-                  {/* SECTION 3: RESOURCES */}
+                  {/* SECTION 3: WALLET / KEYS */}
                   <div className="mb-6">
-                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Resources</h4>
+                      <div className="flex justify-between items-center mb-3 border-b border-gray-800 pb-1">
+                          <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest">Wallet & Keys</h4>
+                          {/* 🟢 NEW: Visit Shop Button */}
+                          <button onClick={() => window.location.search = '?tab=Shop'} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest transition-colors flex items-center gap-1 bg-blue-900/20 px-2 py-1 rounded">
+                              Visit Shop <span>↗</span>
+                          </button>
+                      </div>
                       <div className="grid grid-cols-3 gap-2">
                           <div className="bg-amber-900/20 border border-amber-900/50 p-3 rounded-xl text-center">
                               <span className="block text-2xl mb-1">🪵</span>

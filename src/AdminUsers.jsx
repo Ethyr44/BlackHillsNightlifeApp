@@ -13,12 +13,19 @@ export default function AdminUsers() {
 
     // --- 1. PENDING APPROVALS LOGIC ---
     const fetchPendingApprovals = async () => {
-        const { data } = await supabase
+        // 🟢 FIX: Removed 'created_at' from the select and order clauses to prevent crashes
+        const { data, error } = await supabase
             .from('profiles')
-            .select('id, username, account_type, created_at, details')
+            .select('id, username, account_type, account_status, details')
             .eq('account_status', 'pending')
-            .order('created_at', { ascending: false })
         
+        // 🟢 FIX: Added explicit error logging so we are never blind
+        if (error) {
+            console.error("Fetch Pending Error:", error)
+            alert("Error loading pending users: " + error.message)
+            return
+        }
+
         if (data) setPendingUsers(data)
     }
 
@@ -26,17 +33,17 @@ export default function AdminUsers() {
         setLoadingId(userId)
         
         if (action === 'approve') {
-            await supabase.from('profiles').update({ account_status: 'approved' }).eq('id', userId)
+            const { error } = await supabase.from('profiles').update({ account_status: 'approved' }).eq('id', userId)
+            if (error) alert("Error approving user: " + error.message)
             
-            // Send an in-app notification!
             await supabase.from('notifications').insert([{
                 user_id: userId,
                 title: '✅ Account Approved!',
                 content: 'Welcome to Black Hills Nightlife. Your account has been officially approved by the Admin.'
             }])
         } else {
-            // Reject: Revert them to a 'Regular' user and approve them so they aren't stuck on the pending screen forever.
-            await supabase.from('profiles').update({ account_type: 'Regular', account_status: 'approved' }).eq('id', userId)
+            const { error } = await supabase.from('profiles').update({ account_type: 'Regular', account_status: 'approved' }).eq('id', userId)
+            if (error) alert("Error rejecting user: " + error.message)
             
             await supabase.from('notifications').insert([{
                 user_id: userId,
@@ -54,12 +61,13 @@ export default function AdminUsers() {
         e.preventDefault()
         if (!searchQuery.trim()) return
         
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('profiles')
             .select('id, username, account_type, account_status')
             .ilike('username', `%${searchQuery}%`)
             .limit(10)
             
+        if (error) alert("Search Error: " + error.message)
         if (data) setSearchResults(data)
     }
 
@@ -67,12 +75,13 @@ export default function AdminUsers() {
         if (!window.confirm(`Force change this user to ${newRole}?`)) return
         
         setLoadingId(userId)
-        await supabase.from('profiles').update({ 
+        const { error } = await supabase.from('profiles').update({ 
             account_type: newRole, 
-            account_status: 'approved' // Automatically bypasses any locks
+            account_status: 'approved' 
         }).eq('id', userId)
         
-        // Refresh the search results visually
+        if (error) alert("Role Update Error: " + error.message)
+        
         setSearchResults(prev => prev.map(u => u.id === userId ? { ...u, account_type: newRole, account_status: 'approved' } : u))
         setLoadingId(null)
     }
@@ -102,8 +111,9 @@ export default function AdminUsers() {
                                             Req: {user.account_type}
                                         </span>
                                     </div>
+                                    {/* 🟢 FIX: Removed the Date() cast since created_at is gone */}
                                     <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                                        Joined: {new Date(user.created_at).toLocaleDateString()}
+                                        Status: Waiting for Review
                                     </p>
                                 </div>
 

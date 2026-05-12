@@ -5,6 +5,9 @@ import Setlist from './Setlist'
 import Repertoire from './Repertoire'
 import ProfileHeader from './ProfileHeader'
 import HostTracker from './HostTracker'
+import ProfileVenue from './ProfileVenue'
+import ProfileHost from './ProfileHost'
+import ProfilePerformer from './ProfilePerformer'
 
 const GRADIENTS = {
   'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
@@ -226,12 +229,39 @@ export default function Profile({ session }) {
             </div>
         </div>
 
-        {profile.account_type === 'Host' && <HostTracker session={session} />}
-
-        {showKaraokeFeatures && (
+        {/* 🟢 DYNAMIC ROLE DASHBOARDS */}
+        {profile.account_type === 'Venue' ? (
+            <div className="mt-8 pt-8 border-t border-gray-800">
+                <ProfileVenue profile={profile} isOwner={true} onViewEntity={null} />
+            </div>
+        ) : profile.account_type === 'Performer' ? (
+            <div className="mt-8 pt-8 border-t border-gray-800">
+                <ProfilePerformer profile={profile} isOwner={true} onViewEntity={null} />
+            </div>
+        ) : profile.account_type === 'Host' ? (
+            <div className="mt-8 pt-8 border-t border-gray-800">
+                <ProfileHost profile={profile} isOwner={true} onViewEntity={null} />
+                <div className="mt-6">
+                    <HostTracker session={session} />
+                </div>
+            </div>
+        ) : (
             <>
-              <Setlist session={session} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} currentUser={profile} profileUser={profile} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+                {/* SECTION 2: KARAOKE FEATURES (Regular & Singer Only) */}
+                <div>
+                    <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4">
+                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">Active Setlist</h3>
+                    </div>
+                    <Setlist session={session} />
+                </div>
+
+                {/* SECTION 3: REPERTOIRE */}
+                <div>
+                    <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4 mt-8">
+                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">The Vault</h3>
+                    </div>
+                    <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+                </div>
             </>
         )}
       </div>

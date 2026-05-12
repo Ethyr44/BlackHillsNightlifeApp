@@ -3,10 +3,6 @@ import { supabase } from './supabaseClient'
 import JournalFeed from './JournalFeed'
 import { useAppConfig } from './useAppConfig'
 
-import MapVenueOverlay from './MapVenueOverlay'
-import MapGiftOverlay from './MapGiftOverlay'
-import MapDeployGift from './MapDeployGift'
-
 function getDistanceInFeet(lat1, lon1, lat2, lon2) {
     const R = 3958.8;
     const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -28,6 +24,7 @@ export default function Map({ currentUser, onViewEntity }) {
   const [geoGifts, setGeoGifts] = useState([])
   const [activeUsers, setActiveUsers] = useState([])
   
+  // 1. Replace activeFilter with this object
   const [filters, setFilters] = useState({
     venues: true,
     events: true,
@@ -43,23 +40,37 @@ export default function Map({ currentUser, onViewEntity }) {
   // 🟢 ADMIN STATE
   const [showAdminGiftModal, setShowAdminGiftModal] = useState(false)
   const [isPlacingGift, setIsPlacingGift] = useState(false)
-  const [adminGiftCoords, setAdminGiftCoords] = useState(null)
+  const [adminGift, setAdminGift] = useState({
+      title: 'Admin Test Drop',
+      lat: '',
+      lng: '',
+      lp: 100,
+      wood: 0,
+      stone: 0,
+      iron: 0,
+      gemType: 'None',
+      gemQty: 1,
+      expiresAt: ''
+  })
 
   const markersRef = useRef([])
   const userMarkersRef = useRef([])
 
+  // Default to User's location immediately if available, otherwise fallback to Rapid City
   const [mapCenter, setMapCenter] = useState(
       currentUser?.current_lat && currentUser?.current_lng 
       ? { lat: parseFloat(currentUser.current_lat), lng: parseFloat(currentUser.current_lng) } 
       : { lat: 44.0805, lng: -103.2310 }
   );
 
+  // Force re-center if the user's location updates after initial load
   useEffect(() => {
       if (currentUser?.current_lat && currentUser?.current_lng) {
           setMapCenter({ lat: parseFloat(currentUser.current_lat), lng: parseFloat(currentUser.current_lng) });
       }
   }, [currentUser?.current_lat, currentUser?.current_lng]);
 
+  // 2. Add this quick toggle function
   const toggleFilter = (key) => {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -118,6 +129,7 @@ export default function Map({ currentUser, onViewEntity }) {
     init()
   }, [])
 
+  // Pan to mapCenter when the center coordinates change
   useEffect(() => {
       if (mapInstance && mapCenter) {
           mapInstance.panTo(mapCenter);
@@ -142,10 +154,11 @@ export default function Map({ currentUser, onViewEntity }) {
       
       const clickListener = mapInstance.addListener('click', (e) => {
           if (isPlacingGift) {
-              setAdminGiftCoords({
-                  lat: e.latLng.lat(),
-                  lng: e.latLng.lng()
-              })
+              setAdminGift(prev => ({
+                  ...prev,
+                  lat: e.latLng.lat().toFixed(6),
+                  lng: e.latLng.lng().toFixed(6)
+              }))
               setIsPlacingGift(false)
               setShowAdminGiftModal(true)
           }
@@ -153,6 +166,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
       return () => window.google.maps.event.removeListener(clickListener)
   }, [mapInstance, isPlacingGift])
+
 
   useEffect(() => {
       if (!mapInstance || !window.google) return
@@ -189,7 +203,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
               const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: venue.name, content: dotDiv })
               marker.addListener('gmp-click', () => {
-                  if (isPlacingGift) return 
+                  if (isPlacingGift) return // Prevent opening venue if placing gift
                   setActiveGift(null)
                   setActiveVenue(venue)
                   mapInstance.panTo(position)
@@ -215,7 +229,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
               const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: gift.title, content: dotDiv })
               marker.addListener('gmp-click', () => {
-                  if (isPlacingGift) return 
+                  if (isPlacingGift) return // Prevent opening gift if placing gift
                   setActiveVenue(null)
                   setActiveGift(gift)
                   mapInstance.panTo(position)
@@ -269,11 +283,14 @@ export default function Map({ currentUser, onViewEntity }) {
 
   const handleClaimGift = async () => {
       setClaiming(true)
+
+      // Get current location...
       navigator.geolocation.getCurrentPosition(async (pos) => {
           const userLat = pos.coords.latitude
           const userLng = pos.coords.longitude
           const dist = getDistanceInFeet(userLat, userLng, activeGift.lat, activeGift.lng)
 
+          // 🟢 FIX: Increased range to 100 feet
           if (dist > 100) {
               alert(`You are too far away! Get within 100 feet. (Currently ${Math.round(dist)}ft away)`)
               setClaiming(false)
@@ -303,7 +320,7 @@ export default function Map({ currentUser, onViewEntity }) {
           const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
           await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
 
-          alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp || 0} L$.`)
+          alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp} L$.`)
           setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
           setActiveGift(null)
           setClaiming(false)
@@ -313,20 +330,24 @@ export default function Map({ currentUser, onViewEntity }) {
       }, { enableHighAccuracy: true })
   }
 
+  // 🟢 NEW: The Venue Link Check-in System
   const handleVenueLink = async (venue) => {
       setLinkingVenue(true)
+
       navigator.geolocation.getCurrentPosition(
           async (pos) => {
               const userLat = pos.coords.latitude
               const userLng = pos.coords.longitude
               const dist = getDistanceInFeet(userLat, userLng, venue.lat, venue.lng)
 
+              // 1. Enforce the 100ft Perimeter
               if (dist > 100) {
                   alert(`You are too far away! Get within 100 feet of ${venue.name} to Link. (Currently ${Math.round(dist)}ft away)`)
                   setLinkingVenue(false)
                   return
               }
 
+              // 2. Trigger the Server-Side Engine
               const { data: pointsEarned, error } = await supabase.rpc('link_venue', {
                   p_user_id: currentUser.id,
                   p_username: currentUser.username,
@@ -336,6 +357,7 @@ export default function Map({ currentUser, onViewEntity }) {
               if (error) {
                   alert("Link Failed: " + error.message)
               } else {
+                  // Success!
                   if (pointsEarned === 44) {
                       alert(`🎉 NEW DISCOVERY! You successfully Linked with ${venue.name} for the first time and earned 44 L$!`)
                   } else {
@@ -352,25 +374,33 @@ export default function Map({ currentUser, onViewEntity }) {
       )
   }
 
-  const handleDeployGift = async (payload) => {
-      const submitPayload = {
-          title: 'Admin Test Drop',
-          lat: parseFloat(payload.lat),
-          lng: parseFloat(payload.lng),
-          reward_lp: 100, // Standard test reward
-          reward_gems: payload.gemType !== 'None' ? { [payload.gemType]: parseInt(payload.gemQty) } : {},
+  const handleAdminGiftSubmit = async (e) => {
+      e.preventDefault()
+      const payload = {
+          title: adminGift.title,
+          lat: parseFloat(adminGift.lat),
+          lng: parseFloat(adminGift.lng),
+          reward_lp: parseInt(adminGift.lp),
+          reward_resources: {
+              Wood: parseInt(adminGift.wood),
+              Stone: parseInt(adminGift.stone),
+              Iron: parseInt(adminGift.iron)
+          },
+          reward_gems: adminGift.gemType !== 'None' ? { [adminGift.gemType]: parseInt(adminGift.gemQty) } : {},
+          expires_at: adminGift.expiresAt ? new Date(adminGift.expiresAt).toISOString() : null
       }
       
-      const { data, error } = await supabase.from('geo_gifts').insert([submitPayload]).select()
+      const { data, error } = await supabase.from('geo_gifts').insert([payload]).select()
       if (!error && data) {
           setGeoGifts(prev => [...prev, data[0]])
           setShowAdminGiftModal(false)
           alert("Admin Geo-Gift deployed!")
       } else {
-          alert("Error deploying Geo-Gift: " + error.message)
+          alert("Error deploying Geo-Gift.")
       }
   }
 
+  // 🟢 FORCE RESPAWN ALL GIFTS
   const handleForceRegenerate = async () => {
       if (!window.confirm("This will wipe all current Geo-Gifts and spawn 7 new ones at random locations. Proceed?")) return;
       
@@ -384,41 +414,56 @@ export default function Map({ currentUser, onViewEntity }) {
       }
   }
 
-  // 🟢 98% FULLSCREEN CONTAINER STYLE
-  const mapContainerStyle = {
-    height: 'calc(100vh - 160px)', 
-    width: '98%',
-    margin: '1% auto',
-    borderRadius: '24px',
-    overflow: 'hidden',
-    position: 'relative',
-    boxShadow: '0 0 40px rgba(0,0,0,0.5)',
-    border: '2px solid rgba(255,255,255,0.05)'
-  }
+    // 🟢 NEW: Trigger the Smart Venue Spawner
+    const handleSpawnSmartCaches = async () => {
+        if (!window.confirm("Deploy 10 random GeoGifts near active venues?")) return
+        
+        const { error } = await supabase.rpc('spawn_smart_geogifts', { spawn_count: 10 })
+        
+        if (error) {
+            alert("Error spawning caches: " + error.message)
+        } else {
+            alert("Successfully deployed 10 new GeoGifts!")
+            const { data } = await supabase.from('geo_gifts').select('*')
+            if (data) setGeoGifts(data)
+        }
+    }
 
-  let activeVenueDistance = null;
-  let activeGiftDistance = null;
-  
-  if (currentUser?.current_lat && currentUser?.current_lng) {
-      if (activeVenue) {
-          activeVenueDistance = getDistanceInFeet(currentUser.current_lat, currentUser.current_lng, activeVenue.lat, activeVenue.lng)
-      }
-      if (activeGift) {
-          activeGiftDistance = getDistanceInFeet(currentUser.current_lat, currentUser.current_lng, activeGift.lat, activeGift.lng)
-      }
-  }
+    // 🟢 NEW: Clear All GeoGifts
+    const handleClearAllGeoGifts = async () => {
+        if (!window.confirm("WARNING: Are you sure you want to delete ALL active GeoGifts from the map?")) return
+        
+        // Supabase requires a filter for deletes. .not('id', 'is', null) safely selects every row.
+        const { error } = await supabase.from('geo_gifts').delete().not('id', 'is', null)
+        
+        if (error) {
+            alert("Error clearing map: " + error.message)
+        } else {
+            alert("Map wiped clean!")
+            setGeoGifts([])
+        }
+    }
 
   return (
-    <div className="animate-fade-in flex flex-col pb-24">
+    <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in flex flex-col gap-6 pb-24">
 
-      <div className="flex flex-col gap-3 shrink-0 border-b border-gray-800 pb-4 px-4 mt-4">
+      <div className="text-center mb-2">
+        {config.map_title_visible !== false && (
+            <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
+                {config.map_title || 'The Scene'}
+            </h2>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3 shrink-0 border-b border-gray-800 pb-4">
           <div className="flex justify-between items-center">
-            <div className="flex gap-2 overflow-x-auto p-2 w-full hide-scrollbar">
+            {/* Replace your existing filter buttons with these toggles */}
+            <div className="flex gap-2 overflow-x-auto p-2">
               {Object.keys(filters).map(key => (
                 <button 
                   key={key}
                   onClick={() => toggleFilter(key)}
-                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                  className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest transition-all ${
                     filters[key] 
                       ? 'bg-blue-600 text-white shadow-[0_0_10px_rgba(59,130,246,0.5)]' 
                       : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
@@ -449,9 +494,9 @@ export default function Map({ currentUser, onViewEntity }) {
           )}
       </div>
 
-      <div style={mapContainerStyle} className="bg-gray-900 z-0">
+      <div className="relative w-full rounded-3xl overflow-hidden border-2 border-blue-900/30 shadow-[0_0_30px_rgba(0,0,0,0.5)] flex flex-col bg-[#050505]">
         
-        {/* PLACEMENT BANNER */}
+        {/* 🟢 PLACEMENT BANNER */}
         {isPlacingGift && (
             <div className="absolute top-4 left-4 right-4 bg-red-600 text-white p-3 rounded-xl z-50 text-center shadow-xl animate-pulse flex justify-between items-center pointer-events-auto">
                 <span className="text-xs font-bold uppercase tracking-widest">📍 Tap anywhere on map</span>
@@ -459,20 +504,69 @@ export default function Map({ currentUser, onViewEntity }) {
             </div>
         )}
 
-        {!mapInstance && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
-                Initializing Radar...
-            </div>
-        )}
-        <div id="map" ref={mapRef} className={`absolute inset-0 bg-[#090812] z-0 ${isPlacingGift ? 'cursor-crosshair' : ''}`}></div>
-        
-        {/* Recenter Button */}
-        <div className="absolute top-4 right-4 z-40">
-            <button onClick={() => {if(mapInstance && mapCenter) mapInstance.panTo(mapCenter)}} className="bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-white shadow-[0_0_20px_rgba(0,0,0,0.8)]">🛰️</button>
+        {/* THE FIX: Changed h-[60vh] to h-[85vh] to force it to fill the device screen */}
+        <div className="relative w-full h-[85vh] z-0">
+            {!mapInstance && (
+                <div className="absolute inset-0 flex items-center justify-center bg-[#090812] text-gray-500 font-bold uppercase tracking-widest text-xs animate-pulse z-10">
+                    Initializing Radar...
+                </div>
+            )}
+            <div ref={mapRef} className={`absolute inset-0 bg-[#090812] z-0 ${isPlacingGift ? 'cursor-crosshair' : ''}`}></div>
+
+            {activeVenue && !isPlacingGift && (
+                <div className="absolute top-4 left-4 right-4 p-4 rounded-2xl bg-black/80 backdrop-blur-md border border-blue-500/50 shadow-2xl z-30 pointer-events-auto">
+                    <div className="flex justify-between items-start mb-2">
+                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{activeVenue.name}</h3>
+                        <button onClick={() => setActiveVenue(null)} className="text-gray-500 hover:text-white">✕</button>
+                    </div>
+                    {activeVenue.eventToday ? (
+                        <div className="mb-3">
+                            <span className="text-[#ff2d78] text-[9px] font-bold uppercase tracking-widest block">{activeVenue.isLive ? '🔥 LIVE NOW' : '📅 TODAY'}</span>
+                            <span className="text-white text-xs font-bold">{activeVenue.eventToday.title}</span>
+                        </div>
+                    ) : (
+                        <span className="text-purple-400 text-[9px] font-bold uppercase tracking-widest block mb-3">Official BHNL Venue</span>
+                    )}
+                    <div className="mt-4 pt-4 border-t border-gray-800 flex gap-2">
+                        <button 
+                            onClick={() => onViewEntity(activeVenue.name)} 
+                            className="flex-1 bg-gray-800 hover:bg-gray-700 text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+                        >
+                            View Page
+                        </button>
+                        <button 
+                            onClick={() => handleVenueLink(activeVenue)} 
+                            disabled={linkingVenue}
+                            className="flex-1 bg-cyan-900/30 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-600 hover:text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_10px_rgba(34,211,238,0.2)] disabled:opacity-50"
+                        >
+                            {linkingVenue ? 'Linking...' : '📍 Venue Link'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {activeGift && !isPlacingGift && (
+                <div className="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-[#090812]/95 backdrop-blur-md border-2 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.3)] z-30 pointer-events-auto text-center">
+                    <div className="flex justify-between items-start mb-1 absolute right-4 top-4">
+                        <button onClick={() => setActiveGift(null)} className="text-gray-500 hover:text-white">✕</button>
+                    </div>
+                    <div className="text-4xl mb-2">🎁</div>
+                    <h3 className="text-2xl font-['Bebas_Neue'] text-green-400 tracking-widest">{activeGift.title}</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4">Location Cache Identified</p>
+                    
+                    <button 
+                        onClick={handleClaimGift} 
+                        disabled={claiming}
+                        className="w-full bg-green-600 hover:bg-green-500 disabled:bg-gray-800 disabled:text-gray-600 text-white py-3 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors shadow-lg"
+                    >
+                        {claiming ? 'Extracting...' : 'Claim Reward (Must be within 100ft)'}
+                    </button>
+                </div>
+            )}
         </div>
       </div>
 
-      <div className="px-4 mt-6">
+      <div className="pb-32">
           <div className="text-center mb-6">
               {config.journal_title_visible !== false && (
                   <h2 className="text-4xl font-['Bebas_Neue'] text-gray-300 tracking-wider">
@@ -488,33 +582,107 @@ export default function Map({ currentUser, onViewEntity }) {
           <JournalFeed currentUser={currentUser} />
       </div>
 
-      {/* 🟢 THE MODULAR UI OVERLAYS */}
-      <MapVenueOverlay 
-          venue={activeVenue}
-          distance={activeVenueDistance}
-          isProcessing={linkingVenue}
-          onCheckIn={() => handleVenueLink(activeVenue)}
-          onClose={() => setActiveVenue(null)}
-          onViewEntity={onViewEntity}
-      />
+      {showAdminGiftModal && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+              <div className="w-full max-w-md bg-gray-900 border border-red-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.2)] my-10">
+                  <div className="flex justify-between items-start mb-6">
+                      <h2 className="text-2xl font-['Bebas_Neue'] text-red-400 tracking-widest">Deploy Custom Geo-Gift</h2>
+                      <button onClick={() => setShowAdminGiftModal(false)} className="text-gray-500 hover:text-white font-bold">✕</button>
+                  </div>
 
-      <MapGiftOverlay 
-          gift={activeGift}
-          distance={activeGiftDistance}
-          isProcessing={claiming}
-          onClaim={handleClaimGift}
-          onClose={() => setActiveGift(null)}
-      />
+                  {/* 🟢 FIX: Renamed to GeoGifts */}
+                  <button 
+                      type="button" 
+                      onClick={handleSpawnSmartCaches}
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(147,51,234,0.3)] mb-2"
+                  >
+                      Deploy 10 Venue GeoGifts
+                  </button>
 
-      <MapDeployGift 
-          coords={adminGiftCoords}
-          isDeploying={false}
-          onDeploy={handleDeployGift}
-          onClose={() => {
-              setAdminGiftCoords(null)
-              setShowAdminGiftModal(false)
-          }}
-      />
+                  {/* 🟢 NEW: The Nuke Button */}
+                  <button 
+                      type="button" 
+                      onClick={handleClearAllGeoGifts}
+                      className="w-full bg-red-900/30 text-red-500 border border-red-500/50 hover:bg-red-600 hover:text-white py-3 rounded-xl font-bold uppercase tracking-widest transition-colors mb-4"
+                  >
+                      🗑️ Clear All GeoGifts
+                  </button>
+
+                  <div className="relative py-4 mb-2">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-red-900/50"></div></div>
+                      <div className="relative flex justify-center text-sm"><span className="px-3 bg-[#090812] text-red-500 font-bold uppercase tracking-widest text-[10px]">Or Manual Drop</span></div>
+                  </div>
+
+                  <form onSubmit={handleAdminGiftSubmit} className="space-y-4">
+                      <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Gift Title</label>
+                          <input required type="text" value={adminGift.title} onChange={e => setAdminGift({...adminGift, title: e.target.value})} className="w-full bg-black border border-gray-700 text-white p-3 rounded-xl focus:border-red-500 outline-none" />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Latitude</label>
+                              <input readOnly type="text" value={adminGift.lat} className="w-full bg-black/50 border border-gray-800 text-gray-500 p-3 rounded-xl outline-none cursor-not-allowed" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Longitude</label>
+                              <input readOnly type="text" value={adminGift.lng} className="w-full bg-black/50 border border-gray-800 text-gray-500 p-3 rounded-xl outline-none cursor-not-allowed" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-blue-400 mb-1 block">Reward L$</label>
+                              <input type="number" min="0" value={adminGift.lp} onChange={e => setAdminGift({...adminGift, lp: e.target.value})} className="w-full bg-black border border-blue-900 p-3 rounded-xl focus:border-blue-500 outline-none text-white" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1 block">Expiration Date/Time</label>
+                              <input type="datetime-local" value={adminGift.expiresAt} onChange={e => setAdminGift({...adminGift, expiresAt: e.target.value})} className="w-full bg-black border border-gray-700 p-3 rounded-xl outline-none text-white text-xs" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-amber-500 mb-1 block">Wood</label>
+                              <input type="number" min="0" value={adminGift.wood} onChange={e => setAdminGift({...adminGift, wood: e.target.value})} className="w-full bg-black border border-amber-900 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1 block">Stone</label>
+                              <input type="number" min="0" value={adminGift.stone} onChange={e => setAdminGift({...adminGift, stone: e.target.value})} className="w-full bg-black border border-slate-700 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-gray-300 mb-1 block">Iron</label>
+                              <input type="number" min="0" value={adminGift.iron} onChange={e => setAdminGift({...adminGift, iron: e.target.value})} className="w-full bg-black border border-gray-600 p-3 rounded-xl text-white outline-none" />
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pb-4">
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Include Rare Gem</label>
+                              <select value={adminGift.gemType} onChange={e => setAdminGift({...adminGift, gemType: e.target.value})} className="w-full bg-black border border-pink-900/50 p-3 rounded-xl text-white outline-none text-sm">
+                                  <option value="None">None</option>
+                                  <option value="Quartz">Quartz</option>
+                                  <option value="Amethyst">Amethyst</option>
+                                  <option value="Jade">Jade</option>
+                                  <option value="Emerald">Emerald</option>
+                                  <option value="Sapphire">Sapphire</option>
+                                  <option value="Ruby">Ruby</option>
+                                  <option value="Diamond">Diamond</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Gem Qty</label>
+                              <input type="number" min="1" value={adminGift.gemQty} onChange={e => setAdminGift({...adminGift, gemQty: e.target.value})} className="w-full bg-black border border-pink-900/50 p-3 rounded-xl text-white outline-none" disabled={adminGift.gemType === 'None'} />
+                          </div>
+                      </div>
+
+                      <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest transition-colors shadow-lg shadow-red-500/20">
+                          Deploy GeoGift to Coordinates
+                      </button>
+                  </form>
+              </div>
+          </div>
+      )}
     </div>
   )
 }

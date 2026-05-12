@@ -3,6 +3,9 @@ import { supabase } from './supabaseClient'
 import Setlist from './Setlist'
 import Repertoire from './Repertoire'
 import SongBook from './Songbook'
+import ProfileVenue from './ProfileVenue'
+import ProfileHost from './ProfileHost'
+import ProfilePerformer from './ProfilePerformer'
 
 const GRADIENTS = {
   'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
@@ -13,7 +16,7 @@ const GRADIENTS = {
   'abyss': 'bg-black/60 backdrop-blur-md'
 }
 
-export default function PublicProfile({ entity, onClose, currentUser }) {
+export default function PublicProfile({ entity, onClose, currentUser, onViewEntity }) {
   const [followersCount, setFollowersCount] = useState(0)
   const [isConnection, setIsConnection] = useState(false) 
   const [isLoading, setIsLoading] = useState(true)
@@ -188,17 +191,31 @@ export default function PublicProfile({ entity, onClose, currentUser }) {
             </div>
         )}
 
-        {/* KARAOKE FEATURES */}
-        {showKaraokeFeatures && (
-            <>
-              <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
-              <Repertoire userId={entity.id} isOwner={false} canSuggest={true} currentUser={currentUser} profileUser={entity} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-              
-              <div className="mt-8 bg-[#090812] border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-400"></div>
-                  <SongBook currentUser={currentUser} profileUser={entity} isOwnProfile={false} embedded={true} />
-              </div>
-            </>
+        {/* DYNAMIC ROLE PROFILES */}
+        {entity.account_type === 'Venue' ? (
+            <div className="mt-6">
+                <ProfileVenue profile={entity} isOwner={false} onViewEntity={onViewEntity} />
+            </div>
+        ) : entity.account_type === 'Performer' ? (
+            <div className="mt-6">
+                <ProfilePerformer profile={entity} isOwner={false} onViewEntity={onViewEntity} />
+            </div>
+        ) : entity.account_type === 'Host' ? (
+            <div className="mt-6">
+                <ProfileHost profile={entity} isOwner={false} onViewEntity={onViewEntity} />
+            </div>
+        ) : (
+            showKaraokeFeatures && (
+                <div className="mt-6 animate-fade-in">
+                    <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
+                    <Repertoire userId={entity.id} isOwner={false} canSuggest={true} currentUser={currentUser} profileUser={entity} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+                    
+                    <div className="mt-8 bg-[#090812] border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-400"></div>
+                        <SongBook currentUser={currentUser} profileUser={entity} isOwnProfile={false} embedded={true} />
+                    </div>
+                </div>
+            )
         )}
       </div>
     </>

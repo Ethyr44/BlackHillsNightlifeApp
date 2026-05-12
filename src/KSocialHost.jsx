@@ -108,6 +108,19 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             toast.success("Stage Initialized!")
             setActiveSession(data)
             setView('dashboard')
+            
+            // 🟢 THE FYP & MAP BRIDGE: Create a Live Event instantly
+            await supabase.from('events').insert([{
+                title: sessionTitle,
+                venue: venueName,
+                event_type: 'Karaoke',
+                event_date: new Date().toISOString(),
+                end_date: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // Closes in 4 hours
+                host_id: currentUser.id,
+                created_by: currentUser.id,
+                status: 'approved',
+                description: `🎤 LIVE NOW! The Stage is open at ${venueName}. Join the queue!`
+            }])
         }
         setIsLoading(false)
     }
@@ -148,19 +161,32 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
         } 
         else if (action === 'complete') {
             const singer = singers.find(s => s.id === singerId)
+            
+            // 🟢 THE VAULT BRIDGE: Save to their Repertoire automatically
+            if (singer.user_id) {
+                await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
+            }
+
             let currentSetlist = Array.isArray(singer.setlist) ? singer.setlist : []
             
             if (currentSetlist.length > 1) {
                 const nextSetlist = currentSetlist.slice(1)
                 const nextSong = nextSetlist[0]
                 
-                await supabase.from('session_singers').update({
+                // 🟢 FIX: Added error catcher to prevent silent button sticking!
+                const { error } = await supabase.from('session_singers').update({
                     status: 'queued', song_id: nextSong.id, song_title: nextSong.title, song_artist: nextSong.artist,
                     setlist: nextSetlist, 
-                    previous_score: singer.score_performance || 0, // Save previous score for the Contender Card
+                    previous_score: singer.total_points || singer.score_performance || 0,
                     score_performance: 0, score_wow: 0, score_originality: 0, total_points: 0, super_votes: 0
                 }).eq('id', singerId)
-                toast.success(`${singer.singer_name} cycled to next song.`)
+                
+                if (error) {
+                    toast.error("Failed to cycle: " + error.message)
+                    console.error("DB Cycle Error:", error)
+                } else {
+                    toast.success(`${singer.singer_name} cycled to next song.`)
+                }
             } else {
                 await supabase.from('session_singers').delete().eq('id', singerId)
                 toast.success(`${singer.singer_name} completed their set.`)

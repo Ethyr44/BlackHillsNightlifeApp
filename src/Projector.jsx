@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import QRCode from 'react-qr-code'
 
 export default function Projector() {
     const [session, setSession] = useState(null)
@@ -7,8 +8,10 @@ export default function Projector() {
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState(null)
 
+    // 🟢 The Auto-Cycle State
+    const [cycleView, setCycleView] = useState('scoreboard') // 'scoreboard', 'stage', 'qr'
+
     useEffect(() => {
-        // 1. Grab the Session ID from the URL (e.g. /?tab=Projector&session=1234)
         const params = new URLSearchParams(window.location.search)
         const sessionId = params.get('session')
 
@@ -22,136 +25,144 @@ export default function Projector() {
             const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).single()
             if (sessData) setSession(sessData)
 
-            const { data: singerData } = await supabase.from('session_singers')
-                .select('*')
-                .eq('session_id', sessionId)
-                .order('total_points', { ascending: false })
+            const { data: singerData } = await supabase.from('session_singers').select('*').eq('session_id', sessionId)
             if (singerData) setSingers(singerData)
 
             setIsLoading(false)
         }
 
         fetchAll()
-
-        // 2. The Real-Time Listener (Watches the Queue)
-        const queueSub = supabase.channel('projector-queue')
-            .on('postgres', {
-                event: '*',
-                schema: 'public',
-                table: 'session_singers',
-                filter: `session_id=eq.${sessionId}`
-            }, () => {
-                // If anything changes, re-fetch the sorted list
-                supabase.from('session_singers')
-                    .select('*')
-                    .eq('session_id', sessionId)
-                    .order('total_points', { ascending: false })
-                    .then(({ data }) => { if (data) setSingers(data) })
-            })
-            .subscribe()
-            
-        // 3. The Real-Time Listener (Watches the Session for title changes/ending)
-        const sessionSub = supabase.channel('projector-session')
-            .on('postgres', {
-                event: '*',
-                schema: 'public',
-                table: 'active_sessions',
-                filter: `id=eq.${sessionId}`
-            }, (payload) => {
-                if (payload.eventType === 'DELETE') {
-                    setError("This session has ended.")
-                } else {
-                    setSession(payload.new)
-                }
-            })
-            .subscribe()
-
-        // THE FIX: Fallback polling every 20 seconds to guarantee updates
-        const pollInterval = setInterval(() => {
-            supabase.from('session_singers')
-                .select('*')
-                .eq('session_id', sessionId)
-                .order('total_points', { ascending: false })
-                .then(({ data }) => { if (data) setSingers(data) })
-        }, 4000)
-
-        return () => {
-            supabase.removeChannel(queueSub)
-            supabase.removeChannel(sessionSub)
-            clearInterval(pollInterval)
-        }
+        const queueSub = supabase.channel('projector-channel').on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchAll).subscribe()
+        return () => supabase.removeChannel(queueSub)
     }, [])
 
-    if (error) return <div className="h-screen bg-[#090812] flex items-center justify-center"><h1 className="text-4xl text-red-500 font-['Bebas_Neue'] tracking-widest">{error}</h1></div>
-    if (isLoading || !session) return <div className="h-screen bg-[#090812] flex items-center justify-center"><div className="w-20 h-20 border-8 border-[#00f5ff] border-t-transparent rounded-full animate-spin"></div></div>
+    // 🟢 The 10-Second Auto-Cycler
+    useEffect(() => {
+        const views = ['scoreboard', 'stage', 'qr']
+        let i = 0
+        const interval = setInterval(() => {
+            i = (i + 1) % views.length
+            setCycleView(views[i])
+        }, 10000) // Switches every 10 seconds
+        return () => clearInterval(interval)
+    }, [])
 
-    // Find if someone is currently singing
-    const activeSinger = singers.find(s => s.status === 'singing')
+    if (error) return <div className="min-h-screen bg-black text-red-500 flex items-center justify-center text-2xl font-bold uppercase tracking-widest">{error}</div>
+    if (isLoading) return <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center text-4xl font-['Bebas_Neue'] tracking-widest animate-pulse">Initializing Display...</div>
+
+    // 🟢 SMART VIEW LOGIC: Force the 'Stage' view if a singer is currently active!
+    const activeSinger = singers.find(s => s.status === 'singing' || s.status === 'voting' || s.status === 'results')
+    const currentView = activeSinger ? 'stage' : cycleView
+    const sortedSingers = singers.filter(s => s.status !== 'pending').sort((a,b)=>((b.total_points || b.score_performance || 0))-((a.total_points || a.score_performance || 0)))
 
     return (
-        <div className="min-h-screen bg-[#090812] text-white p-8 animate-fade-in relative overflow-hidden flex flex-col">
+        <div className="min-h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30 flex flex-col">
             
-            {/* The Background Grid Pattern */}
-            <div className="absolute inset-0 z-0 pointer-events-none opacity-20" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-
-            {/* HEADER */}
-            <div className="relative z-10 text-center mb-12 flex-shrink-0">
-                <h1 className="text-7xl md:text-9xl font-['Bebas_Neue'] text-[#ff2d78] tracking-widest drop-shadow-[0_0_20px_rgba(255,45,120,0.6)] mb-2 uppercase">
-                    {session.session_title}
-                </h1>
-                <p className="text-2xl md:text-4xl text-[#00f5ff] tracking-[0.2em] uppercase font-bold drop-shadow-[0_0_10px_rgba(0,245,255,0.4)]">
-                    {session.venue_name || 'Live Karaoke Leaderboard'}
-                </p>
-                <p className="text-gray-400 mt-2 text-xl tracking-widest uppercase">Hosted by {session.host_name}</p>
+            {/* PROJECTOR HEADER */}
+            <div className="px-12 py-6 border-b-2 border-gray-900 bg-gradient-to-b from-blue-900/10 to-transparent flex justify-between items-center shadow-2xl">
+                <div>
+                    <h1 className="text-5xl font-['Bebas_Neue'] tracking-[0.05em] text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-[#ff2d78] drop-shadow-[0_0_15px_rgba(0,245,255,0.4)]">
+                        {session?.title || 'KSocial LIVE!'}
+                    </h1>
+                    <span className="text-gray-400 uppercase tracking-widest font-bold text-sm ml-1">{session?.venue_name || session?.business_name || 'Black Hills Nightlife'}</span>
+                </div>
+                <div className="text-right">
+                    <span className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Room Code</span>
+                    <span className="font-['Bebas_Neue'] text-5xl tracking-[0.2em] text-white">{session?.session_code}</span>
+                </div>
             </div>
 
-            {/* LIVE SINGER SPOTLIGHT */}
-            {activeSinger && (
-                <div className="relative z-10 bg-[#ff2d78]/10 border-2 border-[#ff2d78] rounded-3xl p-8 mb-12 text-center shadow-[0_0_50px_rgba(255,45,120,0.3)] animate-pulse flex-shrink-0">
-                    <div className="inline-block bg-[#ff2d78] text-white px-6 py-2 rounded-full text-xl font-bold uppercase tracking-widest mb-4">
-                        ● LIVE ON STAGE
-                    </div>
-                    <h2 className="text-6xl md:text-8xl font-['Bebas_Neue'] text-white tracking-widest drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]">
-                        {activeSinger.name}
-                    </h2>
-                </div>
-            )}
-
-            {/* THE LEADERBOARD */}
-            <div className="relative z-10 flex-1 overflow-hidden flex flex-col">
-                <h3 className="text-4xl font-['Bebas_Neue'] text-yellow-400 tracking-widest mb-6 text-center drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">🏆 CURRENT RANKINGS</h3>
+            {/* PROJECTOR BODY */}
+            <div className="flex-1 p-12 flex flex-col justify-center relative">
                 
-                {singers.length === 0 ? (
-                    <div className="text-center text-gray-500 text-3xl font-bold tracking-widest uppercase mt-20">Waiting for singers to join...</div>
-                ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 auto-rows-max overflow-y-auto hide-scrollbar pb-10">
-                        {singers.map((singer, index) => {
-                            const isLive = singer.status === 'singing'
-                            return (
-                                <div key={singer.id} className={`bg-gray-900/80 backdrop-blur-sm border-2 ${isLive ? 'border-[#00f5ff] shadow-[0_0_30px_rgba(0,245,255,0.4)]' : 'border-gray-800'} rounded-3xl p-6 flex items-center justify-between transition-all duration-500`}>
-                                    
-                                    <div className="flex items-center gap-6 overflow-hidden">
-                                        <div className={`flex-shrink-0 w-16 h-16 rounded-full border-2 flex items-center justify-center font-['Bebas_Neue'] text-4xl shadow-lg ${index === 0 ? 'bg-yellow-500/20 border-yellow-400 text-yellow-400 shadow-yellow-400/50' : index === 1 ? 'bg-gray-400/20 border-gray-300 text-gray-300 shadow-gray-300/50' : index === 2 ? 'bg-amber-700/20 border-amber-600 text-amber-500 shadow-amber-600/50' : 'bg-white/5 border-gray-600 text-gray-500'}`}>
-                                            {index + 1}
+                {/* VIEW 1: SCOREBOARD */}
+                {currentView === 'scoreboard' && (
+                    <div className="animate-fade-in max-w-5xl mx-auto w-full">
+                        <h2 className="text-center font-['Bebas_Neue'] text-6xl text-yellow-500 tracking-widest mb-12 drop-shadow-[0_0_20px_rgba(234,179,8,0.3)]">🏆 LEADERBOARD</h2>
+                        
+                        {sortedSingers.length === 0 ? (
+                            <div className="text-center text-gray-600 text-3xl font-bold uppercase tracking-widest py-20">Waiting for Contenders...</div>
+                        ) : (
+                            <div className="space-y-4">
+                                {sortedSingers.slice(0, 5).map((singer, index) => (
+                                    <div key={singer.id} className="bg-gray-900/50 border border-gray-800 rounded-3xl p-6 flex items-center justify-between">
+                                        <div className="flex items-center gap-6">
+                                            <div className="w-16 h-16 rounded-2xl bg-black border border-gray-700 flex items-center justify-center font-['Bebas_Neue'] text-4xl text-gray-400 shadow-inner">
+                                                #{index + 1}
+                                            </div>
+                                            <div>
+                                                <h4 className="font-bold text-white text-4xl tracking-wide truncate">{singer.singer_name}</h4>
+                                                <p className="text-gray-500 uppercase tracking-widest font-bold text-sm mt-1">{singer.song_title}</p>
+                                            </div>
                                         </div>
-                                        <h4 className="font-bold text-white text-3xl md:text-4xl truncate tracking-wide">
-                                            {singer.name}
-                                        </h4>
+                                        <div className="text-right">
+                                            <span className="block font-['Bebas_Neue'] text-6xl text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.5)]">
+                                                {singer.total_points || singer.score_performance || 0}
+                                            </span>
+                                        </div>
                                     </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
 
-                                    <div className="text-right pl-4 flex-shrink-0">
-                                        <span className={`block font-['Bebas_Neue'] text-5xl md:text-6xl ${isLive ? 'text-[#00f5ff] drop-shadow-[0_0_10px_rgba(0,245,255,0.8)]' : 'text-white'}`}>
-                                            {singer.total_points}
-                                        </span>
-                                        <span className="block text-sm uppercase text-gray-500 font-bold tracking-widest mt-1">Points</span>
-                                    </div>
-
+                {/* VIEW 2: THE STAGE */}
+                {currentView === 'stage' && (
+                    <div className="animate-fade-in text-center w-full max-w-6xl mx-auto">
+                        {activeSinger ? (
+                            <div className="bg-gradient-to-b from-gray-900/80 to-black border border-gray-800 p-16 rounded-[3rem] shadow-[0_0_100px_rgba(0,0,0,0.8)] relative overflow-hidden">
+                                {activeSinger.status === 'voting' && <div className="absolute inset-0 bg-blue-600/10 animate-pulse"></div>}
+                                {activeSinger.status === 'singing' && <div className="absolute inset-0 bg-[#ff2d78]/5 animate-pulse"></div>}
+                                
+                                <div className="relative z-10">
+                                    <span className={`inline-block px-8 py-2 rounded-full text-2xl font-bold uppercase tracking-widest mb-12 border-2 ${
+                                        activeSinger.status === 'voting' ? 'bg-blue-900/30 text-blue-400 border-blue-500/50 animate-pulse' : 
+                                        activeSinger.status === 'results' ? 'bg-gray-800 text-gray-400 border-gray-600' :
+                                        'bg-[#ff2d78]/20 text-[#ff2d78] border-[#ff2d78]/50'
+                                    }`}>
+                                        {activeSinger.status === 'voting' ? 'Voting Open!' : activeSinger.status === 'results' ? 'Performance Over' : 'On Stage Now'}
+                                    </span>
+                                    
+                                    <h3 className="text-8xl md:text-[140px] font-['Bebas_Neue'] text-white tracking-widest mb-6 leading-none drop-shadow-2xl">{activeSinger.singer_name}</h3>
+                                    
+                                    {activeSinger.status === 'results' ? (
+                                        <div className="mt-12 bg-black/60 inline-block px-16 py-8 rounded-3xl border border-blue-500/30">
+                                            <p className="text-blue-400 text-8xl font-['Bebas_Neue'] tracking-widest">{activeSinger.total_points || activeSinger.score_performance || 0}</p>
+                                            <p className="text-gray-500 text-xl font-bold uppercase tracking-widest mt-2">Points Earned</p>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p className="text-4xl font-bold text-gray-300 uppercase tracking-widest mb-2">{activeSinger.song_title}</p>
+                                            <p className="text-2xl text-gray-500 uppercase tracking-widest">by {activeSinger.song_artist}</p>
+                                        </>
+                                    )}
                                 </div>
-                            )
-                        })}
+                            </div>
+                        ) : (
+                            <div className="py-32">
+                                <span className="text-8xl opacity-30 mb-8 block">🎤</span>
+                                <p className="text-gray-600 font-bold uppercase tracking-widest text-4xl">Stage is Empty</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* VIEW 3: QR CODE */}
+                {currentView === 'qr' && (
+                    <div className="animate-fade-in max-w-3xl mx-auto w-full text-center">
+                        <h2 className="text-6xl font-['Bebas_Neue'] text-white tracking-widest mb-4">WANT TO SING?</h2>
+                        <p className="text-gray-500 text-2xl font-bold uppercase tracking-widest mb-12">Scan to enter the queue directly from your phone!</p>
+                        
+                        <div className="inline-block bg-white p-12 rounded-[3rem] shadow-[0_0_50px_rgba(255,255,255,0.1)]">
+                            <QRCode value={`${window.location.origin}/?join=${session?.id}`} size={350} />
+                        </div>
+                        
+                        <p className="text-gray-600 text-xl font-bold uppercase tracking-widest mt-12">No App Download Required</p>
                     </div>
                 )}
             </div>
+            
         </div>
     )
 }

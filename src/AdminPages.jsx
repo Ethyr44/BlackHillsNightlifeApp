@@ -21,6 +21,10 @@ export default function AdminPages() {
   const [availableTags, setAvailableTags] = useState([])
   const [selectedTags, setSelectedTags] = useState([])
 
+  // 🟢 NEW: Ownership States
+  const [venueUsers, setVenueUsers] = useState([])
+  const [ownerId, setOwnerId] = useState('')
+
   useEffect(() => { fetchPages() }, [])
 
   const fetchPages = async () => {
@@ -30,6 +34,10 @@ export default function AdminPages() {
     // 🟢 NEW: Fetch available venue styles
     const { data: catData } = await supabase.from('system_categories').select('*').eq('category_type', 'venue')
     if (catData) setAvailableTags(catData.map(c => c.name))
+
+    // 🟢 NEW: Fetch all approved Venue accounts so the Admin can assign them
+    const { data: vUsers } = await supabase.from('profiles').select('id, username').eq('account_type', 'Venue')
+    if (vUsers) setVenueUsers(vUsers)
   }
 
   // Helper to toggle tags
@@ -59,7 +67,7 @@ export default function AdminPages() {
   const resetForm = () => {
     setEditingPageId(null); setPageName(''); setProfilePic(''); setSlideshowUrls([]); 
     setAddress(''); setPhone(''); setWebsite(''); setFacebook(''); setCost('$$');
-    setSelectedTags([]);
+    setSelectedTags([]); setOwnerId('');
   }
 
   const savePage = async () => {
@@ -89,7 +97,8 @@ export default function AdminPages() {
         address: pageType === 'Venue' ? address : null, phone: pageType === 'Venue' ? phone : null,
         website: pageType === 'Venue' ? website : null, facebook: pageType === 'Venue' ? facebook : null,
         cost: pageType === 'Venue' ? cost : null, lat: lat, lng: lng,
-        tags: selectedTags
+        tags: selectedTags,
+        owner_id: ownerId || null // 🟢 NEW: Save the assignment
     }
     
     if (editingPageId) await supabase.from('pages').update(payload).eq('id', editingPageId)
@@ -102,7 +111,7 @@ export default function AdminPages() {
     setEditingPageId(p.id); setPageName(p.name); setPageType(p.page_type); setProfilePic(p.profile_pic || ''); 
     setSlideshowUrls(p.slideshow_urls || []); setAddress(p.address || ''); setPhone(p.phone || ''); 
     setWebsite(p.website || ''); setFacebook(p.facebook || ''); setCost(p.cost || '$$'); 
-    setSelectedTags(p.tags || []);
+    setSelectedTags(p.tags || []); setOwnerId(p.owner_id || ''); // 🟢 NEW: Load the owner if they have one
   }
 
   return (
@@ -170,6 +179,22 @@ export default function AdminPages() {
                             </button>
                         ))}
                     </div>
+                </div>
+
+                {/* 🟢 NEW: Venue Owner Assignment */}
+                <div className="mb-4 pt-4 border-t border-gray-800">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 mb-2 block">Link to Venue Account (Optional)</label>
+                    <select 
+                        value={ownerId} 
+                        onChange={e => setOwnerId(e.target.value)} 
+                        className="w-full bg-black border border-cyan-900/50 p-4 rounded-xl text-white outline-none focus:border-cyan-500"
+                    >
+                        <option value="">-- No Owner Assigned --</option>
+                        {venueUsers.map(vu => (
+                            <option key={vu.id} value={vu.id}>{vu.username}</option>
+                        ))}
+                    </select>
+                    <p className="text-[9px] text-gray-500 mt-1 uppercase tracking-widest font-bold">Linking an account allows the Venue to edit their own details and add events.</p>
                 </div>
 
                 {/* Live Google Map Preview right inside the Admin form! */}

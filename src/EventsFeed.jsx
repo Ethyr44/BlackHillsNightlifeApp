@@ -16,8 +16,11 @@ function getDistanceInFeet(lat1, lon1, lat2, lon2) {
 
 export default function EventsFeed({ currentUser, onViewEntity }) {
   const [venueLineups, setVenueLineups] = useState([])
+  const [displayedVenues, setDisplayedVenues] = useState([])
   const [loading, setLoading] = useState(true)
   const [userLoc, setUserLoc] = useState(null) // 🟢 NEW: Store user location
+  const [page, setPage] = useState(1)
+  const ITEMS_PER_PAGE = 50
 
   const [selectedVenueInfo, setSelectedVenueInfo] = useState(null)
   const [selectedEventInfo, setSelectedEventInfo] = useState(null)
@@ -139,6 +142,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
     }).sort((a, b) => b.priorityScore - a.priorityScore || a.name.localeCompare(b.name)); // Sort Highest Score to Lowest
 
     setVenueLineups(scoredVenues)
+    setDisplayedVenues(scoredVenues.slice(0, ITEMS_PER_PAGE))
     setLoading(false)
   }
 
@@ -189,10 +193,16 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
+  const loadMore = () => {
+      const nextPage = page + 1
+      setDisplayedVenues(venueLineups.slice(0, nextPage * ITEMS_PER_PAGE))
+      setPage(nextPage)
+  }
+
   return (
     <div className="animate-fade-in relative w-full">
         <div className="flex flex-col space-y-6 w-full">
-            {venueLineups.map((venue, idx) => (
+            {displayedVenues.map((venue, idx) => (
                 <VenueCard 
                     key={idx} 
                     venue={venue} 
@@ -203,6 +213,15 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                 />
             ))}
         </div>
+
+        {venueLineups.length > displayedVenues.length && (
+            <button 
+                onClick={loadMore}
+                className="w-full bg-[#090812] border-2 border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/50 py-4 rounded-3xl text-xs font-bold uppercase tracking-widest transition-all mt-6 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+            >
+                Load More Venues
+            </button>
+        )}
 
         {selectedVenueInfo && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">

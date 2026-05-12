@@ -6,12 +6,18 @@ import { EVENT_EMOJIS } from './VenueCard'
 export default function MainFeed({ currentUser, onViewEntity }) {
   const [feed, setFeed] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const ITEMS_PER_PAGE = 50
 
   useEffect(() => {
     const fetchLivingFeed = async () => {
-      setLoading(true)
+      if (page === 1) setLoading(true)
       
-      const { data: rawPosts } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).limit(20)
+      const from = (page - 1) * ITEMS_PER_PAGE
+      const to = from + ITEMS_PER_PAGE - 1
+      
+      const { data: rawPosts } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).range(from, to)
       const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic')
       
       const formattedPosts = (rawPosts || []).map(post => {
@@ -22,17 +28,30 @@ export default function MainFeed({ currentUser, onViewEntity }) {
           }
       })
 
-      const { data: rawEvents } = await supabase.from('events').select('*').eq('status', 'approved').order('created_at', { ascending: false }).limit(10)
+      const eventFrom = (page - 1) * 20
+      const eventTo = eventFrom + 19
+      const { data: rawEvents } = await supabase.from('events').select('*').eq('status', 'approved').order('created_at', { ascending: false }).range(eventFrom, eventTo)
       const formattedEvents = (rawEvents || []).map(evt => ({
           id: `event_${evt.id}`, type: 'event', timestamp: new Date(evt.created_at).getTime(), data: evt
       }))
 
       const combinedFeed = [...formattedPosts, ...formattedEvents].sort((a, b) => b.timestamp - a.timestamp)
-      setFeed(combinedFeed)
+      
+      if (page === 1) {
+          setFeed(combinedFeed)
+      } else {
+          setFeed(prev => {
+              const existingIds = new Set(prev.map(i => i.id))
+              const uniqueCombined = combinedFeed.filter(i => !existingIds.has(i.id))
+              return [...prev, ...uniqueCombined].sort((a, b) => b.timestamp - a.timestamp)
+          })
+      }
+
+      if ((rawPosts?.length || 0) < ITEMS_PER_PAGE && (rawEvents?.length || 0) < 20) setHasMore(false)
       setLoading(false)
     }
     fetchLivingFeed()
-  }, [])
+  }, [page])
 
   if (loading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
@@ -75,6 +94,15 @@ export default function MainFeed({ currentUser, onViewEntity }) {
               }
               return null
           })
+      )}
+
+      {hasMore && feed.length >= ITEMS_PER_PAGE && (
+          <button 
+              onClick={() => setPage(p => p + 1)}
+              className="w-full bg-[#090812] border-2 border-gray-800 text-gray-400 hover:text-white hover:border-blue-500/50 py-4 rounded-3xl text-xs font-bold uppercase tracking-widest transition-all mt-6 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+          >
+              Load More
+          </button>
       )}
     </div>
   )

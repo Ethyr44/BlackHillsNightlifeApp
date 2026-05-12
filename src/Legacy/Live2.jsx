@@ -7,40 +7,15 @@ import Shop from './Shop'
 import KCrawlManager from './KCrawlManager'
 
 export default function Live({ currentUser, onViewEntity }) {
-    const [activeMiniPage, setActiveMiniPage] = useState(() => localStorage.getItem('bhnl_live_tab') || 'KSocial')
+    const [activeMiniPage, setActiveMiniPage] = useState('KSocial')
 
     // --- KSocial State ---
     const [activeSessions, setActiveSessions] = useState([])
     const [joinedSessionId, setJoinedSessionId] = useState(() => localStorage.getItem('bhnl_joined_session') || null)
     
     // --- Host State ---
-    const [hostMode, setHostMode] = useState(() => localStorage.getItem('bhnl_host_mode') || null) 
+    const [hostMode, setHostMode] = useState(null) 
     const [existingSession, setExistingSession] = useState(null)
-
-    // --- Persistence Effects ---
-    useEffect(() => {
-        localStorage.setItem('bhnl_live_tab', activeMiniPage)
-    }, [activeMiniPage])
-
-    useEffect(() => {
-        if (joinedSessionId) localStorage.setItem('bhnl_joined_session', joinedSessionId)
-        else localStorage.removeItem('bhnl_joined_session')
-    }, [joinedSessionId])
-
-    useEffect(() => {
-        if (hostMode) localStorage.setItem('bhnl_host_mode', hostMode)
-        else localStorage.removeItem('bhnl_host_mode')
-    }, [hostMode])
-
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search)
-        const joinId = params.get('join')
-        if (joinId) {
-            setJoinedSessionId(joinId)
-            setActiveMiniPage('KSocial')
-            window.history.replaceState({}, '', window.location.pathname + '?tab=Live')
-        }
-    }, [])
 
     useEffect(() => {
         fetchActiveSessions()
@@ -61,6 +36,7 @@ export default function Live({ currentUser, onViewEntity }) {
 
     const handleJoin = (sessionId, hostName) => {
         if (window.confirm(`Join ${hostName}'s Session?`)) {
+            localStorage.setItem('bhnl_joined_session', sessionId)
             setJoinedSessionId(sessionId)
         }
     }
@@ -98,7 +74,7 @@ export default function Live({ currentUser, onViewEntity }) {
                 {activeMiniPage === 'KSocial' && (
                     <div className="space-y-6">
                         {joinedSessionId ? (
-                            <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={() => setJoinedSessionId(null)} />
+                            <KSocialUser currentUser={currentUser} sessionId={joinedSessionId} onExit={() => { localStorage.removeItem('bhnl_joined_session'); setJoinedSessionId(null); }} />
                         ) : hostMode === 'crawl' ? (
                             <KCrawlManager session={{ user: currentUser }} />
                         ) : hostMode || existingSession ? (

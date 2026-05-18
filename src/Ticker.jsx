@@ -28,12 +28,16 @@ export default function Ticker() {
 
     let manualMsgs = manualData ? manualData.map(m => m.message) : []
 
-    // 2. Fetch TODAY'S Events
-    const startOfDay = new Date()
+    // 2. Fetch TODAY'S Events & Format Date
+    const today = new Date()
+    const startOfDay = new Date(today)
     startOfDay.setHours(0, 0, 0, 0)
     
-    const endOfDay = new Date()
+    const endOfDay = new Date(today)
     endOfDay.setHours(23, 59, 59, 999)
+
+    // Formats to something like "MAY 18, 2026"
+    const dateString = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
 
     const { data: eventsData } = await supabase
       .from('events')
@@ -56,16 +60,17 @@ export default function Ticker() {
         })
     }
 
-    // 4. Format the automated string (e.g. "KARAOKE TODAY: Cheers, The Iron Phnx")
-    const autoMsgs = Object.entries(groupedEvents).map(([type, venues]) => {
-        return `${type} TODAY: ${venues.join(', ')}`
-    })
-
-    // Combine Automated Events + Manual Admin Messages
-    const combined = [...autoMsgs, ...manualMsgs]
+    // 4. Construct the "What's Boppin!" Master String
+    let autoString = `WHATS BOPPIN! | ${dateString}`
     
-    // Fallback if absolutely nothing is happening and no manual messages exist
-    if (combined.length === 0) combined.push("WELCOME TO BLACK HILLS NIGHTLIFE")
+    const eventTypes = Object.keys(groupedEvents)
+    if (eventTypes.length > 0) {
+        const typeStrings = eventTypes.map(type => `${type}: ${groupedEvents[type].join(', ')}`)
+        autoString += ` | ${typeStrings.join(' | ')}`
+    }
+
+    // Combine Automated Events String + Manual Admin Messages
+    const combined = [autoString, ...manualMsgs]
 
     setMessages(combined)
   }

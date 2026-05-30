@@ -28,37 +28,42 @@ export default function Ticker() {
 
     let manualMsgs = manualData ? manualData.map(m => m.message) : []
 
-    // 2. Fetch TODAY'S Events & Format Date
+    // 2. Fetch all approved events to process recurring ones locally
     const today = new Date()
-    const startOfDay = new Date(today)
-    startOfDay.setHours(0, 0, 0, 0)
-    
-    const endOfDay = new Date(today)
-    endOfDay.setHours(23, 59, 59, 999)
-
-    // Formats to something like "MAY 18, 2026"
+    const todayDayOfWeek = today.getDay()
     const dateString = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
 
     const { data: eventsData } = await supabase
       .from('events')
-      .select('title, venue, event_type')
+      .select('title, venue, event_type, event_date, recurring_weekly')
       .eq('status', 'approved')
-      .gte('event_date', startOfDay.toISOString())
-      .lte('event_date', endOfDay.toISOString())
 
-    // 3. Group events by type (e.g., Karaoke, Trivia)
+    // Filter for TODAY using safe date parsing and recurring checks
+    const todaysEvents = (eventsData || []).filter(e => {
+        const rawDate = e.event_date;
+        const safeDateStr = rawDate.includes('Z') || rawDate.includes('+') ? rawDate : rawDate + 'Z';
+        const eDate = new Date(safeDateStr);
+
+        if (e.recurring_weekly) {
+            return eDate.getDay() === todayDayOfWeek;
+        }
+        
+        return eDate.getFullYear() === today.getFullYear() &&
+               eDate.getMonth() === today.getMonth() &&
+               eDate.getDate() === today.getDate();
+    })
+
+    // 3. Group today's filtered events by type (e.g., Karaoke, Trivia)
     const groupedEvents = {}
-    if (eventsData) {
-        eventsData.forEach(ev => {
-            const type = ev.event_type ? ev.event_type.toUpperCase() : 'EVENT'
-            if (!groupedEvents[type]) groupedEvents[type] = []
-            
-            // Only add the venue if it isn't already in the list for this type
-            if (!groupedEvents[type].includes(ev.venue)) {
-                groupedEvents[type].push(ev.venue)
-            }
-        })
-    }
+    todaysEvents.forEach(ev => {
+        const type = ev.event_type ? ev.event_type.toUpperCase() : 'EVENT'
+        if (!groupedEvents[type]) groupedEvents[type] = []
+        
+        // Only add the venue if it isn't already in the list for this type
+        if (!groupedEvents[type].includes(ev.venue)) {
+            groupedEvents[type].push(ev.venue)
+        }
+    })
 
     // 4. Construct the "What's Boppin!" Master String
     let autoString = `WHATS BOPPIN! | ${dateString}`

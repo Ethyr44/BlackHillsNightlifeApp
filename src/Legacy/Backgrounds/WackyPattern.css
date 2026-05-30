@@ -1,0 +1,16 @@
+.wacky-container {
+  /* 1. Pin it to the background behind everything else */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none; /* Crucial: stops the background from blocking your app clicks */
+  
+  /* 2. The UIVerse Visuals */
+  background-color: purple;
+  background-image: linear-gradient(45deg, transparent 33.3%, orange 33.3%, orange 66.6%, transparent 66.6%),
+    linear-gradient(-45deg, transparent 33.3%, orange 33.3%, orange 66.6%, transparent 66.6%);
+  background-size: 60px 60px;
+}

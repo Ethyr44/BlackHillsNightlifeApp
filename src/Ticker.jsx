@@ -10,7 +10,6 @@ export default function Ticker() {
     fetchTickerData()
     fetchColors()
     
-    // Listen for Admins changing the messages in real-time
     const sub = supabase.channel('ticker-updates')
       .on('postgres', { event: '*', schema: 'public', table: 'ticker_messages' }, fetchTickerData)
       .subscribe()
@@ -19,7 +18,7 @@ export default function Ticker() {
   }, [])
 
   const fetchTickerData = async () => {
-    // 1. Fetch Manual Messages from Admin Panel
+    // 1. Fetch Manual Messages
     const { data: manualData } = await supabase
       .from('ticker_messages')
       .select('message')
@@ -28,7 +27,7 @@ export default function Ticker() {
 
     let manualMsgs = manualData ? manualData.map(m => m.message) : []
 
-    // 2. Fetch all approved events to process recurring ones locally
+    // 2. Fetch all approved events
     const today = new Date()
     const todayDayOfWeek = today.getDay()
     const dateString = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
@@ -38,7 +37,6 @@ export default function Ticker() {
       .select('title, venue, event_type, event_date, recurring_weekly')
       .eq('status', 'approved')
 
-    // Filter for TODAY using safe date parsing and recurring checks
     const todaysEvents = (eventsData || []).filter(e => {
         const rawDate = e.event_date;
         const safeDateStr = rawDate.includes('Z') || rawDate.includes('+') ? rawDate : rawDate + 'Z';
@@ -53,30 +51,51 @@ export default function Ticker() {
                eDate.getDate() === today.getDate();
     })
 
-    // 3. Group today's filtered events by type (e.g., Karaoke, Trivia)
-    const groupedEvents = {}
+    // 3. STRICT BUCKETING: Group today's events into predefined categories
+    const groupedEvents = {
+        'KARAOKE': [],
+        'LIVE MUSIC': [],
+        'OPEN MIC': [],
+        'TRIVIA': [],
+        'OTHER': []
+    }
+
     todaysEvents.forEach(ev => {
-        const type = ev.event_type ? ev.event_type.toUpperCase() : 'EVENT'
-        if (!groupedEvents[type]) groupedEvents[type] = []
+        const rawType = ev.event_type ? ev.event_type.toUpperCase() : 'GENERAL'
         
-        // Only add the venue if it isn't already in the list for this type
-        if (!groupedEvents[type].includes(ev.venue)) {
-            groupedEvents[type].push(ev.venue)
+        // Determine which bucket this event falls into (funneling everything else to OTHER)
+        let bucket = 'OTHER'
+        if (rawType.includes('KARAOKE')) bucket = 'KARAOKE'
+        else if (rawType.includes('LIVE MUSIC')) bucket = 'LIVE MUSIC'
+        else if (rawType.includes('OPEN MIC')) bucket = 'OPEN MIC'
+        else if (rawType.includes('TRIVIA')) bucket = 'TRIVIA'
+
+        // Only add the venue if it isn't already listed in this specific bucket
+        if (!groupedEvents[bucket].includes(ev.venue)) {
+            groupedEvents[bucket].push(ev.venue)
         }
     })
 
     // 4. Construct the "What's Boppin!" Master String
     let autoString = `WHATS BOPPIN! | ${dateString}`
     
-    const eventTypes = Object.keys(groupedEvents)
-    if (eventTypes.length > 0) {
-        const typeStrings = eventTypes.map(type => `${type}: ${groupedEvents[type].join(', ')}`)
-        autoString += ` | ${typeStrings.join(' | ')}`
+    // Build the string sequentially based on the buckets that actually have venues today
+    const typeStrings = []
+    const displayOrder = ['KARAOKE', 'LIVE MUSIC', 'OPEN MIC', 'TRIVIA', 'OTHER']
+    
+    displayOrder.forEach(bucket => {
+        if (groupedEvents[bucket].length > 0) {
+            // Joins the venues with your requested // separator
+            typeStrings.push(`${bucket}: ${groupedEvents[bucket].join(' // ')}`)
+        }
+    })
+
+    if (typeStrings.length > 0) {
+        autoString += `   |   ${typeStrings.join('   |   ')}`
     }
 
     // Combine Automated Events String + Manual Admin Messages
     const combined = [autoString, ...manualMsgs]
-
     setMessages(combined)
   }
 
@@ -94,7 +113,7 @@ export default function Ticker() {
 
   // Join all active messages with a bullet point separator
   const tickerText = messages.join('   •   ')
-  const scrollSpeed = Math.max(tickerText.length * 0.15, 10) // 0.15s per char, minimum 10 seconds
+  const scrollSpeed = Math.max(tickerText.length * 0.15, 10) 
 
   return (
     <div 
@@ -106,7 +125,6 @@ export default function Ticker() {
          style={{ animationDuration: `${scrollSpeed}s` }} 
       >
         <span className="mr-8">{tickerText}</span>
-        {/* We duplicate the text once so the scrolling loop is perfectly seamless */}
         <span>{tickerText}</span>
       </div>
 
@@ -117,7 +135,7 @@ export default function Ticker() {
         }
         .animate-ticker {
           animation: ticker-scroll linear infinite;
-          padding-left: 100vw; /* Ensures it starts off screen initially */
+          padding-left: 100vw; 
         }
       `}</style>
     </div>

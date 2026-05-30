@@ -1,39 +1,177 @@
 -making adspace for the app and optimized for each page additionally. ***
--move QR Code button to profile or next to notification bell to make room for adspace ***
--more map pins: 1. Venue, 2. Event, 3. User, 4. Featured, 5. Live Session, 6. Item ***
--Make names and profile pics on Leaderboard and everywhere else link to profile. ***
--fix text wrapping ***
--replace app icon ***
--make sure slideshow is still working properly ***
--clean up slideshow upload modal/form ***
--create user counter for admins ***
--make it so that Users can upload pics ***
+-move QR Code button to profile or next to notification bell to make room for adspace *** [DONE]
+-more map pins: 1. Venue, 2. Event, 3. User, 4. Featured, 5. Live Session, 6. Item *** 
+-Make names and profile pics on Leaderboard and everywhere else link to profile. *** [DONE]
+-fix text wrapping *** [WIP]
+-replace app icon *** [WIP]
+-make sure slideshow is still working properly *** 
+-clean up slideshow upload modal/form *** 
+-make it so that Users can upload pics *** [WIP]
 -make function to set featured venues so that they display higher in the venue card list ***
--create test notification "admin-to-user" button ***
--toggle lox-permit switch/button within map mini-page ***
--fix map and journal merger ***
--admin panel buttons to show/hide pages and mini-pages at will. ***
--fix onboarding, it's not showing any options for the user to pick from after the previous one or two updates. ***
+-create test notification "admin-to-user" button *** [DONE]
+-toggle lox-permit switch/button within map mini-page *** 
+-fix map and journal merger *** [DONE]
+-admin panel buttons to show/hide pages and mini-pages at will. *** 
+-fix onboarding*** [WIP]
+-make it so that Venuecards display how far the venue is from the User's location*** 
+-notification indicator*** [WIP]
+-venue menus***
+-happy hours***
+-hours of operation*** [WIP]
+-Fix KSocial UI***
+-FIx KSocial Voting Cycle Button***
+-Fix Ticker to auto display events of the day*** [WIP]
+-Fix Ticker re-scroll period/buffer*** [WIP]
+-Fix Flickering issues***
+-Fix Daily Login Bonus*** 
+-Fix Onboarding*** [WIP]
+-Delete Post function***
+-Delete User function*** 
+- Update Karafun Catalog***
+- Terms and Agreements***
+- Trademarking, Legal***
+-VenueVisit Function*** [WIP]
+- Fix API Key locations***
+
 
 -clean up supabase to get ride of redundant and/or unnecessary items/rows/keys/subjects **
--do some more code-splitting if possible **
+-do some more code-splitting if possible/necessary ** 
 -create contact section in settings or it's own page **
--fix and make sure lifestyle points distribution system is fully functional **
--add a scrolling ticker **
--look into FB, IG, Snap to-BHNL Sign in, pros/cons, difficulty **
+-fix and make sure lifestyle points distribution system is fully functional ** [WIP]
+-add a scrolling ticker ** [DONE]
+-look into FB, IG, Snap to-BHNL Sign in, pros/cons, difficulty, purely research ** [DONE]
+-bring back original Venuecards.jsx design in Sandbox**
+-happy hour indicator on venuecards**
+-Fix Map to highlight Events Today** [WIP]
+- Fix Admin GeoGifts** 
+-VenueCards link to Venue Profile**
+- Fix GeoGift spawning**
 
--how to fix supabase URL so that it displays a more trustworthy URL when required*
+
+-how to fix supabase URL so that it displays a more trustworthy URL when required* [DONE]
 -add more reaction options. *
--replace notification icon *
--make it so that venue cards change according to the time of day *
-
+-replace notification icon * 
+-VenueCards on Venue Profile*
+-clicking notifications should direct the user to the related subject. *
 
 -make it so that Users can upload vids??
 -add reacts to journal entries??
--make it so bg changes according to the time of day??
--maybe integrate daily zodiac and/or horoscope stuff, Planetary alignments??
+-make it so bg changes according to the time of day?? [WIP]
+-maybe integrate daily zodiac and/or horoscope stuff, Planetary alignments? 
 -add mini-games page/mini-page? 
--how to livestream audio? 
+-how to livestream audio??
 -watch ads for more lifestyle points? 
--make it so that users can upload audio snippets?
--weather info integration?
+-make it so that users can upload audio snippets??
+-weather info integration??
+-Hide Shop, Inventory/Wallet for now??
+-Reset all accounts function??
+
+-----------------------------------------------------
+
+IMPORTED NOTES/POST LAUNCH ADDITIONS/BRAINSTORMING: 
+-Users essentially have two profiles 1. Regular and 2. Karaoke/KSocial. So Whatever updates are made 
+to one are also reflected on the other despite being on separate apps?
+-Fix Profile Pic and Slideshow updater
+-Hide Shop, Items and the like for now 
+-Venue Hours of Operation
+-Venue Menus
+-Venue Happy Hours
+-Happy Hour Pins on Map
+-Happy Hour Highlight on VenueCards
+-Event Snapshot in VenueCards
+
+-figure out a way to make event updating easier, faster and more seamless. *
+-clicking notifications should direct the user to the related subject. ***
+-song searching via songbook and songlist needs to be more open, right now typing in more complex search requests yields no results. ***
+-make it so that other User's can suggest songs for other user's to sing by typing into the other user's Songlist Search bar. X
+
+ 
+**TICKER needs to be fixed so that no matter how short or long the input text is, it always displays so that it's starting point is at the farthest Right position of the screen. **** X
+
+----
+-Admin Panel, Edit Venue button doesn't do anything, we should be able to edit and delete but nothing happens when I attempt to edit/delete a Venue. 
+
+----------
+-remove title page text from each page. it looks stupid?
+
+-make it so that Your User Card glows yellow on the leaderboards so that it's easier to see where youre at.****
+
+-add dislike button**
+-add reacts to comments**
+-make a reset titles to default button in AdminText Manager. **
+
+-Even though I renamed the Map as LIVE Map via AdminConfig, it still briefly displays at "The Scene". Instead of renaming things temporarily with AdminConfig I want to establish NEW DEFAULT NAMES/TITLES for certain pages. X
+
+V1.4
+-Fix Default Avatar
+- De-Clutter, My Vibe Section 
+- De-Clutter, Songlist, Setlist 
+- Improve Search 
+- Improve Notificiations
+- Make Notification icon indicate unread notifications
+- Post Images on Desktop and Mobile 
+- About/Contact Section
+- Fix KCrawl 
+- Add Light/Dark mode support
+- Unread Notification indicator 
+- Notifications link to subject 
+- Event, Venue Suggestions
+- Song Suggestions 
+- Clean Up Map UI 
+- Fix Public Profile 
+- Add Black Hills Art Beat Section?
+- Adspace 
+- Stagename Changes must be approved 
+- Live User Counter
+- Cybersecurity Improvements 
+- Performer Booking
+
+
+V1.7
+- Video Uploads 
+- Soundcloud Embedding for Performers
+- Youtube Embedding 
+- Facebook/Meta API 
+- Sponsorships/Partenerships
+- About/Contact Page 
+- VibeCode Only Friendships
+- Private Messaging 
+- Groups 
+- Automated GeoGift Spawning
+- Automate Karafun Catalog Updating 
+- Clean up, Improve UI 
+- VenueLink Integration 
+- Publish to Apple Store 
+- Automated Calender View/Page 
+- HotSpots Integration 
+- Automated Weather Updates 
+- KSocial Queue Counter 
+- Bring back the Shop and related elements 
+- Optimizations and Efficiency overhaul 
+
+
+V2.0
+- In-App Scanner 
+- Karafun Integration 
+- Group Chat 
+- UI Overhaul 
+- Trivia Integration
+- Industry Standard Notifications, Messaging, Feed, Status Posting, Location
+- Desktop App 
+- Ticket Purchasing, Money Handling 
+- 86d List 
+- Premium Membership 
+- Livestreaming? 
+- Complete User Tasks 
+- Tutorial, Faq, How-to page. 
+- Community Events and Challenges 
+- Karaoke Challenges 
+- Duet Seeker (Find Partners to sing duets with) 
+- Stock Market 
+- Merch
+- Official BHNL Website
+- Items and Multipliers overhaul 
+- Custom Avatars? 
+
+
+

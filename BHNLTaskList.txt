@@ -1,3 +1,15 @@
+KEY: 
+*** = Immediate Priority 
+** = Moderate Priority
+* = Later Priority 
+
+[WIP] = Work In Progress, "I've started working on it and have yet to finish it at this time."
+[DONE] = Done, Finished, Completed, Stabilized
+
+"X" = Done, Finished. 
+
+
+
 -making adspace for the app and optimized for each page additionally. ***
 -move QR Code button to profile or next to notification bell to make room for adspace *** [DONE]
 -more map pins: 1. Venue, 2. Event, 3. User, 4. Featured, 5. Live Session, 6. Item *** 

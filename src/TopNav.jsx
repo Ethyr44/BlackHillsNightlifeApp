@@ -1,6 +1,7 @@
+import { useState, useEffect } from 'react'
+import { supabase } from './supabaseClient'
 import NotificationsMenu from './NotificationsMenu'
 import { useAppConfig } from './useAppConfig'
-
 
 export default function TopNav({
   currentUser,
@@ -13,9 +14,38 @@ export default function TopNav({
   tabs, 
   activeTab, 
   changeTab, 
-  viewingEntity
+  viewingEntity,
+  onViewEntity // 🟢 NEW PROP
 }) {
   const config = useAppConfig()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // 🟢 NEW: Real-time Unread Counter
+  useEffect(() => {
+      if (!currentUser?.id) return
+
+      const fetchUnread = async () => {
+          const { count } = await supabase
+              .from('notifications')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', currentUser.id)
+              .eq('is_read', false)
+          
+          setUnreadCount(count || 0)
+      }
+
+      fetchUnread()
+
+      // Subscribe to instant ping updates
+      const sub = supabase.channel('notif-ping')
+          .on('postgres', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, () => {
+              setUnreadCount(prev => prev + 1)
+          })
+          .on('postgres', { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, fetchUnread)
+          .subscribe()
+
+      return () => supabase.removeChannel(sub)
+  }, [currentUser?.id])
 
   const displayTabs = currentUser?.account_type === 'Temp_Crawl' 
       ? ['Live'] 
@@ -49,14 +79,31 @@ export default function TopNav({
                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
               </svg>
            </button>
-           <button 
-                onClick={() => setShowNotifications(!showNotifications)} 
-                className="text-2xl hover:scale-110 transition-transform bg-gray-800 w-10 h-10 rounded-full flex items-center justify-center border border-gray-700"
-            >
-              🔔
-           </button>
+
+           {/* 🟢 NEW: Bell Wrapper for Dot Position */}
+           <div className="relative">
+               <button 
+                    onClick={() => {
+                        setShowNotifications(!showNotifications)
+                        if (!showNotifications) setUnreadCount(0)
+                    }} 
+                    className="text-2xl hover:scale-110 transition-transform bg-gray-800 w-10 h-10 rounded-full flex items-center justify-center border border-gray-700"
+                >
+                  🔔
+               </button>
+               {unreadCount > 0 && (
+                   <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-black animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
+               )}
+           </div>
+
            {showNotifications && (
-               <NotificationsMenu userId={currentUser.id} onClose={() => setShowNotifications(false)} />
+               <NotificationsMenu 
+                  userId={currentUser.id} 
+                  onClose={() => setShowNotifications(false)} 
+                  onRoute={(type, id) => {
+                      if (onViewEntity) onViewEntity(id)
+                  }}
+               />
            )}
         </div>
       </div>

@@ -102,39 +102,53 @@ export default function AdminUsers() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {pendingUsers.map(user => (
-                            <div key={user.id} className="bg-black/60 border border-gray-700 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h4 className="text-white font-bold text-lg">{user.username}</h4>
-                                        <span className="bg-purple-900/50 text-purple-400 border border-purple-500/50 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">
-                                            Req: {user.account_type}
-                                        </span>
-                                    </div>
-                                    {/* 🟢 FIX: Removed the Date() cast since created_at is gone */}
-                                    <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
-                                        Status: Waiting for Review
-                                    </p>
-                                </div>
+                        {pendingUsers.map(user => {
+                            // 🟢 FIX: Extract the requested entity name from the JSON payload
+                            const entityName = user.account_type === 'Host' 
+                                ? user.details?.stageName 
+                                : user.details?.name;
 
-                                <div className="flex gap-2 w-full sm:w-auto">
-                                    <button 
-                                        onClick={() => handleApproval(user.id, 'reject')}
-                                        disabled={loadingId === user.id}
-                                        className="flex-1 sm:flex-none border border-red-900/50 text-red-500 hover:bg-red-900/30 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
-                                    >
-                                        Reject
-                                    </button>
-                                    <button 
-                                        onClick={() => handleApproval(user.id, 'approve')}
-                                        disabled={loadingId === user.id}
-                                        className="flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_10px_rgba(22,163,74,0.3)]"
-                                    >
-                                        Approve
-                                    </button>
+                            return (
+                                <div key={user.id} className="bg-black/60 border border-gray-700 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h4 className="text-white font-bold text-lg">{user.username}</h4>
+                                            <span className="bg-purple-900/50 text-purple-400 border border-purple-500/50 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-widest">
+                                                Req: {user.account_type}
+                                            </span>
+                                        </div>
+                                        
+                                        {/* 🟢 FIX: Display the extracted details so Admin knows what they are approving */}
+                                        {entityName && (
+                                            <p className="text-xs text-blue-400 mb-1">
+                                                Applying as: <span className="font-bold text-white">{entityName}</span>
+                                            </p>
+                                        )}
+
+                                        <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                                            Status: Waiting for Review
+                                        </p>
+                                    </div>
+
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                        <button 
+                                            onClick={() => handleApproval(user.id, 'reject')}
+                                            disabled={loadingId === user.id}
+                                            className="flex-1 sm:flex-none border border-red-900/50 text-red-500 hover:bg-red-900/30 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+                                        >
+                                            Reject
+                                        </button>
+                                        <button 
+                                            onClick={() => handleApproval(user.id, 'approve')}
+                                            disabled={loadingId === user.id}
+                                            className="flex-1 sm:flex-none bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors shadow-[0_0_10px_rgba(22,163,74,0.3)]"
+                                        >
+                                            Approve
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 )}
             </div>

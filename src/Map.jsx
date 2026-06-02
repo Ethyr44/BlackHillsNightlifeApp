@@ -341,6 +341,12 @@ export default function Map({ currentUser, onViewEntity }) {
                   } else {
                       alert(`✅ Welcome back to ${venue.name}! You earned 22 L$ for Linking.`)
                   }
+                  
+                  // 🟢 NEW: Log the check-in for the Live Counter
+                  await supabase.from('venue_checkins').insert([{
+                      user_id: currentUser.id,
+                      venue_name: venue.name
+                  }])
               }
               setLinkingVenue(false)
           },

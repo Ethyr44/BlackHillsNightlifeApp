@@ -11,7 +11,7 @@ import Ticker from './Ticker'
 import { GlobalToast } from './GlobalToast'
 
 // THE GLOBAL BACKGROUND
-import Moonshower from './backgrounds/Moonshower'
+import BackgroundManager from './BackgroundManager'
 
 // Code Splitting
 const FYP = lazy(() => import('./FYP'))
@@ -70,6 +70,23 @@ function MainApp() {
 
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
+
+  // 🟢 NEW: System config state for toggling pages
+  const [systemConfig, setSystemConfig] = useState({
+      showMap: false,
+      showShop: false,
+      showLeagues: false
+  })
+
+  useEffect(() => {
+      async function fetchConfig() {
+          const { data } = await supabase.from('system_config').select('page_visibility').maybeSingle()
+          if (data && data.page_visibility) {
+              setSystemConfig(data.page_visibility)
+          }
+      }
+      fetchConfig()
+  }, [])
 
   // 🟢 NEW: URL Interceptor for Deep Links & QR Codes
   const joinSessionId = searchParams.get('join')
@@ -330,7 +347,7 @@ function MainApp() {
   if (joinSessionId && isGuestMode) {
       return (
           <div className="min-h-screen bg-[#090812] font-sans selection:bg-yellow-500/30">
-              <Moonshower />
+              <BackgroundManager />
               <GlobalToast />
               <div className="pt-8">
                   {/* We render KSocialUser standalone. We will modularize this later! */}
@@ -347,41 +364,38 @@ function MainApp() {
   // Pre-Render Checks
   if (!session) return <Auth />
   if (session && !currentUser) return <div className="flex justify-center mt-32"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
-  if (!currentUser?.onboarding_complete || testOnboardingType) {
-    return (
-        <Onboarding 
-            session={session} 
-            forcedType={testOnboardingType}
-            onComplete={() => {
-                if (testOnboardingType) {
-                    setTestOnboardingType(null) // Simply close the tester
-                } else {
-                    fetchUser() // Standard real-user onboarding completion
-                }
-            }} 
-        />
-    )
-  }
-
   // 🟢 FIXED: The Pending Status Trapdoor (Admins are immune!)
   if (currentUser?.account_status === 'pending' && currentUser?.account_type !== 'Admin') {
       return (
-          <div className="min-h-screen bg-[#030712] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-[#090812] border border-yellow-500/30 p-8 rounded-3xl max-w-md text-center shadow-[0_0_30px_rgba(234,179,8,0.15)]">
-                  <div className="text-6xl mb-6 animate-pulse">⏳</div>
-                  <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-4">Account Pending</h2>
-                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-                      Account Registration Request Submitted! App Access Pending Admin Approval.
-                  </p>
-                  <p className="text-yellow-500/80 text-xs font-bold uppercase tracking-widest bg-yellow-900/20 p-4 rounded-xl border border-yellow-500/20">
-                      This process usually takes about 5-10 minutes. Thank you for your patience!
-                  </p>
-                  <button onClick={() => supabase.auth.signOut().then(() => window.location.reload())} className="mt-8 text-gray-500 text-[10px] font-bold uppercase tracking-widest hover:text-white transition-colors">
-                      Sign Out
-                  </button>
+          <div className="min-h-screen bg-[#030712] flex items-center justify-center p-4">
+              <div className="bg-[#090812] border border-yellow-500/30 p-8 rounded-3xl text-center max-w-md shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+                  <span className="text-6xl mb-4 block animate-pulse">⏳</span>
+                  <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-2">Application Pending</h2>
+                  <p className="text-gray-400 text-sm mb-6">Your request to become a <strong className="text-blue-400">{currentUser.account_type}</strong> is currently under review by our moderation team.</p>
+                  <button onClick={() => supabase.auth.signOut()} className="mt-4 text-xs text-gray-500 font-bold uppercase tracking-widest hover:text-white transition-colors">Sign Out</button>
               </div>
           </div>
       )
+  }
+
+  // 🟢 THE ONBOARDING FIX: Resume specific forms after approval
+  // (Safeguard: Admins bypass onboarding natively unless explicitly testing)
+  if ((!currentUser?.onboarding_completed && currentUser?.account_type !== 'Admin') || testOnboardingType) {
+      
+      const isApprovedRole = currentUser?.account_status === 'approved' && ['Host', 'Venue', 'Performer'].includes(currentUser?.account_type)
+      
+      return <Onboarding 
+          session={session} 
+          forcedType={testOnboardingType || (isApprovedRole ? currentUser.account_type : null)}
+          onComplete={() => {
+              if (testOnboardingType) {
+                  setTestOnboardingType(null) 
+              } else {
+                  setCurrentUser({ ...currentUser, onboarding_completed: true })
+                  window.location.reload()
+              }
+          }} 
+      />
   }
 
   // 🟢 NEW: If simulating a role, inject it. Otherwise use the real user.
@@ -389,9 +403,24 @@ function MainApp() {
     ? { ...currentUser, account_type: simulatedRole } 
     : currentUser;
 
-  const tabs = effectiveUser?.account_type === 'Admin' 
-    ? ['Admin Console', 'Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
-    : ['Profile', "What's Boppin", 'Live', 'Leagues', 'Songbook', 'Settings']
+  // Generate tabs dynamically based on role AND config
+  const getAvailableTabs = () => {
+      if (effectiveUser?.account_type === 'Admin') {
+          // Admins see everything
+          return ['Admin Console', 'Profile', "What's Boppin", 'Map', 'Live', 'Leagues', 'Shop', 'Songbook', 'Settings']
+      }
+
+      // Standard users see filtered list
+      const baseTabs = ['Profile', "What's Boppin", 'Live', 'Songbook', 'Settings']
+      
+      if (systemConfig.showMap) baseTabs.push('Map')
+      if (systemConfig.showShop) baseTabs.push('Shop')
+      if (systemConfig.showLeagues) baseTabs.push('Leagues')
+      
+      return baseTabs
+  }
+
+  const tabs = getAvailableTabs()
 
   return (
     <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
@@ -406,7 +435,7 @@ function MainApp() {
           </button>
       )}
       
-      <Moonshower />
+      <BackgroundManager />
       <GlobalToast /> {/* 🟢 INJECTED HERE */}
 
       {/* 🎁 REWARD TOASTS 🎁 */}
@@ -443,6 +472,7 @@ function MainApp() {
           activeTab={activeTab}
           changeTab={changeTab}
           viewingEntity={viewingEntity}
+          onViewEntity={onViewEntity}
       />
 
       <Ticker />

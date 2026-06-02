@@ -51,7 +51,7 @@ export default function Leaderboard({ currentUser, onViewEntity }) {
         .from('profiles')
         .select('*')
         .order(orderBy, { ascending: false, nullsFirst: false })
-        .limit(100)
+        .limit(20)
       
       if (!error && data) {
           const realUsers = data.map(u => ({

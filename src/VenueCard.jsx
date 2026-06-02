@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { supabase } from './supabaseClient'
 
 export const EVENT_EMOJIS = {
   'Karaoke': '🎤',
@@ -15,7 +16,51 @@ export const EVENT_EMOJIS = {
   'General': '❗'
 }
 
+// 🟢 NEW: Custom Realtime Hook for Live Counters
+function useLiveVenueCount(venueName) {
+  const [count, setCount] = useState(0)
+
+  useEffect(() => {
+    if (!venueName) return
+
+    // 1. Fetch the initial count
+    const fetchCount = async () => {
+      const { count: initialCount } = await supabase
+        .from('venue_checkins')
+        .select('*', { count: 'exact', head: true })
+        .eq('venue_name', venueName)
+      
+      setCount(initialCount || 0)
+    }
+    
+    fetchCount()
+
+    // 2. Subscribe to Realtime Inserts/Deletes for THIS specific venue
+    const channel = supabase.channel(`public:venue_checkins:${venueName}`)
+      .on(
+        'postgres', 
+        { event: 'INSERT', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, 
+        () => setCount(c => c + 1)
+      )
+      .on(
+        'postgres', 
+        { event: 'DELETE', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, 
+        () => setCount(c => Math.max(0, c - 1))
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [venueName])
+
+  return count
+}
+
 export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent, onAdminEdit }) {
+  // 🟢 NEW: Tap into the live count using the hook
+  const liveCount = useLiveVenueCount(venue.name)
+
   return (
     <div className="flex flex-col w-full h-[220px] rounded-[30px] overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] flex-shrink-0 transition-transform hover:scale-[1.02] border border-blue-900/30 group">
       
@@ -37,15 +82,17 @@ export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent
             )}
           </div>
           <div>
-            {/* REALISTIC 1-40 COUNTER */}
-            <div className="text-5xl sm:text-6xl font-bold text-white mb-[-8px] font-['Bebas_Neue'] tracking-widest drop-shadow-lg">{venue.userCount}</div>
+            {/* 🟢 NEW: Injecting the liveCount variable here */}
+            <div className="text-5xl sm:text-6xl font-bold text-white mb-[-8px] font-['Bebas_Neue'] tracking-widest drop-shadow-lg transition-all duration-300">
+                {liveCount}
+            </div>
             <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-widest font-bold">BHNL Visits</div>
           </div>
         </div>
 
-        {/* Right Side (7-Days Schedule - MOBILE OVERFLOW FIX) */}
+        {/* Right Side (7-Days Schedule) */}
         <div className="relative z-10 flex items-center w-[65%] pl-4 pr-1 gap-2 overflow-x-auto hide-scrollbar flex-nowrap">
-          {venue.schedule.map((slot, i) => (
+          {(venue.schedule || []).map((slot, i) => (
             <button 
                 key={i} 
                 onClick={() => onOpenEvent(slot, venue)}

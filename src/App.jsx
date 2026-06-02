@@ -406,16 +406,20 @@ function MainApp() {
   // Generate tabs dynamically based on role AND config
   const getAvailableTabs = () => {
       if (effectiveUser?.account_type === 'Admin') {
-          // Admins see everything
+          // Admins see everything (Settings is already last here)
           return ['Admin Console', 'Profile', "What's Boppin", 'Map', 'Live', 'Leagues', 'Shop', 'Songbook', 'Settings']
       }
 
-      // Standard users see filtered list
-      const baseTabs = ['Profile', "What's Boppin", 'Live', 'Songbook', 'Settings']
+      // 1. Start with the core tabs (Notice Settings is removed!)
+      const baseTabs = ['Profile', "What's Boppin", 'Live', 'Songbook']
       
+      // 2. Inject the dynamic tabs into the middle
       if (systemConfig.showMap) baseTabs.push('Map')
       if (systemConfig.showShop) baseTabs.push('Shop')
       if (systemConfig.showLeaderboards) baseTabs.push('Leagues')
+      
+      // 3. Lock Settings into the final position
+      baseTabs.push('Settings')
       
       return baseTabs
   }

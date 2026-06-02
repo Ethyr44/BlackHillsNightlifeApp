@@ -75,7 +75,7 @@ function MainApp() {
   const [systemConfig, setSystemConfig] = useState({
       showMap: false,
       showShop: false,
-      showLeagues: false
+      showLeaderboards: false // 🟢 FIX: Match DB naming
   })
 
   useEffect(() => {
@@ -415,7 +415,7 @@ function MainApp() {
       
       if (systemConfig.showMap) baseTabs.push('Map')
       if (systemConfig.showShop) baseTabs.push('Shop')
-      if (systemConfig.showLeagues) baseTabs.push('Leagues')
+      if (systemConfig.showLeaderboards) baseTabs.push('Leagues')
       
       return baseTabs
   }

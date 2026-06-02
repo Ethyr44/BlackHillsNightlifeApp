@@ -42,7 +42,7 @@ export default function KCrawlSignup() {
                 username: role === 'Singer' ? stageName : fullName.split(' ')[0],
                 account_type: role === 'Voter' ? 'Voter' : 'Temp_Crawl',
                 active_setlist: tempSetlist,
-                onboarding_complete: true
+                onboarding_completed: true // 🟢 BUG 1 FIX: Added the 'd' to match App.jsx!
             }).eq('id', authData.user.id)
 
             // Hard redirect into the KSocial Live Hub

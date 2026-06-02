@@ -53,7 +53,7 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
                 username: `DebugUser_${Math.floor(Math.random() * 1000)}`,
                 account_type: 'Regular',
                 account_status: 'approved',
-                onboarding_complete: true
+                onboarding_completed: true // 🟢 BUG 1 FIX: Added the 'd' to match App.jsx!
             }).eq('id', authData.user.id)
             
             alert(`Test account created: ${dummyEmail}`)

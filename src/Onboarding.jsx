@@ -281,8 +281,10 @@ export default function Onboarding({ session, onComplete, forcedType = null }) {
       setSaving(true)
       const finalUsername = username.trim()
       
+      // 🟢 BUG 2 FIX: If 'forcedType' exists, they were already approved by an Admin.
+      // Do not downgrade them back to pending!
       const requiresApproval = ['Venue', 'Performer', 'Host'].includes(accountType)
-      const initialStatus = requiresApproval ? 'pending' : 'approved'
+      const finalStatus = (requiresApproval && !forcedType) ? 'pending' : 'approved'
 
       // Package JSON Details
       let detailsPayload = {}
@@ -295,24 +297,26 @@ export default function Onboarding({ session, onComplete, forcedType = null }) {
           username: finalUsername,
           full_name: fullName.trim(),
           account_type: accountType,
-          account_status: initialStatus, 
+          account_status: finalStatus, // 🟢 FIXED: Safe status applied
           zodiac_sign: zodiac,
           pref_events: prefEvents,
           pref_venues: prefVenues,
           pref_genres: prefGenres,
-          details: detailsPayload, // 🟢 Inject specialized payload
-          onboarding_complete: true
+          details: detailsPayload, 
+          onboarding_completed: true // 🟢 BUG 1 FIX: Added the 'd' to match App.jsx!
       }).eq('id', session.user.id)
 
-      // Inject Global Welcome Post (Preserved)
-      let welcomeMessage = `${finalUsername} has joined the scene!`
-      if (accountType === 'Host') welcomeMessage = `🎤 New Host Alert: ${finalUsername} has joined the scene!`
-      if (accountType === 'Admin') welcomeMessage = `⚙️ Admin ${finalUsername} has authenticated.`
+      // 🟢 FIX: Only inject the welcome post if this is their very first time applying
+      if (!forcedType) {
+          let welcomeMessage = `${finalUsername} has joined the scene!`
+          if (accountType === 'Host') welcomeMessage = `🎤 New Host Alert: ${finalUsername} has joined the scene!`
+          if (accountType === 'Admin') welcomeMessage = `⚙️ Admin ${finalUsername} has authenticated.`
 
-      await supabase.from('posts').insert([{
-          author_id: session.user.id,
-          content: welcomeMessage
-      }])
+          await supabase.from('posts').insert([{
+              author_id: session.user.id,
+              content: welcomeMessage
+          }])
+      }
 
       setSaving(false)
       onComplete()

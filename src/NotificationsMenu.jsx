@@ -3,34 +3,54 @@ import { supabase } from './supabaseClient'
 
 export default function NotificationsMenu({ userId, onClose, onRoute }) {
     const [notifications, setNotifications] = useState([])
+    const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        const fetchNotifs = async () => {
-            const { data } = await supabase
-                .from('notifications')
-                .select('*')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .limit(10)
-            
-            if (data) {
-                setNotifications(data)
-                
-                // Mark all fetched notifications as read in the database
-                const unreadIds = data.filter(n => !n.is_read).map(n => n.id)
-                if (unreadIds.length > 0) {
-                    await supabase.from('notifications')
-                        .update({ is_read: true })
-                        .in('id', unreadIds)
-                }
-            }
-        }
         fetchNotifs()
     }, [userId])
 
-    // 🟢 NEW: Click Handler
-    const handleNotificationClick = (n) => {
-        // If the database has a target_id (like the name of the Venue/User), trigger route
+    const fetchNotifs = async () => {
+        setLoading(true)
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(15)
+        
+        if (error) console.error("Fetch Notifs Error:", error)
+        if (data) setNotifications(data)
+        setLoading(false)
+    }
+
+    // 🟢 FIX: A dedicated, robust function to mark all as read
+    const handleMarkAllRead = async () => {
+        const unreadNotifs = notifications.filter(n => !n.is_read)
+        if (unreadNotifs.length === 0) return
+
+        // 1. Optimistic UI Update (Instantly removes the blue dots)
+        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+
+        // 2. Safe Database Commit
+        const unreadIds = unreadNotifs.map(n => n.id)
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .in('id', unreadIds)
+
+        if (error) {
+            console.error("Failed to mark as read in Supabase:", error)
+            // Revert UI if DB fails
+            fetchNotifs() 
+        }
+    }
+
+    const handleNotificationClick = async (n) => {
+        // If it's unread, mark just this one as read when clicked
+        if (!n.is_read) {
+            await supabase.from('notifications').update({ is_read: true }).eq('id', n.id)
+        }
+
         if (n.target_type && n.target_id && onRoute) {
             onRoute(n.target_type, n.target_id)
         }
@@ -38,27 +58,41 @@ export default function NotificationsMenu({ userId, onClose, onRoute }) {
     }
 
     return (
-        <div className="absolute top-12 right-0 w-80 bg-[#090812] border border-gray-700 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)] z-[200] overflow-hidden animate-fade-in">
-            <div className="p-3 border-b border-gray-800 flex justify-between items-center bg-black/50">
-                <h3 className="font-['Bebas_Neue'] text-xl text-blue-400 tracking-widest">Notifications</h3>
-                <button onClick={onClose} className="text-gray-500 hover:text-white w-6 h-6 rounded-full bg-gray-800 flex items-center justify-center text-xs">✕</button>
+        <div className="absolute top-16 right-4 w-80 bg-[#0B0F19] border-2 border-gray-800 rounded-3xl shadow-2xl overflow-hidden z-50 animate-slide-up-slow">
+            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/50">
+                <h3 className="font-['Bebas_Neue'] text-xl text-white tracking-widest">Notifications</h3>
+                
+                {/* 🟢 NEW: Explicit trigger button to clear out the queue */}
+                {notifications.some(n => !n.is_read) && (
+                    <button 
+                        onClick={handleMarkAllRead}
+                        className="text-[9px] text-blue-400 font-bold uppercase tracking-widest hover:text-blue-300 transition-colors bg-blue-900/20 px-2 py-1 rounded"
+                    >
+                        Mark All Read
+                    </button>
+                )}
             </div>
-            <div className="max-h-80 overflow-y-auto">
-                {notifications.length === 0 ? (
+            
+            <div className="max-h-80 overflow-y-auto hide-scrollbar">
+                {loading ? (
+                    <p className="p-6 text-center text-xs font-bold uppercase tracking-widest text-gray-500 animate-pulse">Loading...</p>
+                ) : notifications.length === 0 ? (
                     <p className="p-6 text-center text-xs font-bold uppercase tracking-widest text-gray-500">No new notifications</p>
                 ) : (
                     notifications.map(n => (
                         <div 
                             key={n.id} 
                             onClick={() => handleNotificationClick(n)}
-                            className={`p-4 border-b border-gray-800/50 transition-colors ${n.target_id ? 'cursor-pointer hover:bg-gray-800' : ''} ${n.is_read ? 'bg-transparent' : 'bg-blue-900/20'}`}
+                            className={`p-4 border-b border-gray-800/50 transition-all ${n.target_id ? 'cursor-pointer hover:bg-gray-800' : ''} ${n.is_read ? 'bg-transparent opacity-60' : 'bg-blue-900/10 border-l-2 border-l-blue-500'}`}
                         >
                             <div className="flex justify-between items-start mb-1">
-                                <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{n.title}</h4>
-                                {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>}
+                                <h4 className={`text-[10px] font-bold uppercase tracking-widest ${n.is_read ? 'text-gray-400' : 'text-blue-400'}`}>{n.title}</h4>
+                                {!n.is_read && <span className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>}
                             </div>
-                            <p className="text-sm text-gray-300 mt-1">{n.content}</p>
-                            <span className="text-[9px] text-gray-600 mt-2 block">{new Date(n.created_at).toLocaleDateString()} at {new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <p className={`text-xs mt-1 ${n.is_read ? 'text-gray-500' : 'text-gray-300'}`}>{n.content}</p>
+                            <span className="text-[9px] text-gray-600 mt-2 block font-bold">
+                                {new Date(n.created_at).toLocaleDateString()} at {new Date(n.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
                         </div>
                     ))
                 )}

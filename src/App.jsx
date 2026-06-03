@@ -380,7 +380,9 @@ function MainApp() {
 
   // 🟢 THE ONBOARDING FIX: Resume specific forms after approval
   // (Safeguard: Admins bypass onboarding natively unless explicitly testing)
-  if ((!currentUser?.onboarding_completed && currentUser?.account_type !== 'Admin') || testOnboardingType) {
+  const isCompleted = currentUser?.onboarding_completed || currentUser?.onboarding_complete;
+  
+  if ((!isCompleted && currentUser?.account_type !== 'Admin') || testOnboardingType) {
       
       const isApprovedRole = currentUser?.account_status === 'approved' && ['Host', 'Venue', 'Performer'].includes(currentUser?.account_type)
       
@@ -391,7 +393,8 @@ function MainApp() {
               if (testOnboardingType) {
                   setTestOnboardingType(null) 
               } else {
-                  setCurrentUser({ ...currentUser, onboarding_completed: true })
+                  // Force local state to bypass the gatekeeper immediately
+                  setCurrentUser({ ...currentUser, onboarding_completed: true, onboarding_complete: true })
                   window.location.reload()
               }
           }} 

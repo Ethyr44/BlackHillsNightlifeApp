@@ -292,21 +292,28 @@ export default function Onboarding({ session, onComplete, forcedType = null }) {
       if (accountType === 'Performer') detailsPayload = perfData
       if (accountType === 'Host') detailsPayload = hostData
 
-      // Update Profile (Preserved all original fields)
-      await supabase.from('profiles').update({
+      // Update Profile
+      const { error } = await supabase.from('profiles').update({
           username: finalUsername,
           full_name: fullName.trim(),
           account_type: accountType,
-          account_status: finalStatus, // 🟢 FIXED: Safe status applied
+          account_status: finalStatus, // 🟢 Applies safe status
           zodiac_sign: zodiac,
           pref_events: prefEvents,
           pref_venues: prefVenues,
           pref_genres: prefGenres,
           details: detailsPayload, 
-          onboarding_completed: true // 🟢 BUG 1 FIX: Added the 'd' to match App.jsx!
+          onboarding_complete: true // 🟢 Reverted back to your original working DB column name
       }).eq('id', session.user.id)
 
-      // 🟢 FIX: Only inject the welcome post if this is their very first time applying
+      // 🟢 SILENT CRASH FIX: Stop and display the exact database error if one occurs!
+      if (error) {
+          setErrorMsg(`Database Error: ${error.message}`)
+          setSaving(false)
+          return
+      }
+
+      // 🟢 FEED FIX: Only inject the welcome post if this is their very first time applying
       if (!forcedType) {
           let welcomeMessage = `${finalUsername} has joined the scene!`
           if (accountType === 'Host') welcomeMessage = `🎤 New Host Alert: ${finalUsername} has joined the scene!`

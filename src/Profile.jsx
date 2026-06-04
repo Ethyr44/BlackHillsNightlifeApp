@@ -8,6 +8,7 @@ import HostTracker from './HostTracker'
 import ProfileVenue from './ProfileVenue'
 import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
+import SongBook from './Songbook'
 
 const GRADIENTS = {
   'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
@@ -29,6 +30,7 @@ const GEM_STATS = {
 }
 
 export default function Profile({ session }) {
+  const currentUser = session?.user;
   const [profile, setProfile] = useState(null)
   const [isEditingTheme, setIsEditingTheme] = useState(false)
   const [showInventory, setShowInventory] = useState(false)
@@ -136,8 +138,6 @@ export default function Profile({ session }) {
 
   return (
     <>
-      <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
-      
       <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-6">
         
         <div className="relative pt-8">
@@ -247,21 +247,23 @@ export default function Profile({ session }) {
             </div>
         ) : (
             <>
-                {/* SECTION 2: KARAOKE FEATURES (Regular & Singer Only) */}
-                <div>
-                    <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4">
-                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">Active Setlist</h3>
-                    </div>
-                    <Setlist session={session} />
-                </div>
+                {/* SECTION 2: KARAOKE FEATURES */}
+                {showKaraokeFeatures && (
+                    <div className="mt-6 animate-fade-in space-y-6">
+                        
+                        {/* 1. Setlist Top */}
+                        <Setlist session={session} isOwner={true} />
 
-                {/* SECTION 3: REPERTOIRE */}
-                <div>
-                    <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-4 mt-8">
-                        <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">The Vault</h3>
+                        {/* 2. Suggest Song Middle */}
+                        <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-purple-600"></div>
+                            <SongBook currentUser={currentUser} profileUser={profile} isOwnProfile={true} embedded={true} />
+                        </div>
+
+                        {/* 3. Repertoire Bottom */}
+                        <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
                     </div>
-                    <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-                </div>
+                )}
             </>
         )}
       </div>

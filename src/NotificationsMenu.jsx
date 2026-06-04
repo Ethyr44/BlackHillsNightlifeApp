@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function NotificationsMenu({ userId, onClose, onRoute }) {
+export default function NotificationsMenu({ userId, onClose, onRoute, onMarkRead, onMarkAllRead }) {
     const [notifications, setNotifications] = useState([])
     const [loading, setLoading] = useState(true)
 
@@ -11,10 +11,16 @@ export default function NotificationsMenu({ userId, onClose, onRoute }) {
 
     const fetchNotifs = async () => {
         setLoading(true)
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        
+        // Lazy cleanup of old notifications for this user
+        supabase.from('notifications').delete().eq('user_id', userId).lt('created_at', yesterday).then()
+
         const { data, error } = await supabase
             .from('notifications')
             .select('*')
             .eq('user_id', userId)
+            .gte('created_at', yesterday)
             .order('created_at', { ascending: false })
             .limit(15)
         
@@ -30,6 +36,7 @@ export default function NotificationsMenu({ userId, onClose, onRoute }) {
 
         // 1. Optimistic UI Update (Instantly removes the blue dots)
         setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+        if (onMarkAllRead) onMarkAllRead()
 
         // 2. Safe Database Commit
         const unreadIds = unreadNotifs.map(n => n.id)
@@ -48,6 +55,8 @@ export default function NotificationsMenu({ userId, onClose, onRoute }) {
     const handleNotificationClick = async (n) => {
         // If it's unread, mark just this one as read when clicked
         if (!n.is_read) {
+            setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, is_read: true } : notif))
+            if (onMarkRead) onMarkRead()
             await supabase.from('notifications').update({ is_read: true }).eq('id', n.id)
         }
 

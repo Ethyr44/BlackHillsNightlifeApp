@@ -6,9 +6,10 @@ import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
 import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
-import TopNav from './TopNav'
 import Ticker from './Ticker'
 import { GlobalToast } from './GlobalToast'
+import GlobalHeader from './GlobalHeader'
+import BottomNav from './BottomNav'
 
 // THE GLOBAL BACKGROUND
 import BackgroundManager from './BackgroundManager'
@@ -315,7 +316,9 @@ function MainApp() {
   }
 
   const executeSearch = async (e) => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
+    if (e && e.preventDefault) e.preventDefault();
+    
+    if (searchQuery.trim()) {
       const query = `%${searchQuery}%`
       const { data: pages } = await supabase.from('pages').select('*').ilike('name', query)
       const { data: profiles } = await supabase.from('profiles').select('*').ilike('username', query)
@@ -467,7 +470,8 @@ function MainApp() {
         </div>
       )}
 
-      <TopNav 
+      {/* 🟢 NEW: Split Navigation Architecture */}
+      <GlobalHeader 
           currentUser={effectiveUser}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -475,19 +479,14 @@ function MainApp() {
           showNotifications={showNotifications}
           setShowNotifications={setShowNotifications}
           setShowVibeCode={setShowVibeCode}
-          tabs={tabs}
-          activeTab={activeTab}
-          changeTab={changeTab}
-          viewingEntity={viewingEntity}
           onViewEntity={onViewEntity}
+          onHomeClick={() => console.log("Will route to Main Menu in Phase 2!")}
       />
 
       <Ticker />
 
-      <main 
-        className="max-w-2xl mx-auto relative z-10"
-        style={{ paddingBottom: 'calc(10rem + env(safe-area-inset-bottom, 0px))' }}
-      >
+      {/* 🟢 NEW: pb-28 ensures you can scroll past the floating dock */}
+      <main className="max-w-2xl mx-auto relative z-10 w-full transition-all duration-300 pb-28">
         {viewingEntity ? (
           <PublicProfile 
               entity={viewingEntity} 
@@ -527,6 +526,14 @@ function MainApp() {
           </Suspense>
         )}
       </main>
+
+      {/* 🟢 NEW: Bottom Dock */}
+      <BottomNav 
+          displayTabs={tabs}
+          activeTab={activeTab}
+          changeTab={changeTab}
+          viewingEntity={viewingEntity}
+      />
 
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
 

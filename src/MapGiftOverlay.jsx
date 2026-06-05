@@ -26,19 +26,19 @@ export default function MapGiftOverlay({ gift, distance, isProcessing, onClaim, 
                     </div>
 
                     <p className="text-[10px] text-gray-500 uppercase tracking-widest mb-6 font-bold">
-                        You must be within 150 feet to claim this drop.
+                        You must be within 100 feet to claim this drop.
                     </p>
 
                     <button 
                         onClick={onClaim}
-                        disabled={isProcessing || distance > 150}
+                        disabled={isProcessing || distance > 100}
                         className={`w-full py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${
-                            distance <= 150 
+                            distance <= 100 
                             ? 'bg-pink-600 text-white shadow-[0_0_20px_rgba(219,39,119,0.4)] hover:bg-pink-500' 
                             : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                         }`}
                     >
-                        {isProcessing ? 'Claiming...' : distance <= 150 ? 'Claim GeoGift' : 'Too Far to Claim'}
+                        {isProcessing ? 'Claiming...' : distance <= 100 ? 'Claim GeoGift' : 'Too Far to Claim'}
                     </button>
                 </div>
             </div>

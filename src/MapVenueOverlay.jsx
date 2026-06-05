@@ -33,14 +33,14 @@ export default function MapVenueOverlay({ venue, distance, isProcessing, onCheck
                         </button>
                         <button 
                             onClick={onCheckIn}
-                            disabled={isProcessing || distance > 300}
+                            disabled={isProcessing || distance > 100}
                             className={`py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${
-                                distance <= 300 
+                                distance <= 100 
                                 ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(59,130,246,0.4)] hover:bg-blue-500' 
                                 : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                             }`}
                         >
-                            {isProcessing ? 'Linking...' : distance <= 300 ? 'Check In (+22 L$)' : 'Too Far to Link'}
+                            {isProcessing ? 'Linking...' : distance <= 100 ? 'Check In (+22 L$)' : 'Too Far to Link'}
                         </button>
                     </div>
                 </div>

@@ -187,7 +187,14 @@ export default function Map({ currentUser, onViewEntity }) {
               dotDiv.innerHTML = `<div class="${dotSize} ${dotColor} ${animation} rounded-full border-2 border-white transition-transform duration-300"></div>`
               dotDiv.style.cursor = 'pointer'
 
-              const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: venue.name, content: dotDiv })
+          const marker = new window.google.maps.marker.AdvancedMarkerElement({ 
+              position, 
+              map: mapInstance, 
+              title: venue.name, 
+              content: dotDiv,
+              zIndex: 100,
+              collisionBehavior: 'REQUIRED'
+          })
               marker.addListener('gmp-click', () => {
                   if (isPlacingGift) return 
                   setActiveGift(null)
@@ -213,7 +220,14 @@ export default function Map({ currentUser, onViewEntity }) {
               dotDiv.innerHTML = `<div class="w-5 h-5 bg-green-500 shadow-[0_0_25px_rgba(34,197,94,1)] animate-pulse rounded-full border-2 border-white transition-transform duration-300"></div>`
               dotDiv.style.cursor = 'pointer'
 
-              const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, title: gift.title, content: dotDiv })
+              const marker = new window.google.maps.marker.AdvancedMarkerElement({ 
+                  position, 
+                  map: mapInstance, 
+                  title: gift.title, 
+                  content: dotDiv,
+                  zIndex: 90,
+                  collisionBehavior: 'REQUIRED'
+              })
               marker.addListener('gmp-click', () => {
                   if (isPlacingGift) return 
                   setActiveVenue(null)
@@ -230,7 +244,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
       const allTrue = filters.venues && filters.events && filters.users && filters.geoGifts;
       if (pointsPlotted && !allTrue) mapInstance.fitBounds(bounds)
-  }, [mapInstance, venues, geoGifts, filters, currentUser, isPlacingGift])
+  }, [mapInstance, venues, geoGifts, filters, currentUser?.id, isPlacingGift])
 
   useEffect(() => {
       const fetchUsers = async () => {
@@ -261,7 +275,13 @@ export default function Map({ currentUser, onViewEntity }) {
               const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
               const dotDiv = document.createElement('div')
               dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
-              const marker = new window.google.maps.marker.AdvancedMarkerElement({ position, map: mapInstance, content: dotDiv })
+              const marker = new window.google.maps.marker.AdvancedMarkerElement({ 
+                  position, 
+                  map: mapInstance, 
+                  content: dotDiv,
+                  zIndex: 50,
+                  collisionBehavior: 'OPTIONAL_AND_HIDES_LOWER_PRIORITY'
+              })
               userMarkersRef.current.push(marker)
           })
       }

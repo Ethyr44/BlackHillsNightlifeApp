@@ -2,6 +2,35 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { toast } from './GlobalToast'
 
+// 🟢 NEW: Linkify utility to turn URLs into clickable links
+const Linkify = ({ text }) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <>
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    return (
+                        <a 
+                            key={i} 
+                            href={part} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                            onClick={(e) => e.stopPropagation()} // Prevents the post container click from firing
+                        >
+                            {part}
+                        </a>
+                    );
+                }
+                return part;
+            })}
+        </>
+    );
+};
+
 export default function FeedPost({ item, currentUser, onViewEntity }) {
     const [liked, setLiked] = useState(false)
     const [likeCount, setLikeCount] = useState(0)
@@ -120,7 +149,9 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
             </div>
 
             {/* 🟢 Post Content */}
-            <p className="text-gray-200 text-sm mt-3 mb-3 whitespace-pre-wrap leading-relaxed">{item.data.content}</p>
+            <p className="text-gray-200 text-sm mt-3 mb-3 whitespace-pre-wrap leading-relaxed">
+                <Linkify text={item.data.content} />
+            </p>
             
             {/* 🟢 THE FIX: Render the Image if attached! */}
             {item.data.image_url && (
@@ -153,7 +184,7 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                             <div className="flex-1">
                                 <div className="bg-black/50 border border-gray-800 p-3 rounded-2xl rounded-tl-sm">
                                     <h5 className="font-bold text-white text-xs mb-1">{c.profiles?.username}</h5>
-                                    <p className="text-gray-300 text-xs">{c.content}</p>
+                                    <p className="text-gray-300 text-xs"><Linkify text={c.content} /></p>
                                 </div>
                                 <div className="flex gap-4 mt-1 ml-2">
                                     <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">{timeAgo(c.created_at)}</span>

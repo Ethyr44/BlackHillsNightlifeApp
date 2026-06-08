@@ -16,6 +16,35 @@ const GRADIENTS = {
   'abyss': 'bg-black/60 backdrop-blur-md'
 }
 
+// 🟢 Drop this near the top of your file
+const Linkify = ({ text }) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <>
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    return (
+                        <a 
+                            key={i} 
+                            href={part} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                            onClick={(e) => e.stopPropagation()} // Prevents the post container click from firing
+                        >
+                            {part}
+                        </a>
+                    );
+                }
+                return part;
+            })}
+        </>
+    );
+};
+
 export default function PublicProfile({ entity, onClose, currentUser, onViewEntity }) {
   const [followersCount, setFollowersCount] = useState(0)
   const [isConnection, setIsConnection] = useState(false) 
@@ -127,7 +156,7 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
 
             {!isPage && recentPost && (
                 <div className="bg-black/50 border border-white/10 px-4 py-3 rounded-xl w-full max-w-sm relative z-10 backdrop-blur-md mb-6">
-                    <p className="text-gray-200 text-xs italic font-medium break-words">"{recentPost.content}"</p>
+                    <p className="text-gray-200 text-xs italic font-medium break-words">"<Linkify text={recentPost.content} />"</p>
                 </div>
             )}
 

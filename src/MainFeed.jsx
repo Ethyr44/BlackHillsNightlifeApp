@@ -4,6 +4,35 @@ import FeedPost from './FeedPost'
 import { EVENT_EMOJIS } from './VenueCard'
 import { toast } from './GlobalToast'
 
+// 🟢 Drop this near the top of your file
+const Linkify = ({ text }) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return (
+        <>
+            {parts.map((part, i) => {
+                if (part.match(urlRegex)) {
+                    return (
+                        <a 
+                            key={i} 
+                            href={part} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                            onClick={(e) => e.stopPropagation()} // Prevents the post container click from firing
+                        >
+                            {part}
+                        </a>
+                    );
+                }
+                return part;
+            })}
+        </>
+    );
+};
+
 export default function MainFeed({ currentUser, onViewEntity }) {
   const [feed, setFeed] = useState([])
   const [loading, setLoading] = useState(true)
@@ -184,7 +213,7 @@ export default function MainFeed({ currentUser, onViewEntity }) {
                          </p>
                          {item.data.description && (
                              <div className="bg-black/50 p-4 rounded-xl border border-gray-800 text-gray-400 text-sm italic">
-                                 {item.data.description}
+                                 <Linkify text={item.data.description} />
                              </div>
                          )}
                       </div>

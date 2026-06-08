@@ -324,14 +324,19 @@ function MainApp() {
   const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
   const getAvailableTabs = () => {
-      // 🟢 Simplified Bottom Dock!
-      const baseTabs = ['Home', 'Feed', 'Venues', 'KSocial', 'Profile']
-      
-      if (systemConfig.showSettings !== false) baseTabs.push('Settings')
-      
+      // 🟢 ADMIN OVERRIDE: Admins get the dashboard and all core dock tabs regardless of settings
       if (effectiveUser?.account_type === 'Admin') {
-          return ['Admin Dashboard', ...baseTabs]
+          return ['Admin Dashboard', 'Home', 'Feed', 'Venues', 'KSocial', 'Profile', 'Settings']
       }
+
+      // 🟢 STANDARD USERS: Build the dock dynamically based on Admin settings
+      const baseTabs = ['Home'] // Home is the hub, so it is always visible
+
+      if (systemConfig.showFeed !== false) baseTabs.push('Feed')
+      if (systemConfig.showVenues !== false) baseTabs.push('Venues')
+      if (systemConfig.showKSocial !== false) baseTabs.push('KSocial')
+      if (systemConfig.showProfile !== false) baseTabs.push('Profile')
+      if (systemConfig.showSettings !== false) baseTabs.push('Settings')
 
       return baseTabs
   }

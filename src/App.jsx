@@ -13,6 +13,7 @@ import BottomNav from './BottomNav'
 import BackgroundManager from './BackgroundManager'
 
 // 🟢 NEW: Direct Code Splitting for the flattened navigation
+const Home = lazy(() => import('./Home')) // <--- ADD THIS LINE
 const MainFeed = lazy(() => import('./MainFeed'))
 const EventsFeed = lazy(() => import('./EventsFeed')) // Serves as the Venues List
 const Profile = lazy(() => import('./Profile'))
@@ -25,6 +26,7 @@ const Shop = lazy(() => import('./Shop'))
 const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
+const JournalFeed = lazy(() => import('./JournalFeed')) // 🟢 Add this import!
 
 const getInitialSplash = () => {
     const hour = new Date().getHours()
@@ -47,8 +49,8 @@ const getInitialSplash = () => {
 
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams()
-  // 🟢 NEW: Default tab is now 'Feed'
-  const activeTab = searchParams.get('tab') || "Feed"
+  // 🟢 FIXED: Default tab is now 'Home'
+  const activeTab = searchParams.get('tab') || "Home"
   
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -322,16 +324,16 @@ function MainApp() {
   const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
   const getAvailableTabs = () => {
-      // 🟢 Admins get everything appended to their Dashboard
+      // 🟢 Simplified Bottom Dock!
+      const baseTabs = ['Home', 'Feed', 'Venues', 'KSocial', 'Profile']
+      
+      if (systemConfig.showSettings !== false) baseTabs.push('Settings')
+      
       if (effectiveUser?.account_type === 'Admin') {
-          return ['Admin Dashboard', ...ALL_TABS]
+          return ['Admin Dashboard', ...baseTabs]
       }
 
-      // 🟢 Everyone else gets the tabs filtered by the Admin's visibility config
-      return ALL_TABS.filter(tab => {
-          const configKey = `show${tab}`
-          return systemConfig[configKey] !== false // If it's not explicitly false, show it
-      })
+      return baseTabs
   }
 
   const tabs = getAvailableTabs()
@@ -380,7 +382,8 @@ function MainApp() {
           setShowNotifications={setShowNotifications}
           setShowVibeCode={setShowVibeCode}
           onViewEntity={onViewEntity}
-          onHomeClick={() => setSearchParams({ tab: 'Feed' })}
+          // 🟢 FIXED: Logo now takes you Home
+          onHomeClick={() => setSearchParams({ tab: 'Home' })} 
       />
 
       <Ticker />
@@ -414,6 +417,7 @@ function MainApp() {
               
               {/* 🟢 NEW: Rendered Flat Tabs */}
               {/* 🟢 FIXED: Changed to 'Admin Dashboard' */}
+              {activeTab === 'Home' && <Home changeTab={changeTab} currentUser={effectiveUser} />}
               {activeTab === 'Admin Dashboard' && <AdminPanel session={session} setSimulatedRole={setSimulatedRole} setShowSplash={setShowSplash} setTestOnboardingType={setTestOnboardingType} />}
               {activeTab === 'Feed' && <MainFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Venues' && <EventsFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
@@ -428,6 +432,9 @@ function MainApp() {
               {activeTab === 'KSocial' && <Live currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               
               {activeTab === 'Shop' && <Shop currentUser={effectiveUser} />}
+              
+              {/* 🟢 NEW: Standalone Journal Route */}
+              {activeTab === 'Journal' && <JournalFeed currentUser={effectiveUser} />}
             </div>
           </Suspense>
         )}

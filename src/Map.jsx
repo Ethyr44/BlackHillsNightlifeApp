@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
-import JournalFeed from './JournalFeed'
-import { useAppConfig } from './useAppConfig'
 
 import MapVenueOverlay from './MapVenueOverlay'
 import MapGiftOverlay from './MapGiftOverlay'
@@ -22,7 +20,6 @@ function getDistanceInFeet(lat1, lon1, lat2, lon2) {
 export default function Map({ currentUser, onViewEntity }) {
   const mapRef = useRef(null)
   const [mapInstance, setMapInstance] = useState(null)
-  const config = useAppConfig()
 
   const [venues, setVenues] = useState([])
   const [geoGifts, setGeoGifts] = useState([])
@@ -504,22 +501,6 @@ export default function Map({ currentUser, onViewEntity }) {
         <div className="absolute top-4 right-4 z-40">
             <button onClick={() => {if(mapInstance && mapCenter) mapInstance.panTo(mapCenter)}} className="bg-black/60 backdrop-blur-md p-3 rounded-2xl border border-white/10 text-white shadow-[0_0_20px_rgba(0,0,0,0.8)]">🛰️</button>
         </div>
-      </div>
-
-      <div className="px-4 mt-6">
-          <div className="text-center mb-6">
-              {config.journal_title_visible !== false && (
-                  <h2 className="text-4xl font-['Bebas_Neue'] text-gray-300 tracking-wider">
-                      {config.journal_title || 'Live Journal Chat'}
-                  </h2>
-              )}
-              {config.journal_subtitle_visible !== false && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                      {config.journal_subtitle || 'Global Anonymous Chatter • 10 Min Auto-Wipe'}
-                  </p>
-              )}
-          </div>
-          <JournalFeed currentUser={currentUser} />
       </div>
 
       {/* 🟢 THE MODULAR UI OVERLAYS */}

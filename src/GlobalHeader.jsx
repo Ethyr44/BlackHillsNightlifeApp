@@ -70,7 +70,10 @@ export default function GlobalHeader({
          {/* ACTION ICONS */}
          <div className="flex items-center gap-1 sm:gap-2 relative">
              <button onClick={() => setShowVibeCode(true)} className="text-gray-400 hover:text-white p-2 transition-colors">
-                <span className="text-xl leading-none">📱</span>
+                {/* 🟢 NEW: QR Code SVG Icon */}
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm8-2h8v8h-8V3zm2 2v4h4V5h-4zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm13-2h3v2h-3v-2zm-3 0h2v2h-2v-2zm3 3h3v2h-3v-2zm-3 0h2v2h-2v-2zm3 3h3v2h-3v-2zm-3 0h2v2h-2v-2z"/>
+                </svg>
              </button>
              
              <button onClick={() => setShowNotifications(!showNotifications)} className="text-gray-400 hover:text-white p-2 transition-colors relative">

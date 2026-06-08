@@ -79,6 +79,16 @@ function MainApp() {
           }
       }
       fetchConfig()
+
+      // 🟢 NEW: Realtime listener so the Nav Dock updates instantly when an Admin changes settings
+      const configSub = supabase.channel('system-config-changes')
+          .on('postgres', { event: 'UPDATE', schema: 'public', table: 'system_config' }, (payload) => {
+              if (payload.new && payload.new.page_visibility) {
+                  setSystemConfig(payload.new.page_visibility)
+              }
+          }).subscribe()
+
+      return () => supabase.removeChannel(configSub)
   }, [])
 
   const joinSessionId = searchParams.get('join')

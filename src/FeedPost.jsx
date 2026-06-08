@@ -2,32 +2,92 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { toast } from './GlobalToast'
 
-// 🟢 NEW: Linkify utility to turn URLs into clickable links
-const Linkify = ({ text }) => {
-    if (!text) return null;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
-    const parts = text.split(urlRegex);
+// 🟢 NEW: Fetches and displays rich link previews (Images, Titles, etc.)
+const LinkPreview = ({ url }) => {
+    const [preview, setPreview] = useState(null)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchPreview = async () => {
+            try {
+                // Using Microlink's free public API for rich embeds
+                const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`)
+                const data = await res.json()
+                if (data.status === 'success') {
+                    setPreview(data.data)
+                }
+            } catch (e) {
+                console.error("Preview failed", e)
+            }
+            setLoading(false)
+        }
+        fetchPreview()
+    }, [url])
+
+    if (loading) return <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500 animate-pulse">Loading preview...</div>
+    if (!preview || (!preview.image && !preview.title)) return null
 
     return (
-        <>
-            {parts.map((part, i) => {
-                if (part.match(urlRegex)) {
-                    return (
-                        <a 
-                            key={i} 
-                            href={part} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
-                            onClick={(e) => e.stopPropagation()} // Prevents the post container click from firing
-                        >
-                            {part}
-                        </a>
-                    );
-                }
-                return part;
-            })}
-        </>
+        <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            onClick={(e) => e.stopPropagation()} 
+            className="mt-3 block border border-gray-700 rounded-xl overflow-hidden hover:border-blue-500 transition-colors bg-black/40 group"
+        >
+            {preview.image && (
+                <div className="h-32 sm:h-48 w-full bg-gray-800 overflow-hidden">
+                    <img src={preview.image.url} alt={preview.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                </div>
+            )}
+            <div className="p-3 bg-[#090812]">
+                <h4 className="text-white font-bold text-sm line-clamp-1">{preview.title || url}</h4>
+                {preview.description && <p className="text-gray-400 text-xs mt-1 line-clamp-2">{preview.description}</p>}
+                <span className="text-[9px] text-gray-500 uppercase tracking-widest mt-2 block font-bold">
+                    {new URL(url).hostname.replace('www.', '')}
+                </span>
+            </div>
+        </a>
+    )
+}
+
+// 🟢 UPDATED: Extracts the URL and attaches the rich preview underneath the text
+const Linkify = ({ text }) => {
+    if (!text) return null;
+    
+    const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    // Find the first URL to generate a preview block for
+    const match = text.match(urlRegex);
+    const firstUrl = match ? (match[0].startsWith('www.') ? `https://${match[0]}` : match[0]) : null;
+
+    return (
+        <div className="flex flex-col w-full">
+            <p className="whitespace-pre-wrap">
+                {parts.map((part, i) => {
+                    if (part.match(urlRegex)) {
+                        const href = part.startsWith('www.') ? `https://${part}` : part;
+                        return (
+                            <a 
+                                key={i} 
+                                href={href} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
+                                onClick={(e) => e.stopPropagation()} 
+                            >
+                                {part}
+                            </a>
+                        );
+                    }
+                    return part;
+                })}
+            </p>
+            
+            {/* 🟢 Render the rich card preview below the text */}
+            {firstUrl && <LinkPreview url={firstUrl} />}
+        </div>
     );
 };
 
@@ -149,9 +209,9 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
             </div>
 
             {/* 🟢 Post Content */}
-            <p className="text-gray-200 text-sm mt-3 mb-3 whitespace-pre-wrap leading-relaxed">
+            <div className="text-gray-200 text-sm mt-3 mb-3 whitespace-pre-wrap leading-relaxed">
                 <Linkify text={item.data.content} />
-            </p>
+            </div>
             
             {/* 🟢 THE FIX: Render the Image if attached! */}
             {item.data.image_url && (
@@ -184,7 +244,7 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                             <div className="flex-1">
                                 <div className="bg-black/50 border border-gray-800 p-3 rounded-2xl rounded-tl-sm">
                                     <h5 className="font-bold text-white text-xs mb-1">{c.profiles?.username}</h5>
-                                    <p className="text-gray-300 text-xs"><Linkify text={c.content} /></p>
+                                    <div className="text-gray-300 text-xs"><Linkify text={c.content} /></div>
                                 </div>
                                 <div className="flex gap-4 mt-1 ml-2">
                                     <span className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">{timeAgo(c.created_at)}</span>

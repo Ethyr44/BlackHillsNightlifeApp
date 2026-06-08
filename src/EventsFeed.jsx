@@ -18,6 +18,7 @@ function getDistanceInFeet(lat1, lon1, lat2, lon2) {
 export default function EventsFeed({ currentUser, onViewEntity }) {
   const [rawLineups, setRawLineups] = useState([]) // 🟢 NEW: Stores the unsorted master list
   const [sortMode, setSortMode] = useState('distance') // 🟢 NEW: 'distance' or 'eventsFirst'
+  const [eventTypeFilter, setEventTypeFilter] = useState('All')
   
   const [venueLineups, setVenueLineups] = useState([])
   const [displayedVenues, setDisplayedVenues] = useState([])
@@ -86,7 +87,13 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
   useEffect(() => {
       if (rawLineups.length === 0) return;
 
-      const sorted = [...rawLineups];
+      let sorted = [...rawLineups];
+      
+      if (eventTypeFilter !== 'All') {
+          sorted = sorted.filter(venue => 
+              venue.schedule.some(slot => slot.event?.event_type === eventTypeFilter)
+          );
+      }
 
       const getDist = (venue) => {
           if (!userLoc || !venue.lat || !venue.lng) return Infinity;
@@ -119,7 +126,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       setVenueLineups(sorted);
       setDisplayedVenues(sorted.slice(0, ITEMS_PER_PAGE));
       setPage(1); // 🟢 Important: Reset pagination to page 1 when sort changes
-  }, [rawLineups, userLoc, sortMode]);
+  }, [rawLineups, userLoc, sortMode, eventTypeFilter]);
 
   const loadMore = () => {
       const nextVenues = venueLineups.slice(0, (page + 1) * ITEMS_PER_PAGE)
@@ -207,7 +214,30 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                     </button>
                 </div>
 
-                {displayedVenues.map((venue) => (
+                <div className="flex gap-2 bg-[#090812] p-1.5 rounded-xl border border-gray-800 shadow-inner mb-4 overflow-x-auto hide-scrollbar">
+                    {['All', 'Karaoke', 'Live Music', 'Comedy', 'Open Mic', 'Trivia', 'Drinks'].map(type => (
+                        <button 
+                            key={type}
+                            onClick={() => setEventTypeFilter(type)}
+                            className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
+                                eventTypeFilter === type 
+                                ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]' 
+                                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
+                            }`}
+                        >
+                            {type}
+                        </button>
+                    ))}
+                </div>
+
+                {displayedVenues
+                    // 🟢 NEW: Filter logic
+                    .filter(venue => {
+                        if (eventTypeFilter === 'All') return true;
+                        // Check if ANY slot in the venue has an event matching the filter
+                        return venue.schedule.some(slot => slot.event?.event_type === eventTypeFilter);
+                    })
+                    .map((venue) => (
                     <VenueCard 
                         key={venue.id} 
                         venue={venue} 

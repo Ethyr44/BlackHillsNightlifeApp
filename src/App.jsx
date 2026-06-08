@@ -334,18 +334,30 @@ function MainApp() {
   const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
   const getAvailableTabs = () => {
-      // 🟢 ADMIN OVERRIDE: Admins get the dashboard and all core dock tabs regardless of settings
+      // 🟢 ADMIN OVERRIDE: Admins get absolutely everything
       if (effectiveUser?.account_type === 'Admin') {
-          return ['Admin Dashboard', 'Home', 'Feed', 'Venues', 'KSocial', 'Profile', 'Settings']
+          return [
+              'Admin Dashboard', 'Home', 'Feed', 'Venues', 'KSocial', 
+              'Profile', 'Map', 'Leagues', 'Songbook', 'Shop', 'Settings'
+          ]
       }
 
       // 🟢 STANDARD USERS: Build the dock dynamically based on Admin settings
       const baseTabs = ['Home'] // Home is the hub, so it is always visible
 
+      // The core tabs
       if (systemConfig.showFeed !== false) baseTabs.push('Feed')
       if (systemConfig.showVenues !== false) baseTabs.push('Venues')
       if (systemConfig.showKSocial !== false) baseTabs.push('KSocial')
       if (systemConfig.showProfile !== false) baseTabs.push('Profile')
+
+      // 🟢 THE MISSING TABS: Now they will actually obey the Admin Visibility Controller!
+      if (systemConfig.showMap !== false) baseTabs.push('Map')
+      if (systemConfig.showLeagues !== false) baseTabs.push('Leagues')
+      if (systemConfig.showSongbook !== false) baseTabs.push('Songbook')
+      if (systemConfig.showShop !== false) baseTabs.push('Shop')
+      
+      // 🟢 Keep Settings at the end of the dock!
       if (systemConfig.showSettings !== false) baseTabs.push('Settings')
 
       return baseTabs

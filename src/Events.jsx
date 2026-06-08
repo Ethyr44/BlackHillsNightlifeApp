@@ -3,110 +3,169 @@ import { supabase } from './supabaseClient'
 
 export default function Events({ onViewEntity }) {
   const [events, setEvents] = useState([])
+  const [venues, setVenues] = useState([]) // 🟢 NEW: Store venues for weekly schedules
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState('upcoming') // 'upcoming' or 'archived'
+  const [eventTypeFilter, setEventTypeFilter] = useState('All')
+  
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedDayEvents, setSelectedDayEvents] = useState(null)
+
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
   useEffect(() => {
-    async function fetchEvents() {
+    async function fetchData() {
       setLoading(true)
-      const now = new Date().toISOString()
       
-      // THE FIX: Appended .eq('status', 'approved') to strictly filter out pending requests!
-      let query = supabase.from('events').select('*').eq('status', 'approved')
-      
-      // Filter based on the toggle
-      if (viewMode === 'upcoming') {
-        query = query.gte('event_date', now).order('event_date', { ascending: true })
-      } else {
-        query = query.lt('event_date', now).order('event_date', { ascending: false }) // Newest past events first
-      }
-      
-      const { data, error } = await query
-      if (!error && data) setEvents(data)
+      // 1. Fetch One-Off Events
+      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved')
+      if (eventData) setEvents(eventData)
+
+      // 2. Fetch Venues (for their recurring weekly schedules)
+      const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue')
+      if (venueData) setVenues(venueData)
+
       setLoading(false)
     }
-    fetchEvents()
-  }, [viewMode])
+    fetchData()
+  }, [])
+
+  const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate()
+  const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay()
+  
+  const year = currentDate.getFullYear()
+  const month = currentDate.getMonth()
+  const daysInMonth = getDaysInMonth(year, month)
+  const firstDay = getFirstDayOfMonth(year, month)
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+
+  // 🟢 HELPER: Get all events (specific + recurring) for a given JS Date object
+  const getEventsForDate = (dateObj) => {
+      const dateString = dateObj.toDateString()
+      const dayName = daysOfWeek[dateObj.getDay()]
+
+      // Get one-off events
+      const specificEvents = events.filter(e => {
+          const eDate = new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z')
+          return eDate.toDateString() === dateString
+      })
+
+      // Get recurring venue events for this day of the week
+      const recurringEvents = []
+      venues.forEach(venue => {
+          const schedule = venue.details?.schedule || []
+          const daySlot = schedule.find(s => s.day === dayName)
+          if (daySlot && daySlot.event) {
+              recurringEvents.push({
+                  id: `recurring-${venue.id}-${dayName}`,
+                  title: `${venue.name} ${daySlot.event.event_type}`,
+                  event_type: daySlot.event.event_type,
+                  description: daySlot.event.description || `Weekly ${daySlot.event.event_type} at ${venue.name}`,
+                  venue: venue.name,
+                  isRecurring: true
+              })
+          }
+      })
+
+      // Combine and filter
+      return [...specificEvents, ...recurringEvents].filter(e => eventTypeFilter === 'All' || e.event_type === eventTypeFilter)
+  }
+
+  const handleDayClick = (day) => {
+      const targetDate = new Date(year, month, day)
+      const dayEvents = getEventsForDate(targetDate)
+      setSelectedDayEvents({ date: targetDate.toDateString(), events: dayEvents })
+  }
 
   return (
-    <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in pb-12">
-      
+    <div className="max-w-xl mx-auto p-4 mt-4 animate-fade-in pb-32">
       <div className="text-center mb-6">
-        <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
-            {viewMode === 'upcoming' ? 'The Circuit' : 'The Archive'}
-        </h2>
-        <p className="text-gray-400 font-bold tracking-widest uppercase text-xs mt-2">
-            {viewMode === 'upcoming' ? 'Upcoming Black Hills Events' : 'Past Events & Memories'}
-        </p>
+        <h2 className="text-5xl font-['Bebas_Neue'] text-white tracking-wider drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">EVENT CALENDAR</h2>
       </div>
 
-      {/* --- Archive Toggle Buttons --- */}
-      <div className="flex bg-gray-900 border border-gray-800 rounded-xl p-1 mb-8">
-        <button 
-          onClick={() => setViewMode('upcoming')}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'upcoming' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-        >
-          Upcoming
-        </button>
-        <button 
-          onClick={() => setViewMode('archived')}
-          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'archived' ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30' : 'text-gray-500 hover:text-gray-300'}`}
-        >
-          Archived
-        </button>
+      <div className="flex gap-2 bg-[#090812] p-1.5 rounded-xl border border-gray-800 shadow-inner mb-6 overflow-x-auto hide-scrollbar">
+          {['All', 'Karaoke', 'Live Music', 'Comedy', 'Open Mic', 'Trivia', 'Drinks'].map(type => (
+              <button 
+                  key={type}
+                  onClick={() => setEventTypeFilter(type)}
+                  className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${eventTypeFilter === type ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)]' : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'}`}
+              >
+                  {type}
+              </button>
+          ))}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center p-8 mt-10">
-          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {events.length === 0 ? (
-            <div className="text-center p-8 bg-gray-900 border border-gray-800 rounded-xl">
-              <p className="text-gray-500 font-bold tracking-widest uppercase text-sm">
-                  {viewMode === 'upcoming' ? 'No upcoming events on the radar.' : 'No archived events found.'}
-              </p>
-            </div>
-          ) : (
-            events.map(event => {
-              const dateObj = new Date(event.event_date)
-              const month = dateObj.toLocaleDateString(undefined, { month: 'short' }).toUpperCase()
-              const day = dateObj.getDate()
-              const time = dateObj.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      <div className="bg-gray-900 border border-gray-800 p-4 rounded-t-2xl flex justify-between items-center">
+          <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} className="text-gray-400 hover:text-white px-4 py-2 font-bold transition-transform active:scale-95">❮</button>
+          <h3 className="text-2xl font-bold text-white tracking-wide">{monthNames[month]} {year}</h3>
+          <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} className="text-gray-400 hover:text-white px-4 py-2 font-bold transition-transform active:scale-95">❯</button>
+      </div>
 
-              return (
-                <div key={event.id} className={`bg-gray-900 border rounded-xl overflow-hidden shadow-lg transition-colors group ${viewMode === 'archived' ? 'border-gray-800 opacity-80 grayscale-[30%]' : 'border-gray-800 hover:border-blue-500/50'}`}>
-                  <div className="bg-black p-4 flex gap-4 items-center border-b border-gray-800">
-                    <div className="bg-gray-800 rounded-lg p-2 text-center min-w-[60px] border border-gray-700">
-                      <span className="block text-blue-400 text-[10px] font-bold uppercase tracking-widest">{month}</span>
-                      <span className="block text-white font-['Bebas_Neue'] text-2xl leading-none mt-1">{day}</span>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white leading-tight">{event.title}</h3>
-                      <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">
-                        {time} • {event.event_type}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-gray-300 text-sm mb-4 leading-relaxed">{event.description}</p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <button onClick={() => onViewEntity(event.venue)} className="bg-blue-900/20 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-colors">
-                        📍 {event.venue}
+      <div className="bg-black border border-t-0 border-gray-800 p-4 rounded-b-2xl shadow-xl">
+          <div className="grid grid-cols-7 gap-1 mb-2">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div key={d} className="text-center text-[10px] font-bold uppercase text-gray-500">{d}</div>)}
+          </div>
+          
+          <div className="grid grid-cols-7 gap-2">
+              {[...Array(firstDay)].map((_, i) => <div key={`empty-${i}`} />)}
+              
+              {[...Array(daysInMonth)].map((_, i) => {
+                  const day = i + 1;
+                  const targetDate = new Date(year, month, day)
+                  const isToday = new Date().toDateString() === targetDate.toDateString()
+                  const dayHasEvents = getEventsForDate(targetDate).length > 0 // 🟢 Checks both one-off and recurring
+
+                  return (
+                      <button 
+                          key={day}
+                          onClick={() => handleDayClick(day)}
+                          className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all active:scale-95 ${isToday ? 'bg-blue-900/30 border border-blue-500 text-blue-400' : 'bg-gray-900/50 text-gray-300 hover:bg-gray-800 border border-gray-800'}`}
+                      >
+                          <span className="font-bold text-sm">{day}</span>
+                          {dayHasEvents && <span className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_5px_rgba(34,211,238,0.8)]"></span>}
                       </button>
-                      {event.entertainer && (
-                        <button onClick={() => onViewEntity(event.entertainer)} className="bg-purple-900/20 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-colors">
-                          🎤 {event.entertainer}
-                        </button>
+                  )
+              })}
+          </div>
+      </div>
+
+      {selectedDayEvents && (
+          <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
+              <div className="bg-[#090812] w-full sm:max-w-md max-h-[80vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-gray-800 p-6 relative pb-12 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] hide-scrollbar">
+                  <button onClick={() => setSelectedDayEvents(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white font-bold text-xl transition-colors">✕</button>
+                  
+                  <h3 className="text-3xl font-['Bebas_Neue'] text-blue-400 tracking-widest mb-1">Daily Lineup</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6">{selectedDayEvents.date}</p>
+
+                  <div className="space-y-4">
+                      {selectedDayEvents.events.length === 0 ? (
+                          <div className="text-center py-10 border border-dashed border-gray-800 rounded-2xl">
+                              <span className="text-3xl opacity-50 block mb-2">🗓️</span>
+                              <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No events scheduled.</p>
+                          </div>
+                      ) : (
+                          selectedDayEvents.events.map(event => (
+                              <div key={event.id} className="bg-black border border-gray-800 p-4 rounded-2xl">
+                                  <div className="flex justify-between items-start mb-2">
+                                      <div>
+                                          <h4 className="font-bold text-white text-lg leading-tight flex items-center gap-2">
+                                              {event.title}
+                                              {event.isRecurring && <span className="bg-purple-900/30 text-purple-400 text-[8px] px-1.5 py-0.5 rounded border border-purple-500/30">Weekly</span>}
+                                          </h4>
+                                          <p className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">
+                                              {event.isRecurring ? 'Weekly Event' : new Date(event.event_date.includes('Z') ? event.event_date : event.event_date + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {event.event_type}
+                                          </p>
+                                      </div>
+                                  </div>
+                                  <p className="text-gray-400 text-xs mb-4">{event.description}</p>
+                                  <button onClick={() => { setSelectedDayEvents(null); onViewEntity(event.venue); }} className="w-full bg-gray-900 hover:bg-gray-800 border border-gray-700 text-white py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors">
+                                      📍 View {event.venue}
+                                  </button>
+                              </div>
+                          ))
                       )}
-                    </div>
                   </div>
-                </div>
-              )
-            })
-          )}
-        </div>
+              </div>
+          </div>
       )}
     </div>
   )

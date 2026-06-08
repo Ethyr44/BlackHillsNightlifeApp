@@ -129,6 +129,7 @@ export default function Map({ currentUser, onViewEntity }) {
       disableDefaultUI: true, // Hides the general elements
       zoomControl: false,     // Explicitly kills the zoom buttons
       mapTypeControl: false,  // Explicitly kills the satellite toggle
+        gestureHandling: 'greedy', // 🟢 THIS fixes the two-finger requirement on mobile
       mapId: 'e48372c619f58e7f83289663'
     })
     setMapInstance(map)
@@ -415,16 +416,13 @@ export default function Map({ currentUser, onViewEntity }) {
       }
   }
 
-  // 🟢 98% FULLSCREEN CONTAINER STYLE
+  // 🟢 FULLSCREEN EDGE-TO-EDGE CONTAINER STYLE
   const mapContainerStyle = {
-    height: 'calc(100vh - 160px)', 
-    width: '98%',
-    margin: '1% auto',
-    borderRadius: '24px',
+    height: 'calc(100vh - 130px)', 
+    width: '100%',
+    margin: '0',
     overflow: 'hidden',
-    position: 'relative',
-    boxShadow: '0 0 40px rgba(0,0,0,0.5)',
-    border: '2px solid rgba(255,255,255,0.05)'
+    position: 'relative'
   }
 
   let activeVenueDistance = null;

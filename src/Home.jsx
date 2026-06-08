@@ -31,7 +31,8 @@ export default function Home({ changeTab, currentUser }) {
             glow: 'shadow-[0_0_20px_rgba(6,182,212,0.4)]',
             subItems: [
                 { label: 'Venues', tab: 'Venues', active: true, icon: '📍' },
-                { label: 'Events Calendar', tab: 'Events', active: false, icon: '📅' },
+                // 🟢 FIXED: Changed active to true so it's clickable and routes to the 'Events' tab!
+                { label: 'Events Calendar', tab: 'Events', active: true, icon: '📅' },
                 { label: 'Map', tab: 'Map', active: true, icon: '🗺️' },
                 { label: 'Leagues', tab: 'Leagues', active: true, icon: '🏆' }
             ]

@@ -1,6 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
+const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const generateDefaultWeek = () => {
+  let week = {};
+  DAYS_OF_WEEK.forEach(day => {
+    // Defaulting to 4 PM - 2 AM since it's nightlife
+    week[day] = { isOpen: true, open: '16:00', close: '02:00' }; 
+  });
+  return week;
+};
+
 export default function AdminPages() {
   const [pages, setPages] = useState([])
   const [loading, setLoading] = useState(false)
@@ -23,6 +34,11 @@ export default function AdminPages() {
   // 🟢 NEW: Ownership States
   const [venueUsers, setVenueUsers] = useState([])
   const [ownerId, setOwnerId] = useState('')
+
+  const [menuUrl, setMenuUrl] = useState('')
+  const [popularSongs, setPopularSongs] = useState(['', '', '']) 
+  const [hoursOfOp, setHoursOfOp] = useState(generateDefaultWeek())
+  const [happyHour, setHappyHour] = useState(generateDefaultWeek())
 
   useEffect(() => { fetchPages() }, [])
 
@@ -78,7 +94,11 @@ export default function AdminPages() {
       slideshow_urls: slideshowUrls,
       address, phone, website, facebook, cost,
       tags: selectedTags,
-      owner_id: ownerId || null // 🟢 NEW: Save the assignment
+      owner_id: ownerId || null, // 🟢 NEW: Save the assignment
+      menu_url: menuUrl,
+      popular_songs: popularSongs.filter(song => song.trim() !== ''),
+      hours_of_operation: hoursOfOp,
+      happy_hour_schedule: happyHour
     }
 
     if (editingPageId) {
@@ -89,6 +109,7 @@ export default function AdminPages() {
 
     setPageName(''); setPageType('Venue'); setEditingPageId(null); setProfilePic(''); setSlideshowUrls([]);
     setAddress(''); setPhone(''); setWebsite(''); setFacebook(''); setCost('$$'); setSelectedTags([]); setOwnerId('');
+    setMenuUrl(''); setPopularSongs(['', '', '']); setHoursOfOp(generateDefaultWeek()); setHappyHour(generateDefaultWeek());
     fetchPages()
     setLoading(false)
   }
@@ -106,6 +127,10 @@ export default function AdminPages() {
     setCost(p.cost || '$$')
     setSelectedTags(p.tags || [])
     setOwnerId(p.owner_id || '') // 🟢 NEW: Load existing owner
+    setMenuUrl(p.menu_url || '')
+    setPopularSongs(p.popular_songs?.length ? [...p.popular_songs, '', '', ''].slice(0, 3) : ['', '', ''])
+    setHoursOfOp(p.hours_of_operation && Object.keys(p.hours_of_operation).length > 0 ? p.hours_of_operation : generateDefaultWeek())
+    setHappyHour(p.happy_hour_schedule && Object.keys(p.happy_hour_schedule).length > 0 ? p.happy_hour_schedule : generateDefaultWeek())
   }
 
   const deletePage = async (id) => {
@@ -113,6 +138,49 @@ export default function AdminPages() {
     await supabase.from('pages').delete().eq('id', id)
     fetchPages()
   }
+
+  const renderScheduleBuilder = (title, schedule, setSchedule) => (
+      <div className="bg-black/50 border border-gray-800 p-4 rounded-xl">
+          <label className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 mb-3 block">{title}</label>
+          <div className="space-y-2">
+              {DAYS_OF_WEEK.map(day => (
+                  <div key={day} className="flex items-center justify-between gap-2 bg-gray-900/50 p-2 rounded-lg border border-gray-800">
+                      <div className="w-16">
+                          <span className="text-[10px] text-white font-bold uppercase tracking-widest">{day.slice(0,3)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-1 justify-end">
+                          <button
+                              onClick={() => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], isOpen: !prev[day].isOpen } }))}
+                              className={`px-3 py-1 rounded text-[9px] font-bold uppercase tracking-widest transition-colors ${schedule[day]?.isOpen ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30'}`}
+                          >
+                              {schedule[day]?.isOpen ? 'Open' : 'Closed'}
+                          </button>
+                          
+                          {schedule[day]?.isOpen ? (
+                              <div className="flex items-center gap-1">
+                                  <input 
+                                      type="time" 
+                                      value={schedule[day].open} 
+                                      onChange={e => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], open: e.target.value } }))} 
+                                      className="bg-black border border-gray-700 text-white text-xs rounded p-1 outline-none focus:border-blue-500" 
+                                  />
+                                  <span className="text-gray-500 text-xs">-</span>
+                                  <input 
+                                      type="time" 
+                                      value={schedule[day].close} 
+                                      onChange={e => setSchedule(prev => ({ ...prev, [day]: { ...prev[day], close: e.target.value } }))} 
+                                      className="bg-black border border-gray-700 text-white text-xs rounded p-1 outline-none focus:border-blue-500" 
+                                  />
+                              </div>
+                          ) : (
+                              <div className="text-[10px] text-gray-600 font-bold uppercase tracking-widest px-8">-- : --</div>
+                          )}
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </div>
+  )
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -171,10 +239,35 @@ export default function AdminPages() {
               </div>
           </div>
 
+          {/* 🟢 NEW: MENU & SONGS */}
+          {pageType === 'Venue' && (
+              <div className="pt-4 border-t border-gray-800 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2 block">Menu / Specials URL</label>
+                          <input type="text" value={menuUrl} onChange={e => setMenuUrl(e.target.value)} placeholder="https://..." className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500" />
+                      </div>
+                      <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2 block">Top 3 Karaoke Songs</label>
+                          <div className="flex gap-2">
+                              {popularSongs.map((song, i) => (
+                                  <input key={i} type="text" value={song} onChange={e => { const newSongs = [...popularSongs]; newSongs[i] = e.target.value; setPopularSongs(newSongs); }} placeholder={`#${i + 1}`} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 text-xs" />
+                              ))}
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {renderScheduleBuilder("Standard Operating Hours", hoursOfOp, setHoursOfOp)}
+                      {renderScheduleBuilder("Happy Hour Specials", happyHour, setHappyHour)}
+                  </div>
+              </div>
+          )}
+
           <button onClick={savePage} disabled={loading || uploading} className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-xs transition-colors shadow-lg">
             {loading ? 'Saving...' : editingPageId ? 'Update Page' : 'Create Page'}
           </button>
-          {editingPageId && <button onClick={() => {setEditingPageId(null); setPageName(''); setProfilePic(''); setSlideshowUrls([]); setAddress(''); setPhone(''); setWebsite(''); setFacebook(''); setCost('$$'); setSelectedTags([]); setOwnerId('');}} className="w-full mt-2 bg-transparent border border-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-xl uppercase tracking-widest text-xs transition-colors">Cancel</button>}
+          {editingPageId && <button onClick={() => {setEditingPageId(null); setPageName(''); setProfilePic(''); setSlideshowUrls([]); setAddress(''); setPhone(''); setWebsite(''); setFacebook(''); setCost('$$'); setSelectedTags([]); setOwnerId(''); setMenuUrl(''); setPopularSongs(['', '', '']); setHoursOfOp(generateDefaultWeek()); setHappyHour(generateDefaultWeek());}} className="w-full mt-2 bg-transparent border border-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-xl uppercase tracking-widest text-xs transition-colors">Cancel</button>}
         </div>
       </div>
 

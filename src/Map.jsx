@@ -129,8 +129,9 @@ export default function Map({ currentUser, onViewEntity }) {
     const map = new window.google.maps.Map(mapRef.current, {
       center: mapCenter,
       zoom: 13,
-      disableDefaultUI: true,
-      zoomControl: true,
+      disableDefaultUI: true, // Hides the general elements
+      zoomControl: false,     // Explicitly kills the zoom buttons
+      mapTypeControl: false,  // Explicitly kills the satellite toggle
       mapId: 'e48372c619f58e7f83289663'
     })
     setMapInstance(map)
@@ -179,9 +180,16 @@ export default function Map({ currentUser, onViewEntity }) {
               let dotSize = 'w-4 h-4'
               let animation = ''
 
+              // Apply the glow and size bump if there is ANY event today
               if (venue.eventToday) {
                   dotColor = 'bg-[#ff2d78] shadow-[0_0_20px_rgba(255,45,120,0.9)]'
-                  if (venue.isLive) { dotSize = 'w-5 h-5'; animation = 'animate-pulse' }
+                  dotSize = 'w-5 h-5'
+                  animation = 'animate-pulse' 
+                  
+                  // Optional: Make it strobe faster/differently if it's actively live right now
+                  if (venue.isLive) { 
+                      animation = 'animate-ping' 
+                  }
               }
 
               dotDiv.innerHTML = `<div class="${dotSize} ${dotColor} ${animation} rounded-full border-2 border-white transition-transform duration-300"></div>`

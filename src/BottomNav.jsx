@@ -12,7 +12,7 @@ export default function BottomNav({ displayTabs, activeTab, changeTab, viewingEn
                 onClick={() => changeTab(tab)}
                 className={`px-4 py-2.5 rounded-xl text-[11px] font-bold tracking-widest uppercase transition-all whitespace-nowrap ${
                   activeTab === tab 
-                  ? (tab === 'Admin Console' ? 'bg-red-900/20 text-red-500 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]')
+                  ? (tab === 'Admin Dashboard' ? 'bg-red-900/20 text-red-500 border border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]')
                   : 'text-gray-500 hover:text-white hover:bg-gray-800/50'
                 }`}
               >

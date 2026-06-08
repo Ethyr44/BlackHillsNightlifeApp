@@ -205,17 +205,25 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
                 <ProfileHost profile={entity} isOwner={false} onViewEntity={onViewEntity} />
             </div>
         ) : (
-            showKaraokeFeatures && (
-                <div className="mt-6 animate-fade-in">
-                    <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
-                    <Repertoire userId={entity.id} isOwner={false} canSuggest={true} currentUser={currentUser} profileUser={entity} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-                    
-                    <div className="mt-8 bg-[#090812] border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-400"></div>
-                        <SongBook currentUser={currentUser} profileUser={entity} isOwnProfile={false} embedded={true} />
+            <>
+                {/* SECTION 2: KARAOKE FEATURES (Regular & Singer Only) */}
+                {showKaraokeFeatures && (
+                    <div className="mt-6 animate-fade-in space-y-6">
+                        
+                        {/* 1. Setlist Top */}
+                        <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
+                        
+                        {/* 2. Suggest Song Middle */}
+                        <div className="bg-[#090812] border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-400"></div>
+                            <SongBook currentUser={currentUser} profileUser={entity} isOwnProfile={false} embedded={true} />
+                        </div>
+
+                        {/* 3. Repertoire Bottom */}
+                        <Repertoire userId={entity.id} isOwner={false} canSuggest={true} currentUser={currentUser} profileUser={entity} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
                     </div>
-                </div>
-            )
+                )}
+            </>
         )}
       </div>
     </>

@@ -10,12 +10,11 @@ import Ticker from './Ticker'
 import { GlobalToast } from './GlobalToast'
 import GlobalHeader from './GlobalHeader'
 import BottomNav from './BottomNav'
-
-// THE GLOBAL BACKGROUND
 import BackgroundManager from './BackgroundManager'
 
-// Code Splitting
-const FYP = lazy(() => import('./FYP'))
+// 🟢 NEW: Direct Code Splitting for the flattened navigation
+const MainFeed = lazy(() => import('./MainFeed'))
+const EventsFeed = lazy(() => import('./EventsFeed')) // Serves as the Venues List
 const Profile = lazy(() => import('./Profile'))
 const Leaderboard = lazy(() => import('./Leaderboard'))
 const Events = lazy(() => import('./Events'))
@@ -27,7 +26,6 @@ const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 
-// Calculate Splash Screen status synchronously to prevent initial UI flash
 const getInitialSplash = () => {
     const hour = new Date().getHours()
     let currentPhase = 'Midnight'
@@ -39,22 +37,18 @@ const getInitialSplash = () => {
     else if (hour >= 17 && hour < 20) currentPhase = 'Evening'
     else if (hour >= 20 && hour < 24) currentPhase = 'Night'
 
-    // 🟢 NEW: Check if they've already seen this specific phase today
     const todayStr = new Date().toDateString()
     const cacheKey = `bhnl_splash_${todayStr}`
     const lastPhase = localStorage.getItem(cacheKey)
 
-    if (lastPhase === currentPhase) {
-        return false // Skip splash, already saw it for this time of day!
-    }
-
+    if (lastPhase === currentPhase) return false 
     return currentPhase
 }
 
-// --- INNER APP LOGIC ---
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') || "What's Boppin"
+  // 🟢 NEW: Default tab is now 'Feed'
+  const activeTab = searchParams.get('tab') || "Feed"
   
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -72,12 +66,8 @@ function MainApp() {
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
 
-  // 🟢 NEW: System config state for toggling pages
-  const [systemConfig, setSystemConfig] = useState({
-      showMap: false,
-      showShop: false,
-      showLeaderboards: false // 🟢 FIX: Match DB naming
-  })
+  // 1. You can default this to an empty object now
+  const [systemConfig, setSystemConfig] = useState({})
 
   useEffect(() => {
       async function fetchConfig() {
@@ -89,11 +79,9 @@ function MainApp() {
       fetchConfig()
   }, [])
 
-  // 🟢 NEW: URL Interceptor for Deep Links & QR Codes
   const joinSessionId = searchParams.get('join')
   const isGuestMode = searchParams.get('guest') === 'true'
 
-  // 🟢 NEW: When splash mounts, save it to local storage so it doesn't run again this phase
   useEffect(() => {
       if (showSplash && typeof showSplash === 'string') {
           const todayStr = new Date().toDateString()
@@ -108,15 +96,6 @@ function MainApp() {
       }
   }
 
-  // Add this navigation helper function right above your useEffects
-  const navigateToProfile = async (userId) => {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-      if (profile) {
-          setViewingEntity(profile);
-          setSearchParams({ tab: activeTab, view: 'profile' });
-      }
-  };
-
   const fetchUser = async () => {
     if (session?.user?.id) {
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
@@ -124,18 +103,15 @@ function MainApp() {
         setCurrentUser(data);
         checkDailyBonus(data);
         
-        // 🟢 BHNL USER QR JOIN ROUTING
         if (joinSessionId && !isGuestMode) {
             localStorage.setItem('bhnl_joined_session', joinSessionId)
-            localStorage.setItem('bhnl_live_tab', 'KSocial')
-            setSearchParams({ tab: 'Live' }, { replace: true })
+            setSearchParams({ tab: 'KSocial' }, { replace: true })
         }
       }
       setLoading(false);
     }
   };
 
-  // 2. Auth Listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
         setSession(session)
@@ -148,31 +124,20 @@ function MainApp() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // 3. User Fetch & Daily Bonus Trigger
   useEffect(() => {
-    if (session) {
-      fetchUser();
-    }
-
-    // THE 40-SECOND SILENT POLL
-    // This updates their L$, Inventory, and database status in the background
+    if (session) fetchUser();
     const pollInterval = setInterval(() => {
       if (session?.user?.id) {
         supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          .then(({ data }) => {
-            if (data) setCurrentUser(data);
-          });
+          .then(({ data }) => { if (data) setCurrentUser(data); });
       }
-    }, 40000); // 40 seconds
-
+    }, 40000); 
     return () => clearInterval(pollInterval);
   }, [session])
 
-  // 4. FIX #1 & #3: Hardware Back Button Interceptor (React Router Native)
   useEffect(() => {
     const view = searchParams.get('view')
     if (!view) {
-        // If the URL drops the ?view parameter (e.g. hitting the back button), close overlays safely
         setViewingEntity(null)
         setForceFriendView(false)
     }
@@ -182,10 +147,8 @@ function MainApp() {
     }
   }, [searchParams, activeTab])
 
-  // 5. Active Native Push Notifications (Supabase Realtime)
   useEffect(() => {
     if (!currentUser) return
-
     const notifSubscription = supabase.channel('realtime-notifs')
       .on('postgres', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
           const newNotif = payload.new
@@ -202,7 +165,6 @@ function MainApp() {
     return () => supabase.removeChannel(notifSubscription)
   }, [currentUser])
 
-  // 6. 2-Way VibeCode Connection Interceptor
   useEffect(() => {
     const handleVibeScan = async () => {
       if (!currentUser) return
@@ -218,13 +180,7 @@ function MainApp() {
             ])
             const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
             showReward('VibeCode Scanned!', earnedPts)
-
-            await supabase.from('notifications').insert([
-                { user_id: currentUser.id, title: 'New Connection', content: `You successfully connected with a new friend!` },
-                { user_id: targetId, title: 'VibeCode Scanned', content: `${currentUser.username} just scanned your VibeCode and connected with you!` }
-            ])
         }
-        // Wipe 'connect' from the URL but keep the active tab, and open their profile
         setSearchParams({ tab: activeTab, view: 'profile' }, { replace: true })
         setViewingEntity({ id: targetId }) 
       }
@@ -232,7 +188,6 @@ function MainApp() {
     handleVibeScan()
   }, [currentUser, searchParams])
 
-  // 7. FIX #4: GLOBAL RADAR SWEEP (Battery Optimized)
   useEffect(() => {
     if (!currentUser) return;
     let watchId;
@@ -244,7 +199,6 @@ function MainApp() {
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
              const now = Date.now();
-             // Throttles the database updates to max once per 60 seconds to save battery & DB reads
              if (now - lastUpdateTime >= 60000) {
                  lastUpdateTime = now;
                  const { latitude, longitude } = position.coords;
@@ -262,22 +216,15 @@ function MainApp() {
     };
     pingLocation();
 
-    return () => {
-      if (watchId) navigator.geolocation.clearWatch(watchId);
-    };
+    return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
   }, [currentUser]);
 
-  // 8. SECURITY TRAPDOOR for Temp Users
   useEffect(() => {
-      if (currentUser?.account_type === 'Temp_Crawl' && activeTab !== 'Live') {
-          // Security Breach Detected: Nuke the session and redirect
-          supabase.auth.signOut().then(() => {
-              window.location.href = '/?mode=login'
-          })
+      if (currentUser?.account_type === 'Temp_Crawl' && activeTab !== 'KSocial') {
+          supabase.auth.signOut().then(() => { window.location.href = '/?mode=login' })
       }
   }, [activeTab, currentUser])
 
-  // Helpers
   async function checkDailyBonus(userProfile) {
       if (!userProfile) return
       const today = new Date()
@@ -288,36 +235,13 @@ function MainApp() {
           const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
-
-          await supabase.from('notifications').insert([{ user_id: userProfile.id, title: 'Daily Login', content: `You received ${earnedPts || 50} Lifestyle Points for your daily check-in!` }])
-
-          if (userProfile.pref_events && userProfile.pref_events.length > 0) {
-              const { data: allEvents } = await supabase.from('events').select('*').eq('status', 'approved')
-              if (allEvents) {
-                  const dayOfWeek = today.getDay()
-                  const activeToday = allEvents.filter(e => {
-                      const eDate = new Date(e.event_date)
-                      return e.recurring_weekly ? eDate.getDay() === dayOfWeek : eDate.toDateString() === todayString
-                  })
-                  const matchedEvents = activeToday.filter(e => userProfile.pref_events.includes(e.event_type))
-
-                  if (matchedEvents.length > 0) {
-                      const matchNames = [...new Set(matchedEvents.map(m => m.event_type))].join(' & ')
-                      await supabase.from('notifications').insert([{ user_id: userProfile.id, title: 'Suggested Events', content: `🎉 Heads up! There are ${matchedEvents.length} ${matchNames} events happening tonight in the Black Hills! Check the Lineup.` }])
-                  }
-              }
-          }
       }
   }
 
-  const changeTab = (newTab) => {
-    // Utilize React Router to push the new tab to browser history
-    setSearchParams({ tab: newTab })
-  }
+  const changeTab = (newTab) => setSearchParams({ tab: newTab })
 
   const executeSearch = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    
     if (searchQuery.trim()) {
       const query = `%${searchQuery}%`
       const { data: pages } = await supabase.from('pages').select('*').ilike('name', query)
@@ -328,7 +252,6 @@ function MainApp() {
     }
   }
 
-  // FIX #2: Safe Database Search for view entity
   const onViewEntity = async (name) => {
     if (!name) return
     const { data: page } = await supabase.from('pages').select('*').ilike('name', name).limit(1).maybeSingle()
@@ -346,14 +269,12 @@ function MainApp() {
     alert("This entity hasn't been added to the directory yet!")
   }
 
-  // 🟢 TEMP/GUEST QR JOIN ROUTING (Bypasses the BHNL App Shell completely!)
   if (joinSessionId && isGuestMode) {
       return (
           <div className="min-h-screen bg-[#090812] font-sans selection:bg-yellow-500/30">
               <BackgroundManager />
               <GlobalToast />
               <div className="pt-8">
-                  {/* We render KSocialUser standalone. We will modularize this later! */}
                   <Suspense fallback={<div className="text-white text-center mt-20">Loading...</div>}>
                       <Live currentUser={null} forceJoinId={joinSessionId} forceGuest={true} />
                   </Suspense>
@@ -364,10 +285,9 @@ function MainApp() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#030712]"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
 
-  // Pre-Render Checks
   if (!session) return <Auth />
   if (session && !currentUser) return <div className="flex justify-center mt-32"><div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>
-  // 🟢 FIXED: The Pending Status Trapdoor (Admins are immune!)
+  
   if (currentUser?.account_status === 'pending' && currentUser?.account_type !== 'Admin') {
       return (
           <div className="min-h-screen bg-[#030712] flex items-center justify-center p-4">
@@ -381,22 +301,15 @@ function MainApp() {
       )
   }
 
-  // 🟢 THE ONBOARDING FIX: Resume specific forms after approval
-  // (Safeguard: Admins bypass onboarding natively unless explicitly testing)
   const isCompleted = currentUser?.onboarding_completed || currentUser?.onboarding_complete;
-  
   if ((!isCompleted && currentUser?.account_type !== 'Admin') || testOnboardingType) {
-      
       const isApprovedRole = currentUser?.account_status === 'approved' && ['Host', 'Venue', 'Performer'].includes(currentUser?.account_type)
-      
       return <Onboarding 
           session={session} 
           forcedType={testOnboardingType || (isApprovedRole ? currentUser.account_type : null)}
           onComplete={() => {
-              if (testOnboardingType) {
-                  setTestOnboardingType(null) 
-              } else {
-                  // Force local state to bypass the gatekeeper immediately
+              if (testOnboardingType) setTestOnboardingType(null) 
+              else {
                   setCurrentUser({ ...currentUser, onboarding_completed: true, onboarding_complete: true })
                   window.location.reload()
               }
@@ -404,38 +317,27 @@ function MainApp() {
       />
   }
 
-  // 🟢 NEW: If simulating a role, inject it. Otherwise use the real user.
-  const effectiveUser = simulatedRole 
-    ? { ...currentUser, account_type: simulatedRole } 
-    : currentUser;
+  const effectiveUser = simulatedRole ? { ...currentUser, account_type: simulatedRole } : currentUser;
 
-  // Generate tabs dynamically based on role AND config
+  const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
+
   const getAvailableTabs = () => {
+      // 🟢 Admins get everything appended to their Dashboard
       if (effectiveUser?.account_type === 'Admin') {
-          // Admins see everything (Settings is already last here)
-          return ['Admin Console', 'Profile', "What's Boppin", 'Map', 'Live', 'Leagues', 'Shop', 'Songbook', 'Settings']
+          return ['Admin Dashboard', ...ALL_TABS]
       }
 
-      // 1. Start with the core tabs (Notice Settings is removed!)
-      const baseTabs = ['Profile', "What's Boppin", 'Live', 'Songbook']
-      
-      // 2. Inject the dynamic tabs into the middle
-      if (systemConfig.showMap) baseTabs.push('Map')
-      if (systemConfig.showShop) baseTabs.push('Shop')
-      if (systemConfig.showLeaderboards) baseTabs.push('Leagues')
-      
-      // 3. Lock Settings into the final position
-      baseTabs.push('Settings')
-      
-      return baseTabs
+      // 🟢 Everyone else gets the tabs filtered by the Admin's visibility config
+      return ALL_TABS.filter(tab => {
+          const configKey = `show${tab}`
+          return systemConfig[configKey] !== false // If it's not explicitly false, show it
+      })
   }
 
   const tabs = getAvailableTabs()
 
   return (
     <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
-
-      {/* 🟢 NEW: The Simulation Escape Hatch */}
       {simulatedRole && (
           <button 
               onClick={() => setSimulatedRole(null)}
@@ -446,9 +348,8 @@ function MainApp() {
       )}
       
       <BackgroundManager />
-      <GlobalToast /> {/* 🟢 INJECTED HERE */}
+      <GlobalToast /> 
 
-      {/* 🎁 REWARD TOASTS 🎁 */}
       {rewardToast && (
         <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[600] animate-fade-in">
             <div className="bg-gradient-to-r from-yellow-600 via-orange-500 to-yellow-600 p-[2px] rounded-full shadow-[0_0_30px_rgba(234,179,8,0.4)]">
@@ -470,7 +371,6 @@ function MainApp() {
         </div>
       )}
 
-      {/* 🟢 NEW: Split Navigation Architecture */}
       <GlobalHeader 
           currentUser={effectiveUser}
           searchQuery={searchQuery}
@@ -480,12 +380,11 @@ function MainApp() {
           setShowNotifications={setShowNotifications}
           setShowVibeCode={setShowVibeCode}
           onViewEntity={onViewEntity}
-          onHomeClick={() => console.log("Will route to Main Menu in Phase 2!")}
+          onHomeClick={() => setSearchParams({ tab: 'Feed' })}
       />
 
       <Ticker />
 
-      {/* 🟢 NEW: pb-28 ensures you can scroll past the floating dock */}
       <main className="max-w-2xl mx-auto relative z-10 w-full transition-all duration-300 pb-28">
         {viewingEntity ? (
           <PublicProfile 
@@ -496,10 +395,10 @@ function MainApp() {
           />
         ) : (
           <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
-            <div key={activeTab} className="animate-fade-in w-full h-full">
+            <div key={activeTab} className="animate-fade-in w-full h-full mt-4">
               {activeTab === 'Projector' && <Projector />}
               {activeTab === 'Search' && searchResults && (
-                <div className="p-4 mt-4 animate-fade-in">
+                <div className="p-4 animate-fade-in">
                   <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>
                   {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
                   <div className="space-y-4">
@@ -512,22 +411,28 @@ function MainApp() {
                   </div>
                 </div>
               )}
-              {activeTab === "What's Boppin" && <FYP currentUser={effectiveUser} onViewEntity={onViewEntity} />}
-              {activeTab === 'Admin Console' && <AdminPanel session={session} setSimulatedRole={setSimulatedRole} setShowSplash={setShowSplash} setTestOnboardingType={setTestOnboardingType} />}
+              
+              {/* 🟢 NEW: Rendered Flat Tabs */}
+              {/* 🟢 FIXED: Changed to 'Admin Dashboard' */}
+              {activeTab === 'Admin Dashboard' && <AdminPanel session={session} setSimulatedRole={setSimulatedRole} setShowSplash={setShowSplash} setTestOnboardingType={setTestOnboardingType} />}
+              {activeTab === 'Feed' && <MainFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              {activeTab === 'Venues' && <EventsFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Profile' && <Profile session={session} />}
               {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
-              {activeTab === 'Leagues' && <Leaderboard onViewEntity={onViewEntity} />}
+              {activeTab === 'Leagues' && <Leaderboard currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Songbook' && <SongBook currentUser={effectiveUser} />}
               {activeTab === 'Settings' && <Settings currentUser={effectiveUser} setCurrentUser={setCurrentUser} />}
               {activeTab === 'Map' && <Map currentUser={effectiveUser} onViewEntity={onViewEntity} />}
-              {activeTab === 'Live' && <Live currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              
+              {/* 🟢 Handles the KSocial Tab */}
+              {activeTab === 'KSocial' && <Live currentUser={effectiveUser} onViewEntity={onViewEntity} />}
+              
               {activeTab === 'Shop' && <Shop currentUser={effectiveUser} />}
             </div>
           </Suspense>
         )}
       </main>
 
-      {/* 🟢 NEW: Bottom Dock */}
       <BottomNav 
           displayTabs={tabs}
           activeTab={activeTab}
@@ -536,13 +441,11 @@ function MainApp() {
       />
 
       {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
-
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>
   )
 }
 
-// --- APP WRAPPER FOR REACT ROUTER ---
 export default function App() {
   return (
     <BrowserRouter>

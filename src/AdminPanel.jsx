@@ -71,45 +71,61 @@ export default function AdminPanel({ session, setSimulatedRole, setShowSplash, s
   )
 }
 
-// 🟢 NEW: The missing Admin UI for toggling mini-pages
+// 🟢 NEW: The Global Tab Visibility Controller
 function AdminVisibility() {
-    const [config, setConfig] = useState(null)
+    const [config, setConfig] = useState({})
+    const [loading, setLoading] = useState(true)
+
+    // The definitive list of all controllable tabs
+    const AVAILABLE_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
     useEffect(() => {
         const loadConfig = async () => {
             const { data } = await supabase.from('system_config').select('page_visibility').single()
-            if (data) setConfig(data.page_visibility)
+            if (data && data.page_visibility) {
+                setConfig(data.page_visibility)
+            }
+            setLoading(false)
         }
         loadConfig()
     }, [])
 
-    const toggleVisibility = async (key) => {
-        const newConfig = { ...config, [key]: !config[key] }
+    const toggleVisibility = async (tab) => {
+        const key = `show${tab}`
+        // If undefined, it defaults to true. We want to flip whatever its current effective state is.
+        const currentValue = config[key] !== false 
+        const newConfig = { ...config, [key]: !currentValue }
+        
         setConfig(newConfig)
         await supabase.from('system_config').update({ page_visibility: newConfig }).eq('id', 1)
     }
 
-    if (!config) return <div className="text-white font-bold p-4">Loading Setup...</div>
+    if (loading) return <div className="text-white font-bold p-4">Loading Setup...</div>
 
     return (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 animate-fade-in">
-            <h3 className="text-xl font-bold text-white mb-6 uppercase tracking-widest">Mini-Page Visibility Toggles</h3>
-            <p className="text-xs text-gray-500 mb-6">Standard users will not see hidden mini-pages, but Admins retain full access.</p>
+            <h3 className="text-xl font-bold text-white mb-6 uppercase tracking-widest">Global Tab Visibility</h3>
+            <p className="text-xs text-gray-500 mb-6">Standard users will not see hidden tabs. Admins retain full access to everything.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {Object.keys(config).map(key => (
-                    <button
-                        key={key}
-                        onClick={() => toggleVisibility(key)}
-                        className={`p-4 rounded-xl font-bold uppercase tracking-widest text-xs flex justify-between items-center transition-all ${
-                            config[key]
-                            ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
-                            : 'bg-black/50 text-gray-500 border border-gray-800 hover:border-gray-600'
-                        }`}
-                    >
-                        <span>{key.replace('show', '')} Page</span>
-                        <span>{config[key] ? 'VISIBLE' : 'HIDDEN'}</span>
-                    </button>
-                ))}
+                {AVAILABLE_TABS.map(tab => {
+                    // Check the exact key. If it isn't explicitly false, we consider it visible.
+                    const isVisible = config[`show${tab}`] !== false
+
+                    return (
+                        <button
+                            key={tab}
+                            onClick={() => toggleVisibility(tab)}
+                            className={`p-4 rounded-xl font-bold uppercase tracking-widest text-xs flex justify-between items-center transition-all ${
+                                isVisible
+                                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]'
+                                : 'bg-black/50 text-gray-500 border border-gray-800 hover:border-gray-600'
+                            }`}
+                        >
+                            <span>{tab} Tab</span>
+                            <span>{isVisible ? 'VISIBLE' : 'HIDDEN'}</span>
+                        </button>
+                    )
+                })}
             </div>
         </div>
     )

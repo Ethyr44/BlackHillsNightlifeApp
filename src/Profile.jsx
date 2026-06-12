@@ -35,6 +35,11 @@ export default function Profile({ session }) {
   const [ksocialRank, setKsocialRank] = useState('#--')
   const [systemOptions, setSystemOptions] = useState({ venues: [], events: [], genres: [] })
   const [isEditingPrefs, setIsEditingPrefs] = useState(false)
+  const [isPrefsExpanded, setIsPrefsExpanded] = useState(false) // 🟢 Controls Dropdown
+  
+  const [showFriendsList, setShowFriendsList] = useState(false)
+  const [friendsList, setFriendsList] = useState([])
+  const [loadingFriends, setLoadingFriends] = useState(false)
 
   useEffect(() => {
     if (!session) return
@@ -118,6 +123,28 @@ export default function Profile({ session }) {
       fetchProfileData()
   }
 
+  const handleOpenFriends = async () => {
+      setShowFriendsList(true)
+      setLoadingFriends(true)
+      
+      // Find mutual / connected relationships involving this user
+      const { data: inbound } = await supabase.from('connections').select('follower_id').eq('target_id', session.user.id).eq('connection_type', 'friend')
+      const { data: outbound } = await supabase.from('connections').select('target_id').eq('follower_id', session.user.id).eq('connection_type', 'friend')
+      
+      const friendIds = new Set([
+          ...(inbound?.map(c => c.follower_id) || []),
+          ...(outbound?.map(c => c.target_id) || [])
+      ])
+
+      if (friendIds.size > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic, account_type').in('id', Array.from(friendIds))
+          setFriendsList(profiles || [])
+      } else {
+          setFriendsList([])
+      }
+      setLoadingFriends(false)
+  }
+
   if (!profile) return <div className="p-10 text-center text-blue-400 font-bold uppercase tracking-widest animate-pulse">Loading Identity...</div>
 
   const latestPost = posts.length > 0 ? posts[0] : null
@@ -144,7 +171,13 @@ export default function Profile({ session }) {
                 </div>
             </div>
 
-            <ProfileHeader profile={profile} latestPost={latestPost} friendsCount={friendsCount} onEditTheme={() => setIsEditingTheme(true)} />
+            <ProfileHeader 
+                profile={profile} 
+                latestPost={latestPost} 
+                friendsCount={friendsCount} 
+                onEditTheme={() => setIsEditingTheme(true)} 
+                onOpenFriends={handleOpenFriends} 
+            />
         </div>
 
         {/* 🟢 THE INVENTORY BUTTON */}
@@ -167,15 +200,19 @@ export default function Profile({ session }) {
         </div>
 
         {/* CATEGORY PREFERENCES */}
-        <div className="bg-black/40 border border-gray-800 rounded-3xl p-6">
-            <div className="flex justify-between items-center mb-4">
+        <div className="bg-black/40 border border-gray-800 rounded-3xl p-6 transition-all duration-300">
+            <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setIsPrefsExpanded(!isPrefsExpanded)}>
                 <h3 className="text-2xl font-['Bebas_Neue'] text-gray-300 tracking-widest">My Vibe</h3>
-                <button onClick={() => setIsEditingPrefs(!isEditingPrefs)} className="text-xs font-bold text-blue-400 uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-500/30">
-                    {isEditingPrefs ? 'Done' : 'Edit Preferences'}
-                </button>
+                <div className="flex items-center gap-3">
+                    <button onClick={(e) => { e.stopPropagation(); setIsEditingPrefs(!isEditingPrefs); if (!isPrefsExpanded) setIsPrefsExpanded(true); }} className="text-xs font-bold text-blue-400 uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-900/40 transition-colors">
+                        {isEditingPrefs ? 'Done' : 'Edit'}
+                    </button>
+                    <span className={`text-gray-500 text-lg transition-transform duration-300 ${isPrefsExpanded ? 'rotate-180' : ''}`}>▼</span>
+                </div>
             </div>
             
-            <div className="space-y-4">
+            {isPrefsExpanded && (
+            <div className="space-y-4 mt-4 animate-fade-in">
                 <div>
                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Event Styles</span>
                     <div className="flex flex-wrap gap-2">
@@ -219,6 +256,7 @@ export default function Profile({ session }) {
                     </div>
                 </div>
             </div>
+            )}
         </div>
 
         {/* 🟢 DYNAMIC ROLE DASHBOARDS */}
@@ -259,6 +297,34 @@ export default function Profile({ session }) {
             </>
         )}
       </div>
+
+      {/* 🟢 THE FRIENDS LIST MODAL */}
+      {showFriendsList && (
+          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-[#090812] border border-gray-800 rounded-3xl w-full max-w-md p-6 relative max-h-[80vh] flex flex-col shadow-2xl">
+                  <button onClick={() => setShowFriendsList(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-900 w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors z-10">✕</button>
+                  <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest text-blue-400 mb-6">Friends List</h3>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 hide-scrollbar">
+                      {loadingFriends ? (
+                          <p className="text-center text-gray-500 text-xs font-bold uppercase tracking-widest py-8 animate-pulse">Loading Friends...</p>
+                      ) : friendsList.length === 0 ? (
+                          <p className="text-center text-gray-500 text-xs font-bold uppercase tracking-widest py-8">No friends found.</p>
+                      ) : (
+                          friendsList.map(f => (
+                              <div key={f.id} className="flex items-center gap-3 bg-black/40 border border-gray-800 p-3 rounded-xl hover:border-blue-500/50 transition-colors">
+                                  <img src={f.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${f.username}`} alt={f.username} className="w-12 h-12 rounded-full border border-gray-700 bg-black object-cover" />
+                                  <div>
+                                      <h4 className="text-white font-bold text-lg leading-tight">{f.username}</h4>
+                                      <span className="text-[9px] bg-blue-900/30 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest">{f.account_type}</span>
+                                  </div>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* 🟢 THE INVENTORY & WALLET MODAL */}
       {showInventory && (

@@ -262,6 +262,13 @@ function MainApp() {
           const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
           await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
           showReward('Daily Login Bonus', earnedPts)
+
+          // 🟢 FIX: Actually insert a record into the notifications table so it populates the tray!
+          await supabase.from('notifications').insert([{
+              user_id: userProfile.id,
+              title: 'Daily Login Bonus',
+              content: `You earned +${earnedPts || 50} L$ for logging in today! Keep the streak alive.`
+          }])
       }
   }
 

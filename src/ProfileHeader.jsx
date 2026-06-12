@@ -29,7 +29,7 @@ const Linkify = ({ text }) => {
     );
 };
 
-export default function ProfileHeader({ profile, friendsCount, latestPost, onEditTheme }) {
+export default function ProfileHeader({ profile, friendsCount, latestPost, onEditTheme, onOpenFriends }) {
   const [currentSlide, setCurrentSlide] = useState(0)
 
   // Slideshow Timer
@@ -89,7 +89,7 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
       </div>
 
       <div className="flex gap-4 sm:gap-6 mt-6 pt-6 border-t border-white/10 w-full justify-center relative z-10">
-        <div className="text-center">
+        <div className="text-center cursor-pointer hover:opacity-80 transition-opacity" onClick={onOpenFriends}>
           <span className="block text-2xl font-['Bebas_Neue'] text-white" style={{ textShadow: `0 0 10px ${dynamicPrimary}` }}>{friendsCount}</span>
           <span className="text-[10px] text-gray-300 uppercase tracking-widest font-bold">Friends</span>
         </div>

@@ -326,6 +326,13 @@ export default function Map({ currentUser, onViewEntity }) {
           setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
           setActiveGift(null)
           setClaiming(false)
+
+          // 🟢 FIX: Trigger Notification for GeoGift
+          await supabase.from('notifications').insert([{
+              user_id: currentUser.id,
+              title: 'Cache Claimed!',
+              content: `You discovered a GeoGift and earned +${activeGift.reward_lp || 0} L$!`
+          }])
       }, (err) => {
           alert("Radar Offline. Ensure location services are enabled to claim Geo-Gifts.")
           setClaiming(false)
@@ -366,6 +373,13 @@ export default function Map({ currentUser, onViewEntity }) {
                       user_id: currentUser.id,
                       venue_name: venue.name
                   }])
+              
+              // 🟢 FIX: Trigger Notification for Engagement
+              await supabase.from('notifications').insert([{
+                  user_id: currentUser.id,
+                  title: 'Location Linked',
+                  content: `You earned +${pointsEarned || 22} L$ for checking into ${venue.name}!`
+              }])
               }
               setLinkingVenue(false)
           },

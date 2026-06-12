@@ -8,6 +8,7 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [loading, setLoading] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false) // 🟢 Controls Dropdown
 
   const catIcons = { 'Fave': '🌟', 'To Sing': '🎤', 'Sung': '🕒' }
 
@@ -92,11 +93,21 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
   const displayList = searchQuery.length >= 2 ? searchResults : songs
 
   return (
-    <div className="animate-fade-in mt-8 space-y-4">
-        <h3 className="text-3xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
-            {isOwner ? 'My Vault' : 'Their Vault'}
-        </h3>
+    <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 relative overflow-hidden transition-all duration-300 shadow-[0_0_30px_rgba(59,130,246,0.1)] mt-8">
+        <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setIsExpanded(!isExpanded)}>
+            <h3 className="text-3xl font-['Bebas_Neue'] text-blue-400 tracking-wider drop-shadow-[0_0_10px_rgba(59,130,246,0.8)]">
+                {isOwner ? 'My Vault' : 'Their Vault'}
+            </h3>
+            <div className="flex items-center gap-3">
+                <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-500/30">
+                    {songs.length} Songs
+                </span>
+                <span className={`text-gray-500 text-lg transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
+            </div>
+        </div>
 
+        {isExpanded && (
+        <div className="mt-6 space-y-4 animate-fade-in">
         <input
             type="text"
             placeholder="Search the vault..."
@@ -152,6 +163,8 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
               </div>
           )}
         </div>
+      </div>
+      )}
     </div>
   )
 }

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import SongRow from './SongRow'
+import Setlist from './Setlist'
+import Repertoire from './Repertoire'
 
 export default function SongBook({ currentUser, profileUser, isOwnProfile = true, embedded = false }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
+  const [setlistTrigger, setSetlistTrigger] = useState(0)
 
   useEffect(() => {
     const searchTimeout = setTimeout(async () => {
@@ -40,6 +43,7 @@ export default function SongBook({ currentUser, profileUser, isOwnProfile = true
       else alert("Error saving song.")
     } else {
       alert(`Added "${songTitle}" to your ${category}!`)
+      setSetlistTrigger(prev => prev + 1)
     }
   }
 
@@ -75,17 +79,18 @@ export default function SongBook({ currentUser, profileUser, isOwnProfile = true
   }
 
   return (
-    <div className={`${embedded ? '' : 'max-w-2xl mx-auto p-4 animate-fade-in pb-32'}`}>
-        {!embedded && (
-            <h2 className="text-5xl font-['Bebas_Neue'] text-blue-400 tracking-wider mb-8 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)] text-center">
-                Global Songbook
-            </h2>
+    <div className={`${embedded ? '' : 'max-w-2xl mx-auto p-4 animate-fade-in pb-32 space-y-6'}`}>
+        {!embedded && isOwnProfile && (
+            <Setlist session={{ user: currentUser }} isOwner={true} />
         )}
-        {embedded && (
-            <h2 className="text-3xl font-['Bebas_Neue'] tracking-widest text-green-400 mb-6 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)] text-center">
-                Suggest a New Song
+        
+        <div className={`${embedded ? '' : 'bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden'}`}>
+            {!embedded && (
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
+            )}
+            <h2 className={`font-['Bebas_Neue'] tracking-widest text-center mb-6 drop-shadow-[0_0_10px_rgba(59,130,246,0.8)] ${embedded ? 'text-3xl text-green-400' : 'text-5xl text-blue-400'}`}>
+                {embedded ? 'Suggest a New Song' : 'Global Songbook'}
             </h2>
-        )}
 
         {/* Search Bar */}
         <div className="relative mb-6">
@@ -134,6 +139,19 @@ export default function SongBook({ currentUser, profileUser, isOwnProfile = true
               </div>
           )}
         </div>
+    </div>
+
+        {!embedded && isOwnProfile && (
+            <Repertoire 
+                userId={currentUser.id} 
+                isOwner={true} 
+                canSuggest={false} 
+                currentUser={currentUser} 
+                profileUser={currentUser} 
+                trigger={setlistTrigger} 
+                setTrigger={setSetlistTrigger} 
+            />
+        )}
     </div>
   )
 }

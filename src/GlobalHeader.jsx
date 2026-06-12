@@ -19,13 +19,11 @@ export default function GlobalHeader({
       if (!currentUser?.id) return
 
       const fetchUnread = async () => {
-          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
           const { count } = await supabase
               .from('notifications')
               .select('*', { count: 'exact', head: true })
               .eq('user_id', currentUser.id)
               .eq('is_read', false)
-              .gte('created_at', yesterday)
           setUnreadCount(count || 0)
       }
 

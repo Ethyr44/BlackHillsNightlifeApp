@@ -25,16 +25,11 @@ export default function NotificationsMenu({ userId, onClose, onRoute, onMarkRead
 
     const fetchNotifs = async () => {
         setLoading(true)
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-        
-        // Lazy cleanup of old notifications for this user
-        supabase.from('notifications').delete().eq('user_id', userId).lt('created_at', yesterday).then()
 
         const { data, error } = await supabase
             .from('notifications')
             .select('*')
             .eq('user_id', userId)
-            .gte('created_at', yesterday)
             .order('created_at', { ascending: false })
             .limit(15)
         

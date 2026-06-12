@@ -51,7 +51,13 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
       {/* Background Logic */}
       {profile.slideshow_urls && profile.slideshow_urls.length > 0 ? (
           profile.slideshow_urls.map((url, idx) => (
-              <img key={idx} src={url} alt="Slideshow" referrerPolicy="no-referrer" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? 'opacity-40' : 'opacity-0'}`} />
+              <img 
+                  key={idx} 
+                  src={url} 
+                  alt="Slideshow" 
+                  referrerPolicy="no-referrer" 
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${idx === currentSlide ? 'opacity-40 z-0' : 'opacity-0 -z-10'}`} 
+              />
           ))
       ) : (
           <div className="absolute inset-0 opacity-20" style={{ background: `linear-gradient(135deg, ${dynamicPrimary}, ${dynamicSecondary})` }} />

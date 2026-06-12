@@ -90,7 +90,7 @@ export default function AdminPages() {
     const payload = {
       name: pageName,
       page_type: pageType,
-      profile_pic: profilePic,
+      profile_pic: profilePic && !profilePic.includes('dicebear') ? profilePic : null,
       slideshow_urls: slideshowUrls,
       address, phone, website, facebook, cost,
       tags: selectedTags,

@@ -4,18 +4,7 @@ import { supabase } from './supabaseClient'
 import MapVenueOverlay from './MapVenueOverlay'
 import MapGiftOverlay from './MapGiftOverlay'
 import MapDeployGift from './MapDeployGift'
-
-function getDistanceInFeet(lat1, lon1, lat2, lon2) {
-    const R = 3958.8;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const d = R * c; 
-    return d * 5280;
-}
+import { getDistanceInFeet } from './utils'
 
 export default function Map({ currentUser, onViewEntity }) {
   const mapRef = useRef(null)
@@ -172,32 +161,32 @@ export default function Map({ currentUser, onViewEntity }) {
 
           if (show) {
               const position = { lat: parseFloat(venue.lat), lng: parseFloat(venue.lng) }
-              const dotDiv = document.createElement('div')
+              
+              // 1. Check if the venue has an event today based on our earlier data fetch
+              const hasEventToday = !!venue.eventToday;
+              
+              // 2. Check if a KSocial session is currently active
+              const isLive = venue.isLive;
+              
+              // 3. Create the Marker Element
+              const el = document.createElement('div');
+              el.className = `rounded-full border-2 border-[#090812] shadow-lg transition-all ${
+                  hasEventToday || isLive 
+                  ? 'bg-[#ff2d78] w-5 h-5 animate-pulse shadow-[0_0_15px_rgba(255,45,120,0.8)] z-50' 
+                  : 'bg-purple-600 w-4 h-4 opacity-80'
+              }`;
+              el.style.cursor = 'pointer';
 
-              let dotColor = venue.is_hotspot ? 'bg-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.9)]' : 'bg-purple-600 shadow-[0_0_15px_rgba(147,51,234,0.8)]'
-              let dotSize = 'w-4 h-4'
-              let animation = ''
-
-              // Apply the glow and size bump if there is ANY event today
-              if (venue.eventToday) {
-                  dotColor = 'bg-[#ff2d78] shadow-[0_0_20px_rgba(255,45,120,0.9)]'
-                  dotSize = 'w-5 h-5'
-                  animation = 'animate-pulse' 
-                  
-                  // Optional: Make it strobe faster/differently if it's actively live right now
-                  if (venue.isLive) { 
-                      animation = 'animate-ping' 
-                  }
+              // 4. Add a special icon inside the dot ONLY if it is KSocial Live
+              if (isLive) {
+                  el.innerHTML = `<span style="font-size: 10px; display: flex; align-items: center; justify-content: center; height: 100%; width: 100%;">🎤</span>`;
               }
-
-              dotDiv.innerHTML = `<div class="${dotSize} ${dotColor} ${animation} rounded-full border-2 border-white transition-transform duration-300"></div>`
-              dotDiv.style.cursor = 'pointer'
 
           const marker = new window.google.maps.marker.AdvancedMarkerElement({ 
               position, 
               map: mapInstance, 
               title: venue.name, 
-              content: dotDiv,
+                  content: el,
               zIndex: 100,
               collisionBehavior: 'REQUIRED'
           })

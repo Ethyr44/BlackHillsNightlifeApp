@@ -28,6 +28,14 @@ const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 const JournalFeed = lazy(() => import('./JournalFeed')) // 🟢 Add this import!
 
+// 🟢 NEW: Maps specific tabs to their parent "Hubs" for dynamic bottom navigation
+const HUB_MAP = {
+    'Profile': 'SOCIAL', 'Feed': 'SOCIAL', 'Notifs': 'SOCIAL', 'Groups': 'SOCIAL',
+    'Venues': 'LOCAL', 'Events': 'LOCAL', 'Map': 'LOCAL', 'Leagues': 'LOCAL',
+    'KSocial': 'KARAOKE', 'Songbook': 'KARAOKE', 'Journal': 'KARAOKE', 'Shop': 'KARAOKE',
+    'Settings': 'OPTIONS', 'FAQ': 'OPTIONS', 'Contact': 'OPTIONS', 'Admin Dashboard': 'OPTIONS'
+}
+
 const getInitialSplash = () => {
     const hour = new Date().getHours()
     let currentPhase = 'Midnight'
@@ -52,6 +60,9 @@ function MainApp() {
   // 🟢 FIXED: Default tab is now 'Home'
   const activeTab = searchParams.get('tab') || "Home"
   
+  // 🟢 NEW: State to track which Hub is currently active
+  const [activeHub, setActiveHub] = useState(HUB_MAP[activeTab] || 'SOCIAL')
+
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -250,7 +261,12 @@ function MainApp() {
       }
   }
 
-  const changeTab = (newTab) => setSearchParams({ tab: newTab })
+  // 🟢 UPDATED: Change Tab function now dynamically switches the active Hub
+  const changeTab = (newTab) => {
+      const newHub = HUB_MAP[newTab];
+      if (newHub) setActiveHub(newHub); 
+      setSearchParams({ tab: newTab });
+  }
 
   const executeSearch = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -334,33 +350,37 @@ function MainApp() {
   const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
   const getAvailableTabs = () => {
-      // 🟢 ADMIN OVERRIDE: Admins get absolutely everything
+      // 1. Initialize our array with 'Home' so it is ALWAYS present
+      let tabs = ['Home']
+
+      // 2. If the user is an Admin, inject 'Admin Dashboard' at the very front
       if (effectiveUser?.account_type === 'Admin') {
-          return [
-              'Admin Dashboard', 'Home', 'Feed', 'Venues', 'KSocial', 
-              'Profile', 'Map', 'Leagues', 'Songbook', 'Shop', 'Settings'
-          ]
+          tabs.unshift('Admin Dashboard')
       }
 
-      // 🟢 STANDARD USERS: Build the dock dynamically based on Admin settings
-      const baseTabs = ['Home'] // Home is the hub, so it is always visible
+      // 3. Inject the context-specific "Hub" tabs into the middle
+      if (activeHub === 'SOCIAL') {
+          tabs.push('Profile', 'Feed', 'Journal', 'Groups')
+      } else if (activeHub === 'LOCAL') {
+          tabs.push('Venues', 'Events', 'Map') // Ensures Venues is present
+      } else if (activeHub === 'KARAOKE') { // Adjusted to match your HUB_MAP
+          tabs.push('KSocial', 'Songbook', 'Leagues')
+      } else if (activeHub === 'OPTIONS') {
+          tabs.push('Shop')
+      }
 
-      // The core tabs
-      if (systemConfig.showFeed !== false) baseTabs.push('Feed')
-      if (systemConfig.showVenues !== false) baseTabs.push('Venues')
-      if (systemConfig.showKSocial !== false) baseTabs.push('KSocial')
-      if (systemConfig.showProfile !== false) baseTabs.push('Profile')
+      // 4. Global Visibility Controller 
+      if (effectiveUser?.account_type !== 'Admin') {
+          tabs = tabs.filter(tab => systemConfig[`show${tab}`] !== false)
+      }
 
-      // 🟢 THE MISSING TABS: Now they will actually obey the Admin Visibility Controller!
-      if (systemConfig.showMap !== false) baseTabs.push('Map')
-      if (systemConfig.showLeagues !== false) baseTabs.push('Leagues')
-      if (systemConfig.showSongbook !== false) baseTabs.push('Songbook')
-      if (systemConfig.showShop !== false) baseTabs.push('Shop')
-      
-      // 🟢 Keep Settings at the end of the dock!
-      if (systemConfig.showSettings !== false) baseTabs.push('Settings')
+      // 5. Cap it off with Settings so it is ALWAYS the last item
+      if (!tabs.includes('Settings')) {
+          tabs.push('Settings')
+      }
 
-      return baseTabs
+      // Filter out duplicates just in case!
+      return [...new Set(tabs)]
   }
 
   const tabs = getAvailableTabs()

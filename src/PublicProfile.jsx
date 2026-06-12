@@ -6,15 +6,7 @@ import SongBook from './Songbook'
 import ProfileVenue from './ProfileVenue'
 import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
-
-const GRADIENTS = {
-  'deep-space': 'bg-gradient-to-b from-slate-900/60 via-[#090812]/60 to-black/60 backdrop-blur-md',
-  'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812]/60 to-black/60 backdrop-blur-md',
-  'toxic-glow': 'bg-gradient-to-b from-green-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
-  'blood-moon': 'bg-gradient-to-b from-red-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
-  'golden-hour': 'bg-gradient-to-b from-orange-900/30 via-[#090812]/60 to-black/60 backdrop-blur-md',
-  'abyss': 'bg-black/60 backdrop-blur-md'
-}
+import { GRADIENTS } from './themeConstants'
 
 // 🟢 Drop this near the top of your file
 const Linkify = ({ text }) => {
@@ -132,7 +124,13 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
     <>
       {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
           entity.slideshow_urls.map((url, idx) => (
-             <img key={idx} src={url} alt="Slideshow" referrerPolicy="no-referrer" className={`fixed inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out z-0 pointer-events-none opacity-30 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`} />
+             <img 
+                 key={idx} 
+                 src={url} 
+                 alt="Slideshow" 
+                 referrerPolicy="no-referrer" 
+                 className={`fixed inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out pointer-events-none ${idx === currentSlide ? 'opacity-30 z-0' : 'opacity-0 -z-10'}`} 
+             />
           ))
       ) : (
           <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>

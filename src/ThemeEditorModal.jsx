@@ -1,14 +1,6 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient'
-
-const GRADIENTS = {
-  'deep-space': 'bg-gradient-to-b from-slate-900 via-[#090812] to-black',
-  'cyber-dusk': 'bg-gradient-to-b from-purple-900/40 via-[#090812] to-black',
-  'toxic-glow': 'bg-gradient-to-b from-green-900/30 via-[#090812] to-black',
-  'blood-moon': 'bg-gradient-to-b from-red-900/30 via-[#090812] to-black',
-  'golden-hour': 'bg-gradient-to-b from-orange-900/30 via-[#090812] to-black',
-  'abyss': 'bg-black'
-}
+import { GRADIENTS } from './themeConstants' // Make sure this path is correct based on your setup
 
 export default function ThemeEditorModal({ session, profile, onClose, onUpdate }) {
   const [saving, setSaving] = useState(false)
@@ -20,11 +12,10 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
   const [accent, setAccent] = useState(profile.accent_color || '#10b981')
   const [bgGradient, setBgGradient] = useState(profile.bg_gradient || 'deep-space')
 
-  // 🟢 RESTORED: Image States
+  // 🟢 FIX: Images are now handled cleanly
   const [profilePic, setProfilePic] = useState(profile.profile_pic || '')
-  const [slideshow, setSlideshow] = useState(profile.slideshow_urls ? profile.slideshow_urls.join('\n') : '')
+  const [slideshow, setSlideshow] = useState(profile.slideshow_urls || []) // Now an array!
 
-  // 🟢 RESTORED: Supabase Storage Uploader
   const handleImageUpload = async (e, type) => {
     try {
       const file = e.target.files[0]
@@ -39,16 +30,15 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
       // Uploads to a Supabase bucket named 'avatars'
       const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
       
-      if (uploadError) {
-          throw uploadError
-      }
+      if (uploadError) throw uploadError
 
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
       
+      // 🟢 FIX: Update the visual states immediately
       if (type === 'profile') {
           setProfilePic(data.publicUrl)
       } else if (type === 'slideshow') {
-          setSlideshow(prev => prev ? prev + '\n' + data.publicUrl : data.publicUrl)
+          setSlideshow(prev => [...prev, data.publicUrl])
       }
       
     } catch (error) {
@@ -56,6 +46,10 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
     } finally {
         setUploading(false)
     }
+  }
+
+  const handleRemoveSlide = (indexToRemove) => {
+      setSlideshow(prev => prev.filter((_, idx) => idx !== indexToRemove))
   }
 
   const handleSave = async () => {
@@ -66,8 +60,8 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
       secondary_color: secondary,
       accent_color: accent,
       bg_gradient: bgGradient,
-      profile_pic: profilePic, // 🟢 Save Profile Pic
-      slideshow_urls: slideshow.split('\n').map(s => s.trim()).filter(Boolean) // 🟢 Save Slideshow Array
+      profile_pic: profilePic, 
+      slideshow_urls: slideshow // Now passing the array directly
     }
 
     const { error } = await supabase.from('profiles').update(updates).eq('id', session.user.id)
@@ -83,34 +77,40 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-      {/* Added max-h and overflow so the modal scrolls if it gets too tall on small screens */}
       <div className="bg-[#090812] border border-gray-700 rounded-3xl p-6 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.8)] max-h-[90vh] overflow-y-auto hide-scrollbar">
         <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-6 text-white text-center">Customize Identity</h3>
         
         <div className="space-y-6">
           
-          {/* 🟢 RESTORED: Profile Imagery Section */}
+          {/* 🟢 NEW: File Dialog UI */}
           <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
-              <h4 className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Profile Imagery</h4>
               
-              <div className="mb-4">
-                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Avatar Image URL</label>
-                  <div className="flex gap-2">
-                      <input type="text" value={profilePic} onChange={e => setProfilePic(e.target.value)} placeholder="https://..." className="flex-1 bg-black border border-gray-700 text-white rounded-lg p-2 text-xs focus:border-blue-500 outline-none" />
-                      <label className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-widest flex items-center transition-colors">
-                          {uploading ? '...' : 'Upload'}
+              <div className="mb-6">
+                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Avatar Image</label>
+                  <div className="flex items-center gap-4">
+                      <img src={profilePic || `https://api.dicebear.com/7.x/shapes/svg?seed=${profile.username}`} alt="Avatar" className="w-16 h-16 rounded-xl object-cover border border-gray-700 bg-black" />
+                      <label className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-widest transition-colors shadow-md">
+                          {uploading ? 'Uploading...' : 'Change Avatar'}
                           <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'profile')} className="hidden" disabled={uploading} />
                       </label>
                   </div>
               </div>
 
               <div>
-                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-1">Cover Slideshow URLs (One per line)</label>
-                  <textarea value={slideshow} onChange={e => setSlideshow(e.target.value)} placeholder="https://image1.jpg&#10;https://image2.jpg" className="w-full bg-black border border-gray-700 text-white rounded-lg p-2 text-xs focus:border-blue-500 outline-none h-20 resize-none mb-2" />
-                  <label className="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-widest flex items-center justify-center transition-colors">
-                      {uploading ? 'Uploading...' : '+ Upload to Slideshow'}
-                      <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'slideshow')} className="hidden" disabled={uploading} />
-                  </label>
+                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Cover Slideshow</label>
+                  <div className="flex flex-wrap gap-2">
+                      {slideshow.map((url, i) => (
+                          <div key={i} className="relative group">
+                              <img src={url} alt={`Slide ${i}`} className="w-16 h-16 rounded-lg object-cover border border-gray-700" />
+                              <button onClick={() => handleRemoveSlide(i)} className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-400 text-white w-5 h-5 rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center font-bold shadow-md">✕</button>
+                          </div>
+                      ))}
+                      <label className="w-16 h-16 bg-gray-900 hover:bg-gray-800 border border-dashed border-gray-600 rounded-lg cursor-pointer flex flex-col items-center justify-center transition-colors">
+                          <span className="text-gray-400 text-xl leading-none mb-1">+</span>
+                          <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">Add</span>
+                          <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'slideshow')} className="hidden" disabled={uploading} />
+                      </label>
+                  </div>
               </div>
           </div>
 

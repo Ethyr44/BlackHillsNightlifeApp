@@ -2,22 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import VenueCard, { EVENT_EMOJIS } from './VenueCard'
 import { toast } from './GlobalToast'
-
-// 🟢 NEW: Distance Calculator
-function getDistanceInFeet(lat1, lon1, lat2, lon2) {
-    const R = 3958.8;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return (R * c) * 5280;
-}
+import { getDistanceInFeet } from './utils'
 
 export default function EventsFeed({ currentUser, onViewEntity }) {
-  const [rawLineups, setRawLineups] = useState([]) // 🟢 NEW: Stores the unsorted master list
-  const [sortMode, setSortMode] = useState('distance') // 🟢 NEW: 'distance' or 'eventsFirst'
+  const [rawLineups, setRawLineups] = useState([]) 
+  const [sortMode, setSortMode] = useState('distance') 
   const [eventTypeFilter, setEventTypeFilter] = useState('All')
   
   const [venueLineups, setVenueLineups] = useState([])
@@ -48,42 +37,61 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
     const { data: eventsData } = await supabase.from('events').select('*').eq('status', 'approved')
 
     const today = new Date()
-    const currentDayIndex = today.getDay() 
 
     const builtLineups = (venuesData || []).map(venue => {
         const schedule = []
+        // Safely extract the legacy fallback schedule so nothing gets "wiped"
+        const legacySchedule = venue.details?.schedule || []
+
         for (let i = 0; i < 7; i++) {
             const slotDate = new Date(today)
             slotDate.setDate(today.getDate() + i)
             const dayName = slotDate.toLocaleDateString('en-US', { weekday: 'short' })
 
-            const event = eventsData?.find(e => {
+            // PRIORITY 1: Is there a specific one-off event in the events table?
+            let matchedEvent = eventsData?.find(e => {
                 if (e.venue !== venue.name) return false;
-                const rawDate = e.event_date;
-                const safeDateStr = rawDate.includes('Z') || rawDate.includes('+') ? rawDate : rawDate + 'Z';
+                if (e.recurring_weekly) return false;
+                
+                const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
                 const eDate = new Date(safeDateStr);
                 
-                if (e.recurring_weekly) {
-                    return eDate.getDay() === slotDate.getDay();
-                }
                 return eDate.getFullYear() === slotDate.getFullYear() &&
                        eDate.getMonth() === slotDate.getMonth() &&
                        eDate.getDate() === slotDate.getDate();
             })
 
-            schedule.push({ day: dayName, date: slotDate, event: event || null })
+            // PRIORITY 2: If no one-off event, check for a recurring weekly event in the events table
+            if (!matchedEvent) {
+                matchedEvent = eventsData?.find(e => {
+                    if (e.venue !== venue.name) return false;
+                    if (!e.recurring_weekly) return false;
+                    
+                    const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
+                    const eDate = new Date(safeDateStr);
+                    return eDate.getDay() === slotDate.getDay();
+                })
+            }
+
+            // PRIORITY 3 (FALLBACK): Legacy JSON data from the pages table
+            if (!matchedEvent) {
+                const legacySlot = legacySchedule.find(s => s.day === dayName || s.day === slotDate.toLocaleDateString('en-US', { weekday: 'long' }))
+                if (legacySlot && legacySlot.event) {
+                    matchedEvent = legacySlot.event
+                }
+            }
+
+            schedule.push({ day: dayName, date: slotDate, event: matchedEvent || null })
         }
         
-        // 🟢 FIX 1: Merge schedule directly into the venue object
         return { ...venue, schedule }
     })
 
-    // 🟢 FIX: Save raw data. The new effect below handles the sorting.
     setRawLineups(builtLineups)
     setLoading(false)
   }
 
-  // 🟢 NEW: Dynamic Sorting Engine
+  // Dynamic Sorting Engine
   useEffect(() => {
       if (rawLineups.length === 0) return;
 
@@ -100,7 +108,6 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
           return getDistanceInFeet(userLoc.lat, userLoc.lon, venue.lat, venue.lng);
       };
 
-      // Helper to score a venue by its earliest event day (0 = Today, 1 = Tomorrow, ..., 7 = No Events)
       const getEventScore = (venue) => {
           for (let i = 0; i < 7; i++) {
               if (venue.schedule[i]?.event) return i;
@@ -109,23 +116,17 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       };
 
       sorted.sort((a, b) => {
-          // Priority 1: Events First Mode
           if (sortMode === 'eventsFirst') {
               const scoreA = getEventScore(a);
               const scoreB = getEventScore(b);
-
-              if (scoreA !== scoreB) {
-                  return scoreA - scoreB; // Lower score (earlier event) floats to the top
-              }
+              if (scoreA !== scoreB) return scoreA - scoreB;
           }
-
-          // Priority 2 (or Tie-Breaker): Distance from User
           return getDist(a) - getDist(b);
       });
 
       setVenueLineups(sorted);
       setDisplayedVenues(sorted.slice(0, ITEMS_PER_PAGE));
-      setPage(1); // 🟢 Important: Reset pagination to page 1 when sort changes
+      setPage(1); 
   }, [rawLineups, userLoc, sortMode, eventTypeFilter]);
 
   const loadMore = () => {
@@ -139,7 +140,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       setSelectedEventInfo({ slot })
       setIsEditingEvent(false)
       if (slot.event) {
-          setEditFormData({ title: slot.event.title, description: slot.event.description || '', event_type: slot.event.event_type || 'Live Music' })
+          setEditFormData({ title: slot.event.title || '', description: slot.event.description || '', event_type: slot.event.event_type || 'Live Music' })
       } else {
           setEditFormData({ title: '', description: '', event_type: 'Live Music' })
       }
@@ -147,7 +148,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   const handleSaveEvent = async () => {
       const payload = {
-          title: editFormData.title,
+          title: editFormData.title || `${selectedVenueInfo.name} Event`, // Ensure title exists
           description: editFormData.description,
           event_type: editFormData.event_type,
           venue: selectedVenueInfo.name,
@@ -155,19 +156,41 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
           status: 'approved'
       }
 
-      if (selectedEventInfo.slot.event) {
-          await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id)
+      let newEventObj = { ...payload }
+
+      // 1. Save to Database
+      if (selectedEventInfo.slot.event?.id) {
+          const { data } = await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id).select().single()
+          if (data) newEventObj = data
           toast.success("Event updated!")
       } else {
-          await supabase.from('events').insert([payload])
+          const { data } = await supabase.from('events').insert([payload]).select().single()
+          if (data) newEventObj = data
           toast.success("Event created!")
       }
+
+      // 2. Optimistic UI Update: Instantly inject the new event into the rawLineups state
+      // This triggers the sorting engine and updates the VenueCard emojis immediately!
+      setRawLineups(prevRaw => prevRaw.map(v => {
+          if (v.id === selectedVenueInfo.id) {
+              const updatedSchedule = v.schedule.map(s => {
+                  if (s.date.toDateString() === selectedEventInfo.slot.date.toDateString()) {
+                      return { ...s, event: newEventObj }
+                  }
+                  return s;
+              })
+              return { ...v, schedule: updatedSchedule }
+          }
+          return v;
+      }))
+
       setIsEditingEvent(false)
       setSelectedEventInfo(null)
+      
+      // Still run the background fetch to ensure absolute parity with the cloud
       fetchFeedData()
   }
 
-  // 🟢 NEW: Delete Event Logic
   const handleDeleteEvent = async () => {
       if (!selectedEventInfo?.slot?.event?.id) return
       if (!window.confirm("Are you sure you want to permanently delete this event?")) return
@@ -178,6 +201,21 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
           toast.error(`Error deleting event: ${error.message}`)
       } else {
           toast.success("Event deleted successfully!")
+          
+          // Optimistically clear it from the UI
+          setRawLineups(prevRaw => prevRaw.map(v => {
+              if (v.id === selectedVenueInfo.id) {
+                  const updatedSchedule = v.schedule.map(s => {
+                      if (s.date.toDateString() === selectedEventInfo.slot.date.toDateString()) {
+                          return { ...s, event: null }
+                      }
+                      return s;
+                  })
+                  return { ...v, schedule: updatedSchedule }
+              }
+              return v;
+          }))
+
           setIsEditingEvent(false)
           setSelectedEventInfo(null)
           fetchFeedData()
@@ -186,11 +224,10 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   return (
     <div className="space-y-6 animate-fade-in relative">
-        {loading ? (
+        {loading && rawLineups.length === 0 ? (
             <div className="text-center p-12"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>
         ) : (
             <>
-                {/* 🟢 NEW: Sorting Toggles */}
                 <div className="flex gap-2 mb-4 px-1">
                     <button
                         onClick={() => setSortMode('distance')}
@@ -230,14 +267,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                     ))}
                 </div>
 
-                {displayedVenues
-                    // 🟢 NEW: Filter logic
-                    .filter(venue => {
-                        if (eventTypeFilter === 'All') return true;
-                        // Check if ANY slot in the venue has an event matching the filter
-                        return venue.schedule.some(slot => slot.event?.event_type === eventTypeFilter);
-                    })
-                    .map((venue) => (
+                {displayedVenues.map((venue) => (
                     <VenueCard 
                         key={venue.id} 
                         venue={venue} 
@@ -289,8 +319,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                                 <button onClick={handleSaveEvent} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest shadow-lg transition-colors">Save Event</button>
                             </div>
                             
-                            {/* 🟢 NEW: Delete Event Button */}
-                            {selectedEventInfo.slot.event && (
+                            {selectedEventInfo.slot.event?.id && (
                                 <button onClick={handleDeleteEvent} className="w-full mt-2 bg-red-900/20 border border-red-900/50 text-red-500 hover:bg-red-500 hover:text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-lg">
                                     Delete Event
                                 </button>

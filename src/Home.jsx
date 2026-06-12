@@ -19,8 +19,8 @@ export default function Home({ changeTab, currentUser }) {
             subItems: [
                 { label: 'Profile', tab: 'Profile', active: true, icon: '👤' },
                 { label: 'Feed', tab: 'Feed', active: true, icon: '📱' },
-                { label: 'Notifications', tab: 'Notifs', active: false, icon: '🔔' },
-                { label: 'Groups', tab: 'Groups', active: false, icon: '👥' }
+                { label: 'Journal', tab: 'Journal', active: true, icon: '📓' },
+                { label: 'Groups', tab: 'Groups', active: true, icon: '👥' }
             ]
         },
         {
@@ -30,25 +30,24 @@ export default function Home({ changeTab, currentUser }) {
             color: 'from-cyan-500 to-blue-800',
             glow: 'shadow-[0_0_20px_rgba(6,182,212,0.4)]',
             subItems: [
+                { label: 'Map', tab: 'Map', active: true, icon: '🗺️' },
                 { label: 'Venues', tab: 'Venues', active: true, icon: '📍' },
                 // 🟢 FIXED: Changed active to true so it's clickable and routes to the 'Events' tab!
                 { label: 'Events Calendar', tab: 'Events', active: true, icon: '📅' },
-                { label: 'Map', tab: 'Map', active: true, icon: '🗺️' },
-                { label: 'Leagues', tab: 'Leagues', active: true, icon: '🏆' }
+                { label: 'Community Board', tab: 'Community', active: true, icon: '📰' }
             ]
         },
         {
-            id: 'karaoke',
-            title: 'KARAOKE',
-            align: 'left', // Slanted on the right
-            color: 'from-purple-600 to-pink-700',
-            glow: 'shadow-[0_0_20px_rgba(147,51,234,0.4)]',
+            id: 'live',
+            title: 'LIVE',
+            align: 'left',
+            color: 'from-pink-600 to-purple-900',
+            glow: 'shadow-[0_0_20px_rgba(219,39,119,0.4)]',
             subItems: [
-                { label: 'KSocial Sessions', tab: 'KSocial', active: true, icon: '🎤' },
-                { label: 'Songbook', tab: 'Songbook', active: true, icon: '📚' },
-                // 🟢 SWAPPED INVENTORY FOR JOURNAL
-                { label: 'Journal', tab: 'Journal', active: true, icon: '📓' }, 
-                { label: 'Shop', tab: 'Shop', active: true, icon: '💎' }
+                { label: 'Songbook', tab: 'Songbook', active: true, icon: '📖' },
+                { label: 'Karaoke Events', tab: 'KaraokeEvents', active: true, icon: '📅' },
+                { label: 'KSocial', tab: 'KSocial', active: true, icon: '🎤' },
+                { label: 'Leagues', tab: 'Leagues', active: true, icon: '🏆' }
             ]
         },
         {
@@ -58,10 +57,10 @@ export default function Home({ changeTab, currentUser }) {
             color: 'from-gray-700 to-gray-900',
             glow: 'shadow-[0_0_20px_rgba(75,85,99,0.4)]',
             subItems: [
-                ...(currentUser?.account_type === 'Admin' ? [{ label: 'Admin Dashboard', tab: 'Admin Dashboard', active: true, icon: '⚙️' }] : []),
+                { label: currentUser?.account_type === 'Admin' ? 'Admin Dashboard' : 'Dashboard', tab: currentUser?.account_type === 'Admin' ? 'Admin Dashboard' : 'Dashboard', active: currentUser?.account_type === 'Admin', icon: '⚙️' },
                 { label: 'Settings', tab: 'Settings', active: true, icon: '🛠️' },
-                { label: 'FAQ / Blog', tab: 'FAQ', active: false, icon: '📰' },
-                { label: 'About Us / Contact', tab: 'Contact', active: false, icon: '✉️' }
+                { label: 'About / FAQ', tab: 'FAQ', active: true, icon: 'ℹ️' },
+                { label: 'Shop', tab: 'Shop', active: true, icon: '💎' }
             ]
         }
     ]

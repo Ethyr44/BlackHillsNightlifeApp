@@ -1,0 +1,21 @@
+import React from 'react'
+
+export default function KaraokeEvents() {
+  return (
+    <div className="animate-fade-in space-y-6 p-4 sm:p-8 flex flex-col items-center justify-center min-h-[70vh] text-center">
+        <div className="bg-[#090812] border-2 border-pink-500/30 p-10 rounded-[32px] shadow-[0_0_50px_rgba(219,39,119,0.15)] max-w-md w-full">
+            <span className="text-6xl mb-4 block drop-shadow-[0_0_15px_rgba(219,39,119,0.5)]">📅</span>
+            <h2 className="text-4xl font-['Bebas_Neue'] text-white tracking-widest mb-2">Karaoke Events</h2>
+            <p className="text-pink-400 font-bold uppercase tracking-widest text-[10px] mb-6 border-b border-pink-900/50 pb-4">
+                Coming in Version 1.1
+            </p>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">
+                Soon, you'll be able to browse a dedicated list of Karaoke-only events and easily find the next stage to hit!
+            </p>
+            <button disabled className="w-full bg-gray-800 text-gray-500 py-3 rounded-xl font-bold uppercase tracking-widest text-xs cursor-not-allowed">
+                Under Construction
+            </button>
+        </div>
+    </div>
+  )
+}

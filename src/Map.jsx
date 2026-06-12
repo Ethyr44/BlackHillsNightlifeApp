@@ -54,35 +54,39 @@ export default function Map({ currentUser, onViewEntity }) {
     async function init() {
       const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
       
-      const startOfToday = new Date()
-      startOfToday.setHours(0, 0, 0, 0)
-      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved').gte('event_date', startOfToday.toISOString())
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1); // Start of tomorrow
+
+      const { data: eventData } = await supabase
+          .from('events')
+          .select('*')
+          .eq('status', 'approved')
+          .gte('event_date', today.toISOString())
+          .lt('event_date', tomorrow.toISOString());
 
       const { data: giftData } = await supabase.from('geo_gifts').select('*')
       if (giftData) setGeoGifts(giftData)
 
+      // Create a fast lookup Set of venue names that have events today
+      const venuesWithEvents = new Set(eventData?.map(e => e.venue) || []);
+
       const processedVenues = venueData ? venueData.map(v => {
          const now = new Date()
-         const todayStr = now.toDateString()
-         const todayDayOfWeek = now.getDay()
+         const hasEventToday = venuesWithEvents.has(v.name);
 
-         const todaysEvents = (eventData || []).filter(e => {
-            if (e.venue !== v.name) return false;
-            const eDate = new Date(e.event_date);
-            if (e.recurring_weekly) return eDate.getDay() === todayDayOfWeek;
-            return eDate.toDateString() === todayStr;
-         })
+         const todaysEvents = (eventData || []).filter(e => e.venue === v.name);
 
          let isLiveNow = false;
          if (todaysEvents.length > 0) {
              const activeEvent = todaysEvents[0]
              const start = new Date(activeEvent.event_date)
-             if (activeEvent.recurring_weekly) start.setFullYear(now.getFullYear(), now.getMonth(), now.getDate())
              const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
              if (now >= start && now <= end) isLiveNow = true;
          }
 
-         return { ...v, isLive: isLiveNow, eventToday: todaysEvents.length > 0 ? todaysEvents[0] : null }
+         return { ...v, isLive: isLiveNow, eventToday: hasEventToday ? todaysEvents[0] : null }
       }) : []
 
       setVenues(processedVenues)

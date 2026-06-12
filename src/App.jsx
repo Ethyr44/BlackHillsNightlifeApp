@@ -27,13 +27,17 @@ const Settings = lazy(() => import('./Settings'))
 const SongBook = lazy(() => import('./Songbook'))
 const Projector = lazy(() => import('./Projector'))
 const JournalFeed = lazy(() => import('./JournalFeed')) // 🟢 Add this import!
+const Group = lazy(() => import('./Group'))
+const About = lazy(() => import('./About'))
+const Community = lazy(() => import('./Community'))
+const KaraokeEvents = lazy(() => import('./KaraokeEvents'))
 
 // 🟢 NEW: Maps specific tabs to their parent "Hubs" for dynamic bottom navigation
 const HUB_MAP = {
-    'Profile': 'SOCIAL', 'Feed': 'SOCIAL', 'Notifs': 'SOCIAL', 'Groups': 'SOCIAL',
-    'Venues': 'LOCAL', 'Events': 'LOCAL', 'Map': 'LOCAL', 'Leagues': 'LOCAL',
-    'KSocial': 'KARAOKE', 'Songbook': 'KARAOKE', 'Journal': 'KARAOKE', 'Shop': 'KARAOKE',
-    'Settings': 'OPTIONS', 'FAQ': 'OPTIONS', 'Contact': 'OPTIONS', 'Admin Dashboard': 'OPTIONS'
+    'Profile': 'SOCIAL', 'Feed': 'SOCIAL', 'Journal': 'SOCIAL', 'Groups': 'SOCIAL',
+    'Map': 'LOCAL', 'Venues': 'LOCAL', 'Events': 'LOCAL', 'Community': 'LOCAL',
+    'Songbook': 'LIVE', 'KaraokeEvents': 'LIVE', 'KSocial': 'LIVE', 'Leagues': 'LIVE',
+    'Dashboard': 'OPTIONS', 'Shop': 'OPTIONS', 'About': 'OPTIONS', 'Settings': 'OPTIONS', 'FAQ': 'OPTIONS', 'Contact': 'OPTIONS', 'Admin Dashboard': 'OPTIONS'
 }
 
 const getInitialSplash = () => {
@@ -362,9 +366,9 @@ function MainApp() {
       if (activeHub === 'SOCIAL') {
           tabs.push('Profile', 'Feed', 'Journal', 'Groups')
       } else if (activeHub === 'LOCAL') {
-          tabs.push('Venues', 'Events', 'Map') // Ensures Venues is present
-      } else if (activeHub === 'KARAOKE') { // Adjusted to match your HUB_MAP
-          tabs.push('KSocial', 'Songbook', 'Leagues')
+          tabs.push('Map', 'Venues', 'Events', 'Community') // Ensures Venues is present
+      } else if (activeHub === 'LIVE') {
+          tabs.push('Songbook', 'KaraokeEvents', 'KSocial', 'Leagues')
       } else if (activeHub === 'OPTIONS') {
           tabs.push('Shop')
       }
@@ -482,6 +486,10 @@ function MainApp() {
               
               {/* 🟢 NEW: Standalone Journal Route */}
               {activeTab === 'Journal' && <JournalFeed currentUser={effectiveUser} />}
+              {activeTab === 'Groups' && <Group />}
+              {activeTab === 'Community' && <Community />}
+              {activeTab === 'KaraokeEvents' && <KaraokeEvents />}
+              {(activeTab === 'FAQ' || activeTab === 'Contact') && <About />}
             </div>
           </Suspense>
         )}

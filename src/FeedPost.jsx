@@ -37,7 +37,7 @@ const LinkPreview = ({ url }) => {
         >
             {preview.image && (
                 <div className="h-32 sm:h-48 w-full bg-gray-800 overflow-hidden">
-                    <img src={preview.image.url} alt={preview.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <img src={preview.image.url} alt={preview.title} loading="lazy" decoding="async" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                 </div>
             )}
             <div className="p-3 bg-[#090812]">
@@ -100,10 +100,12 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
     const [newComment, setNewComment] = useState('')
     const [replyingTo, setReplyingTo] = useState(null) 
     const [isDeleted, setIsDeleted] = useState(false)
+    const [commentCount, setCommentCount] = useState(0)
 
     useEffect(() => {
         checkLikeStatus()
         fetchLikeCount()
+        fetchCommentCount()
     }, [])
 
     const checkLikeStatus = async () => {
@@ -116,11 +118,17 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
         setLikeCount(count || 0)
     }
 
+    const fetchCommentCount = async () => {
+        const { count } = await supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id)
+        setCommentCount(count || 0)
+    }
+
     const fetchComments = async () => {
         const { data, error } = await supabase.from('comments')
-            .select('*, profiles:user_id(username, profile_pic)')
+            .select('*, profiles(username, profile_pic)')
             .eq('post_id', item.data.id)
             .order('created_at', { ascending: true })
+        if (error) console.error("Comments Error:", error)
         if (!error && data) setComments(data)
     }
 
@@ -144,11 +152,16 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
         e.preventDefault()
         if (!newComment.trim()) return
 
+        // 🟢 Create the base payload first
         const payload = {
             post_id: item.data.id,
             user_id: currentUser.id,
-            content: newComment,
-            reply_to_id: replyingTo ? replyingTo.id : null
+            content: newComment
+        }
+        
+        // 🟢 Only append the reply key if we are actually replying to someone
+        if (replyingTo) {
+            payload.reply_to_id = replyingTo.id
         }
 
         const { error } = await supabase.from('comments').insert([payload])
@@ -156,6 +169,18 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
             setNewComment('')
             setReplyingTo(null)
             fetchComments()
+            setCommentCount(prev => prev + 1)
+            
+            // 🟢 Send a notification to the Post Author!
+            if (item.data.author_id !== currentUser.id) {
+                await supabase.from('notifications').insert([{
+                    user_id: item.data.author_id,
+                    title: 'New Comment',
+                    content: `${currentUser.username} replied to your post.`
+                }])
+            }
+        } else {
+            toast.error("Failed to post: " + error.message)
         }
     }
 
@@ -190,7 +215,7 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => onViewEntity && onViewEntity(item.data.username)}>
                     <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden border border-gray-700 flex-shrink-0">
-                        <img src={item.data.profile_pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.data.username}`} alt="Avatar" className="w-full h-full object-cover" />
+                        <img src={item.data.profile_pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.data.username}`} alt="Avatar" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                     </div>
                     <div>
                         <h4 className="font-bold text-white text-sm leading-tight hover:text-blue-400 transition-colors">{item.data.username}</h4>
@@ -218,6 +243,8 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                 <img 
                     src={item.data.image_url} 
                     alt="Post Attachment" 
+                    loading="lazy"
+                    decoding="async"
                     className="w-full rounded-2xl mb-4 border border-gray-800 object-cover max-h-[500px]" 
                 />
             )}
@@ -229,7 +256,7 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                 </button>
                 
                 <button onClick={toggleComments} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-blue-400 transition-colors">
-                    <span className="text-lg">💬</span> Reply
+                    <span className="text-lg">💬</span> {commentCount > 0 ? `${commentCount} Replies` : 'Reply'}
                 </button>
             </div>
 
@@ -239,11 +266,11 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
                     {comments.map(c => (
                         <div key={c.id} className={`flex gap-3 ${c.reply_to_id ? 'ml-8 relative before:absolute before:content-[\"\"] before:w-4 before:h-px before:bg-gray-700 before:-left-6 before:top-4 border-l border-gray-800 pl-4' : ''}`}>
                             <div className="w-6 h-6 rounded-full bg-gray-800 overflow-hidden flex-shrink-0">
-                                <img src={c.profiles?.profile_pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.profiles?.username}`} alt="Avatar" className="w-full h-full object-cover" />
+                                <img src={c.profiles?.profile_pic || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.profiles?.username || 'User'}`} alt="Avatar" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1">
                                 <div className="bg-black/50 border border-gray-800 p-3 rounded-2xl rounded-tl-sm">
-                                    <h5 className="font-bold text-white text-xs mb-1">{c.profiles?.username}</h5>
+                                    <h5 className="font-bold text-white text-xs mb-1">{c.profiles?.username || 'User'}</h5>
                                     <div className="text-gray-300 text-xs"><Linkify text={c.content} /></div>
                                 </div>
                                 <div className="flex gap-4 mt-1 ml-2">

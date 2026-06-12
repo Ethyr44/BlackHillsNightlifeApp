@@ -142,7 +142,7 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
         </button>
 
         <div className="rounded-3xl p-8 flex flex-col items-center text-center relative overflow-hidden mb-8 border-2 shadow-2xl transition-all duration-500" style={{ backgroundColor: '#090812', borderColor: dynamicPrimary, boxShadow: `0 0 40px ${dynamicPrimary}44, inset 0 0 30px ${dynamicPrimary}44` }}>
-            <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}` }} />
+            <img src={entity.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}`} decoding="async" className="w-36 h-36 rounded-full border-4 bg-black object-cover relative z-10 shadow-2xl" style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} alt="Profile" referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${entity.name || entity.username}` }} />
             
             <h2 className="text-5xl font-['Bebas_Neue'] tracking-wider mt-6 z-10 text-white relative" style={{ textShadow: `0 0 15px ${dynamicPrimary}, 0 0 30px ${dynamicPrimary}` }}>
                 {entity.name || entity.username}

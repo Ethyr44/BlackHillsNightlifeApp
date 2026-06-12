@@ -115,6 +115,8 @@ export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent
                 <img 
                     src={venue.profile_pic} 
                     alt={venue.name} 
+                    loading="lazy"
+                    decoding="async"
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                 />
                 {/* Overlay for readability */}

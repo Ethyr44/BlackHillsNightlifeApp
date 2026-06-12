@@ -165,6 +165,8 @@ export default function Leaderboard({ currentUser, onViewEntity }) {
                         src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}`} 
                         alt={user.username} 
                         onClick={() => onViewEntity(user.username)}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-12 h-12 rounded-full border-2 ${isMe ? 'border-yellow-400' : isTop3 ? 'border-blue-500' : 'border-gray-700'} object-cover bg-black cursor-pointer hover:border-blue-400 transition-colors`} 
                         referrerPolicy="no-referrer" 
                         onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}` }} 

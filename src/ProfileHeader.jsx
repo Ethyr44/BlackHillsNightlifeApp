@@ -67,6 +67,7 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
       <img 
           src={profile.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}`} 
           className="w-36 h-36 rounded-full border-4 bg-black z-10 object-cover shadow-2xl relative" 
+          decoding="async"
           style={{ borderColor: dynamicPrimary, boxShadow: `0 0 25px ${dynamicPrimary}88` }} 
           alt="Profile" 
           onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${profile.username}` }}

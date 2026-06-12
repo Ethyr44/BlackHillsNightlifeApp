@@ -63,7 +63,7 @@ export default function TopNav({
         <div className="max-w-2xl mx-auto p-4 flex justify-between items-center">
            <div className="flex items-center gap-4 flex-1">
                <button onClick={() => changeTab('Profile')} className="w-10 h-10 rounded-full overflow-hidden border-2 border-gray-800 hover:border-blue-500 transition-colors flex-shrink-0 bg-gray-900">
-                  <img src={currentUser.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${currentUser.username}`} alt="Profile" className="w-full h-full object-cover" />
+                  <img src={currentUser.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${currentUser.username}`} alt="Profile" decoding="async" className="w-full h-full object-cover" />
                </button>
                
                <h1 className="text-3xl font-['Bebas_Neue'] tracking-widest bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 text-transparent bg-clip-text drop-shadow-[0_0_10px_rgba(59,130,246,0.3)] hidden sm:block">

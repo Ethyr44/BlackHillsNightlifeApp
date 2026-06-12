@@ -465,7 +465,7 @@ function MainApp() {
                   <div className="space-y-4">
                     {searchResults.profiles.map(user => (
                       <div key={user.id} onClick={() => onViewEntity(user.username)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` }} />
+                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` }} />
                          <h4 className="font-bold text-white text-lg">{user.username}</h4>
                       </div>
                     ))}

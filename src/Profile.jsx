@@ -313,7 +313,7 @@ export default function Profile({ session }) {
                       ) : (
                           friendsList.map(f => (
                               <div key={f.id} className="flex items-center gap-3 bg-black/40 border border-gray-800 p-3 rounded-xl hover:border-blue-500/50 transition-colors">
-                                  <img src={f.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${f.username}`} alt={f.username} className="w-12 h-12 rounded-full border border-gray-700 bg-black object-cover" />
+                                  <img src={f.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${f.username}`} alt={f.username} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 bg-black object-cover" />
                                   <div>
                                       <h4 className="text-white font-bold text-lg leading-tight">{f.username}</h4>
                                       <span className="text-[9px] bg-blue-900/30 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest">{f.account_type}</span>

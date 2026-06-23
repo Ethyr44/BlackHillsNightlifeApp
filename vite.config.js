@@ -47,10 +47,8 @@ export default defineConfig({
   server: {
     // Setting this to true (like you had it) is actually the perfect catch-all for Ngrok
     allowedHosts: true, 
-    // This ensures live-reloading (HMR) doesn't break over the Ngrok connection
-    hmr: {
-      clientPort: 443 
-    }
+    // 🟢 THE FIX: Disables the broken WebSocket overlay crashing the app on ngrok
+    hmr: false 
   },
 
   // 🟢 CODE-SPLITTING & BUILD OPTIMIZATION

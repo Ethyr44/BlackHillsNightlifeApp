@@ -1,19 +1,19 @@
 import { useState } from 'react'
 
 export default function Home({ changeTab, currentUser }) {
-    // Tracks which big menu button is currently expanded
     const [expandedMenu, setExpandedMenu] = useState(null)
 
     const toggleMenu = (menuId) => {
         setExpandedMenu(prev => prev === menuId ? null : menuId)
     }
 
-    // Define the menu structure based on your exact specifications
+    // 🟢 THE FIX: Added descriptive subtitles
     const menuData = [
         {
             id: 'social',
             title: 'SOCIAL',
-            align: 'left', // Slanted on the right
+            subtitle: 'Connect & Share',
+            align: 'left', 
             color: 'from-blue-600 to-blue-900',
             glow: 'shadow-[0_0_20px_rgba(37,99,235,0.4)]',
             subItems: [
@@ -26,13 +26,13 @@ export default function Home({ changeTab, currentUser }) {
         {
             id: 'local',
             title: 'LOCAL',
-            align: 'right', // Slanted on the left
+            subtitle: 'Explore The Hills',
+            align: 'right', 
             color: 'from-cyan-500 to-blue-800',
             glow: 'shadow-[0_0_20px_rgba(6,182,212,0.4)]',
             subItems: [
                 { label: 'Map', tab: 'Map', active: true, icon: '🗺️' },
                 { label: 'Venues', tab: 'Venues', active: true, icon: '📍' },
-                // 🟢 FIXED: Changed active to true so it's clickable and routes to the 'Events' tab!
                 { label: 'Events Calendar', tab: 'Events', active: true, icon: '📅' },
                 { label: 'Community Board', tab: 'Community', active: true, icon: '📰' }
             ]
@@ -40,12 +40,13 @@ export default function Home({ changeTab, currentUser }) {
         {
             id: 'live',
             title: 'LIVE',
+            subtitle: 'Hit The Stage',
             align: 'left',
             color: 'from-pink-600 to-purple-900',
             glow: 'shadow-[0_0_20px_rgba(219,39,119,0.4)]',
             subItems: [
                 { label: 'Songbook', tab: 'Songbook', active: true, icon: '📖' },
-                { label: 'Karaoke Events', tab: 'KaraokeEvents', active: true, icon: '📅' },
+                { label: 'Sports Hub', tab: 'Sports', active: true, icon: '🏀' },
                 { label: 'KSocial', tab: 'KSocial', active: true, icon: '🎤' },
                 { label: 'Leagues', tab: 'Leagues', active: true, icon: '🏆' }
             ]
@@ -53,7 +54,8 @@ export default function Home({ changeTab, currentUser }) {
         {
             id: 'options',
             title: 'OPTIONS',
-            align: 'right', // Slanted on the left
+            subtitle: 'Gear & Settings',
+            align: 'right', 
             color: 'from-gray-700 to-gray-900',
             glow: 'shadow-[0_0_20px_rgba(75,85,99,0.4)]',
             subItems: [
@@ -68,15 +70,15 @@ export default function Home({ changeTab, currentUser }) {
     return (
         <div className="max-w-2xl mx-auto px-4 py-6 animate-fade-in pb-32 space-y-6">
             
-            {/* Optional Welcome Text */}
-            <div className="text-center mb-8">
+            {/* 🟢 THE FIX: Official Logo & Welcome Text */}
+            <div className="text-center mb-8 flex flex-col items-center">
+                <img src="/pwa-192x192.png" alt="Black Hills Nightlife Logo" className="w-24 h-24 mb-4 rounded-3xl shadow-[0_0_20px_rgba(59,130,246,0.3)] object-cover bg-black" />
                 <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Welcome back,</p>
                 <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest">{currentUser?.username || 'Guest'}</h2>
             </div>
 
             {menuData.map((menu) => {
                 const isExpanded = expandedMenu === menu.id
-                // Define the CSS clip-paths for the angled cuts based on alignment
                 const clipStyle = menu.align === 'left' 
                     ? { clipPath: 'polygon(0 0, 100% 0, 85% 100%, 0% 100%)' } 
                     : { clipPath: 'polygon(15% 0, 100% 0, 100% 100%, 0% 100%)' }
@@ -87,11 +89,17 @@ export default function Home({ changeTab, currentUser }) {
                         <button 
                             onClick={() => toggleMenu(menu.id)}
                             style={clipStyle}
-                            className={`w-full h-24 sm:h-32 bg-gradient-to-r ${menu.color} flex items-center ${menu.align === 'left' ? 'justify-start pl-8 sm:pl-12' : 'justify-end pr-8 sm:pr-12'} transition-all hover:scale-[1.02] active:scale-95 ${menu.glow}`}
+                            className={`w-full h-24 sm:h-32 bg-gradient-to-r ${menu.color} flex items-center ${menu.align === 'left' ? 'justify-start pl-8 sm:pl-12' : 'justify-end pr-8 sm:pr-12 text-right'} transition-all hover:scale-[1.02] active:scale-95 ${menu.glow}`}
                         >
-                            <h3 className="text-5xl sm:text-6xl font-['Bebas_Neue'] text-white tracking-widest drop-shadow-md">
-                                {menu.title}
-                            </h3>
+                            <div>
+                                <h3 className="text-5xl sm:text-6xl font-['Bebas_Neue'] text-white tracking-widest drop-shadow-md leading-none">
+                                    {menu.title}
+                                </h3>
+                                {/* 🟢 THE FIX: Render the Subtitle */}
+                                <span className={`text-[10px] sm:text-xs font-bold uppercase tracking-widest text-white/80 mt-1 block ${menu.align === 'left' ? 'text-left' : 'text-right'}`}>
+                                    {menu.subtitle}
+                                </span>
+                            </div>
                         </button>
 
                         {/* THE EXPANDING SUB-MENU GRID */}

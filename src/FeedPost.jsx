@@ -103,25 +103,25 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
     const [commentCount, setCommentCount] = useState(0)
 
     useEffect(() => {
+        if (!item?.data?.id || !currentUser?.id) return; // 🟢 Prevents Unmounted Crashes
+
+        const checkLikeStatus = async () => {
+            const { data } = await supabase.from('post_likes').select('id').eq('post_id', item.data.id).eq('user_id', currentUser.id).maybeSingle()
+            if (data) setLiked(true)
+        }
+        const fetchLikeCount = async () => {
+            const { count } = await supabase.from('post_likes').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id)
+            setLikeCount(count || 0)
+        }
+        const fetchCommentCount = async () => {
+            const { count } = await supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id)
+            setCommentCount(count || 0)
+        }
+
         checkLikeStatus()
         fetchLikeCount()
         fetchCommentCount()
-    }, [])
-
-    const checkLikeStatus = async () => {
-        const { data } = await supabase.from('post_likes').select('id').eq('post_id', item.data.id).eq('user_id', currentUser.id).maybeSingle()
-        if (data) setLiked(true)
-    }
-
-    const fetchLikeCount = async () => {
-        const { count } = await supabase.from('post_likes').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id)
-        setLikeCount(count || 0)
-    }
-
-    const fetchCommentCount = async () => {
-        const { count } = await supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id)
-        setCommentCount(count || 0)
-    }
+    }, [item?.data?.id, currentUser?.id])
 
     const fetchComments = async () => {
         const { data, error } = await supabase.from('comments')

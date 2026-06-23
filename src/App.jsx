@@ -29,14 +29,14 @@ const Projector = lazy(() => import('./Projector'))
 const JournalFeed = lazy(() => import('./JournalFeed')) // 🟢 Add this import!
 const Group = lazy(() => import('./Group'))
 const About = lazy(() => import('./About'))
-const Community = lazy(() => import('./Community'))
-const KaraokeEvents = lazy(() => import('./KaraokeEvents'))
+const Community = lazy(() => import('./Community'));
+const Sports = lazy(() => import('./Sports'));
 
 // 🟢 NEW: Maps specific tabs to their parent "Hubs" for dynamic bottom navigation
 const HUB_MAP = {
     'Profile': 'SOCIAL', 'Feed': 'SOCIAL', 'Journal': 'SOCIAL', 'Groups': 'SOCIAL',
     'Map': 'LOCAL', 'Venues': 'LOCAL', 'Events': 'LOCAL', 'Community': 'LOCAL',
-    'Songbook': 'LIVE', 'KaraokeEvents': 'LIVE', 'KSocial': 'LIVE', 'Leagues': 'LIVE',
+    'Songbook': 'LIVE', 'Sports': 'LIVE', 'KSocial': 'LIVE', 'Leagues': 'LIVE',
     'Dashboard': 'OPTIONS', 'Shop': 'OPTIONS', 'About': 'OPTIONS', 'Settings': 'OPTIONS', 'FAQ': 'OPTIONS', 'Contact': 'OPTIONS', 'Admin Dashboard': 'OPTIONS'
 }
 
@@ -128,7 +128,6 @@ function MainApp() {
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
       if (data) {
         setCurrentUser(data);
-        checkDailyBonus(data);
         
         if (joinSessionId && !isGuestMode) {
             localStorage.setItem('bhnl_joined_session', joinSessionId)
@@ -252,25 +251,17 @@ function MainApp() {
       }
   }, [activeTab, currentUser])
 
-  async function checkDailyBonus(userProfile) {
-      if (!userProfile) return
-      const today = new Date()
-      const todayString = today.toDateString()
-      const lastClaim = userProfile.last_bonus_claim ? new Date(userProfile.last_bonus_claim).toDateString() : null
-
-      if (todayString !== lastClaim) {
-          const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: userProfile.id, action_slug: 'daily_login' })
-          await supabase.from('profiles').update({ last_bonus_claim: new Date().toISOString() }).eq('id', userProfile.id)
-          showReward('Daily Login Bonus', earnedPts)
-
-          // 🟢 FIX: Actually insert a record into the notifications table so it populates the tray!
-          await supabase.from('notifications').insert([{
-              user_id: userProfile.id,
-              title: 'Daily Login Bonus',
-              content: `You earned +${earnedPts || 50} L$ for logging in today! Keep the streak alive.`
-          }])
-      }
-  }
+  // 🟢 NEW: Global State Sync (Instantly updates L$ everywhere)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    
+    const profileSub = supabase.channel('global-profile-sync')
+      .on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` }, (payload) => {
+          setCurrentUser(payload.new);
+      }).subscribe();
+      
+    return () => supabase.removeChannel(profileSub);
+  }, [session?.user?.id]);
 
   // 🟢 UPDATED: Change Tab function now dynamically switches the active Hub
   const changeTab = (newTab) => {
@@ -375,7 +366,7 @@ function MainApp() {
       } else if (activeHub === 'LOCAL') {
           tabs.push('Map', 'Venues', 'Events', 'Community') // Ensures Venues is present
       } else if (activeHub === 'LIVE') {
-          tabs.push('Songbook', 'KaraokeEvents', 'KSocial', 'Leagues')
+          tabs.push('Songbook', 'Sports', 'KSocial', 'Leagues')
       } else if (activeHub === 'OPTIONS') {
           tabs.push('Shop')
       }
@@ -495,7 +486,7 @@ function MainApp() {
               {activeTab === 'Journal' && <JournalFeed currentUser={effectiveUser} />}
               {activeTab === 'Groups' && <Group />}
               {activeTab === 'Community' && <Community />}
-              {activeTab === 'KaraokeEvents' && <KaraokeEvents />}
+              {activeTab === 'Sports' && <Sports />}
               {(activeTab === 'FAQ' || activeTab === 'Contact') && <About />}
             </div>
           </Suspense>

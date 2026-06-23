@@ -57,9 +57,18 @@ export default function Profile({ session }) {
     const { data: pData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (pData) setProfile(pData)
 
-    const { count } = await supabase.from('connections').select('*', { count: 'exact', head: true })
-        .eq('target_id', session.user.id).eq('connection_type', 'friend')
-    setFriendsCount(count || 0)
+    // 🟢 THE FIX: Deduplicate Mutual Friendships
+    const { data: connections } = await supabase.from('connections')
+        .select('follower_id, target_id')
+        .or(`target_id.eq.${session.user.id},follower_id.eq.${session.user.id}`)
+        .eq('connection_type', 'friend')
+        
+    const uniqueFriends = new Set()
+    connections?.forEach(c => {
+        if (c.follower_id !== session.user.id) uniqueFriends.add(c.follower_id)
+        if (c.target_id !== session.user.id) uniqueFriends.add(c.target_id)
+    })
+    setFriendsCount(uniqueFriends.size)
 
     const { data: postData } = await supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false })
     if (postData) setPosts(postData)

@@ -40,31 +40,38 @@ export default function Events({ onViewEntity }) {
 
   // 🟢 HELPER: Get all events (specific + recurring) for a given JS Date object
   const getEventsForDate = (dateObj) => {
-      const dateString = dateObj.toDateString()
+      const dateString = dateObj.toLocaleDateString() // 🟢 Fixed: Uses local timezone string
       const dayName = daysOfWeek[dateObj.getDay()]
 
-      // Get one-off events
       const specificEvents = events.filter(e => {
-          const eDate = new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z')
-          return eDate.toDateString() === dateString
+          if (e.recurring_pattern && e.recurring_pattern !== 'none') return false
+          if (e.recurring_weekly) return false
+          const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
+          const eDate = new Date(safeDateStr)
+          
+          // 🟢 Fixed: Strict local match prevents midnight UTC bleed-over
+          return eDate.toLocaleDateString() === dateString
       })
 
-      // Get recurring venue events for this day of the week
-      const recurringEvents = []
-      venues.forEach(venue => {
-          const schedule = venue.details?.schedule || []
-          const daySlot = schedule.find(s => s.day === dayName)
-          if (daySlot && daySlot.event) {
-              recurringEvents.push({
-                  id: `recurring-${venue.id}-${dayName}`,
-                  title: `${venue.name} ${daySlot.event.event_type}`,
-                  event_type: daySlot.event.event_type,
-                  description: daySlot.event.description || `Weekly ${daySlot.event.event_type} at ${venue.name}`,
-                  venue: venue.name,
-                  isRecurring: true
-              })
-          }
-      })
+      const recurringEvents = events.filter(e => {
+          const pattern = e.recurring_pattern || (e.recurring_weekly ? 'weekly' : 'none')
+          if (pattern === 'none') return false
+
+          const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
+          const eDate = new Date(safeDateStr)
+          
+          if (eDate.getDay() !== dateObj.getDay()) return false
+          
+          const startDay = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate())
+          const currentDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate())
+          if (currentDay < startDay) return false
+
+          if (pattern === 'weekly') return true
+          if (pattern === 'biweekly') return Math.round((currentDay - startDay) / (1000 * 60 * 60 * 24 * 7)) % 2 === 0
+          if (pattern === 'monthly') return Math.ceil(startDay.getDate() / 7) === Math.ceil(currentDay.getDate() / 7)
+          
+          return false
+      }).map(e => ({ ...e, isRecurring: true }))
 
       // Combine and filter
       return [...specificEvents, ...recurringEvents].filter(e => eventTypeFilter === 'All' || e.event_type === eventTypeFilter)

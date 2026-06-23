@@ -13,6 +13,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
     const [showSettingsModal, setShowSettingsModal] = useState(false)
     const [expandedContender, setExpandedContender] = useState(null) 
 
+    const [showAddSingerModal, setShowAddSingerModal] = useState(false)
+    const [manualName, setManualName] = useState('')
+    const [manualSong, setManualSong] = useState('')
+    const [manualArtist, setManualArtist] = useState('')
+
     const [officialVenues, setOfficialVenues] = useState([])
     const [officialAgencies, setOfficialAgencies] = useState(['Independent', 'Black Hills Nightlife', 'Dakota Entertainment'])
 
@@ -144,6 +149,41 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             await supabase.from('session_singers').delete().eq('id', id)
         }
         triggerGlobalSync(true) // Auto Sync
+    }
+
+    const handleAddManualSinger = async (e) => {
+        e.preventDefault()
+        if (!manualName || !manualSong) return toast.error("Name and Song Title are required.")
+        
+        const payload = {
+            session_id: activeSession.id, 
+            user_id: null, // If the DB throws an error here, you must set user_id to be "Nullable" in Supabase
+            singer_name: manualName + ' (Walk-up)',
+            song_id: 'manual-entry', 
+            song_title: manualSong, 
+            song_artist: manualArtist || 'Unknown Artist',
+            setlist: [{ id: 'manual-entry', title: manualSong, artist: manualArtist || 'Unknown Artist' }], 
+            status: 'queued',
+            user_type: 'Walk-up'
+        }
+        
+        // 🟢 THE FIX: Ask for the inserted data back, and catch any errors
+        const { data, error } = await supabase.from('session_singers').insert([payload]).select().single()
+        
+        if (error) {
+            console.error("Manual Insert Error:", error)
+            return toast.error(`Database Error: ${error.message}`)
+        }
+        
+        // 🟢 THE FIX: Instantly inject the new singer into the local UI state
+        if (data) {
+            setSingers(prev => [...prev, data])
+        }
+        
+        setManualName(''); setManualSong(''); setManualArtist('');
+        setShowAddSingerModal(false);
+        triggerGlobalSync(true);
+        toast.success("Walk-up added to rotation!");
     }
 
     const handleSingerAction = async (singerId, action) => {
@@ -288,9 +328,17 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                 )}
 
                 <div className="bg-black/40 border border-gray-800 rounded-3xl p-4 sm:p-6">
-                    <h3 className="text-sm text-gray-500 font-bold uppercase tracking-widest mb-4 flex justify-between">
-                        Contender Rotation
-                        <span className="text-[10px] text-gray-600">Room Code: <span className="text-white">{activeSession.session_code}</span></span>
+                    <h3 className="text-sm text-gray-500 font-bold uppercase tracking-widest mb-4 flex justify-between items-center">
+                        <div>
+                            Contender Rotation
+                            <span className="block text-[10px] text-gray-600 mt-1">Room Code: <span className="text-white">{activeSession.session_code}</span></span>
+                        </div>
+                        <button 
+                            onClick={() => setShowAddSingerModal(true)} 
+                            className="bg-purple-900/30 text-purple-400 hover:bg-purple-600 hover:text-white border border-purple-500/50 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-colors"
+                        >
+                            ➕ Add Walk-up
+                        </button>
                     </h3>
                     
                     <div className="space-y-3">
@@ -403,6 +451,37 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                 </div>
                             ))}
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* MANUAL ADD SINGER MODAL */}
+            {showAddSingerModal && (
+                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
+                    <div className="bg-[#090812] p-6 rounded-3xl border-2 border-purple-500/50 w-full max-w-md shadow-[0_0_30px_rgba(168,85,247,0.2)] relative">
+                        <button onClick={() => setShowAddSingerModal(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white font-bold text-xl">✕</button>
+                        
+                        <h3 className="text-3xl font-['Bebas_Neue'] text-purple-400 tracking-widest mb-1">Add Walk-up Singer</h3>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-6">Manually insert a guest into the queue</p>
+
+                        <form onSubmit={handleAddManualSinger} className="space-y-4">
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Singer Name</label>
+                                <input type="text" value={manualName} onChange={e=>setManualName(e.target.value)} required className="w-full bg-black border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-purple-500" placeholder="e.g. Local Legend Larry" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Song Title</label>
+                                <input type="text" value={manualSong} onChange={e=>setManualSong(e.target.value)} required className="w-full bg-black border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-purple-500" placeholder="e.g. Sweet Caroline" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Artist (Optional)</label>
+                                <input type="text" value={manualArtist} onChange={e=>setManualArtist(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-purple-500" placeholder="e.g. Neil Diamond" />
+                            </div>
+                            
+                            <button type="submit" className="w-full mt-4 bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl uppercase tracking-widest text-xs transition-all shadow-lg">
+                                Inject into Queue
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}

@@ -56,12 +56,24 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
 
   useEffect(() => {
     async function fetchProfileData() {
-      const { count } = await supabase.from('connections')
-        .select('*', { count: 'exact', head: true })
-        .eq('target_id', entity.id) 
-        .eq('connection_type', isPage ? 'following' : 'friend') 
-      
-      setFollowersCount(count || 0)
+      if (isPage) {
+        const { count } = await supabase.from('connections')
+          .select('*', { count: 'exact', head: true })
+          .eq('target_id', entity.id)
+          .eq('connection_type', 'following')
+        setFollowersCount(count || 0)
+      } else {
+        const { data: connections } = await supabase.from('connections')
+          .select('follower_id, target_id')
+          .or(`target_id.eq.${entity.id},follower_id.eq.${entity.id}`)
+          .eq('connection_type', 'friend')
+        const uniqueFriends = new Set()
+        connections?.forEach(c => {
+            if (c.follower_id !== entity.id) uniqueFriends.add(c.follower_id)
+            if (c.target_id !== entity.id) uniqueFriends.add(c.target_id)
+        })
+        setFollowersCount(uniqueFriends.size)
+      }
 
       const { data: existingConnection } = await supabase.from('connections')
         .select('id, connection_type')

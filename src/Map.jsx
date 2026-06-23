@@ -63,20 +63,37 @@ export default function Map({ currentUser, onViewEntity }) {
           .from('events')
           .select('*')
           .eq('status', 'approved')
-          .gte('event_date', today.toISOString())
-          .lt('event_date', tomorrow.toISOString());
+          .or(`event_date.gte.${today.toISOString()},recurring_weekly.eq.true,recurring_pattern.neq.none`);
 
       const { data: giftData } = await supabase.from('geo_gifts').select('*')
       if (giftData) setGeoGifts(giftData)
 
+      // Filter eventData down to ONLY events happening today
+      const todaysEventsFiltered = (eventData || []).filter(e => {
+          const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
+          const eDate = new Date(safeDateStr);
+          const startDay = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate());
+          
+          const pattern = e.recurring_pattern || (e.recurring_weekly ? 'weekly' : 'none');
+          if (pattern === 'none') {
+              return eDate >= today && eDate < tomorrow;
+          }
+          
+          if (eDate.getDay() !== today.getDay() || today < startDay) return false;
+          if (pattern === 'weekly') return true;
+          if (pattern === 'biweekly') return Math.round((today - startDay) / (1000 * 60 * 60 * 24 * 7)) % 2 === 0;
+          if (pattern === 'monthly') return Math.ceil(startDay.getDate() / 7) === Math.ceil(today.getDate() / 7);
+          return false;
+      });
+
       // Create a fast lookup Set of venue names that have events today
-      const venuesWithEvents = new Set(eventData?.map(e => e.venue) || []);
+      const venuesWithEvents = new Set(todaysEventsFiltered.map(e => e.venue));
 
       const processedVenues = venueData ? venueData.map(v => {
          const now = new Date()
          const hasEventToday = venuesWithEvents.has(v.name);
 
-         const todaysEvents = (eventData || []).filter(e => e.venue === v.name);
+         const todaysEvents = todaysEventsFiltered.filter(e => e.venue === v.name);
 
          let isLiveNow = false;
          if (todaysEvents.length > 0) {

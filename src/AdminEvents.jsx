@@ -15,9 +15,9 @@ export default function AdminEvents() {
   const [eventAct, setEventAct] = useState('')
   const [eventType, setEventType] = useState('Karaoke')
   const [eventDate, setEventDate] = useState('')
-  const [eventEndDate, setEventEndDate] = useState('') // 🟢 NEW
   const [eventPoints, setEventPoints] = useState(500)
   const [editingEventId, setEditingEventId] = useState(null)
+  const [recurringPattern, setRecurringPattern] = useState('none')
 
   useEffect(() => {
     fetchData()
@@ -25,16 +25,20 @@ export default function AdminEvents() {
 
   const fetchData = async () => {
     setLoading(true)
-    const { data: eData } = await supabase.from('events').select('*, profiles:host_id(username)')
+    const { data: eData, error } = await supabase.from('events').select('*')
     
+    if (error) console.error("Admin Events Fetch Error:", error)
     if (eData) {
         // 🟢 FIX: The sorting engine (Pending -> Upcoming Sooner -> Past Later)
         const sorted = eData.sort((a, b) => {
             const now = new Date()
             
             // Force safe date parsing
-            const aDate = new Date(a.event_date.includes('Z') || a.event_date.includes('+') ? a.event_date : a.event_date + 'Z')
-            const bDate = new Date(b.event_date.includes('Z') || b.event_date.includes('+') ? b.event_date : b.event_date + 'Z')
+            const aSafe = a.event_date ? (a.event_date.includes('Z') || a.event_date.includes('+') ? a.event_date : a.event_date + 'Z') : null;
+            const bSafe = b.event_date ? (b.event_date.includes('Z') || b.event_date.includes('+') ? b.event_date : b.event_date + 'Z') : null;
+            
+            const aDate = new Date(aSafe || 0)
+            const bDate = new Date(bSafe || 0)
             
             // 1. Pending first
             if (a.status === 'pending' && b.status !== 'pending') return -1;
@@ -82,16 +86,20 @@ export default function AdminEvents() {
       entertainer: eventAct,
       event_type: eventType,
       event_date: new Date(eventDate).toISOString(),
-      end_date: eventEndDate ? new Date(eventEndDate).toISOString() : null, // 🟢 NEW
       points_awarded: eventPoints,
+      recurring_pattern: recurringPattern,
+      recurring_weekly: recurringPattern === 'weekly',
       status: 'approved' 
     }
 
+    // 🟢 THE FIX: Check for DB rejections and surface them
     if (editingEventId) {
-      await supabase.from('events').update(payload).eq('id', editingEventId)
+      const { error } = await supabase.from('events').update(payload).eq('id', editingEventId)
+      if (error) { toast.error("DB Error: " + error.message); setLoading(false); return; }
       toast.success("Event updated!")
     } else {
-      await supabase.from('events').insert([payload])
+      const { error } = await supabase.from('events').insert([payload])
+      if (error) { toast.error("DB Error: " + error.message); setLoading(false); return; }
       toast.success("Event created!")
     }
 
@@ -107,6 +115,7 @@ export default function AdminEvents() {
     setEventAddress(e.address || '')
     setEventAct(e.entertainer || '')
     setEventType(e.event_type || '')
+    setRecurringPattern(e.recurring_pattern || (e.recurring_weekly ? 'weekly' : 'none'))
     
     // 🟢 FIX: Handle timezone safely for HTML datetime-local input
     const formatForInput = (dateStr) => {
@@ -117,7 +126,6 @@ export default function AdminEvents() {
     }
 
     setEventDate(formatForInput(e.event_date))
-    setEventEndDate(formatForInput(e.end_date))
     setEventPoints(e.points_awarded || 500)
     
     // 🟢 FIX: The "Dead Button" is fixed by smooth scrolling to the form!
@@ -141,7 +149,7 @@ export default function AdminEvents() {
   const resetForm = () => {
       setEditingEventId(null); setEventTitle(''); setEventDesc(''); setEventVenue(''); 
       setEventAddress(''); setEventAct(''); setEventType('Karaoke'); setEventDate(''); 
-      setEventEndDate(''); setEventPoints(500)
+      setEventPoints(500); setRecurringPattern('none')
   }
 
   return (
@@ -167,15 +175,18 @@ export default function AdminEvents() {
               <input type="text" value={eventType} onChange={e => setEventType(e.target.value)} placeholder="Event Type (Karaoke, Trivia, etc)" className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-              <div>
-                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Start Time</label>
-                  <input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500" />
-              </div>
-              <div>
-                  <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">End Time</label>
-                  <input type="datetime-local" value={eventEndDate} onChange={e => setEventEndDate(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500" />
-              </div>
+          <div>
+              <select value={recurringPattern} onChange={e => setRecurringPattern(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500">
+                  <option value="none">Frequency: One-Time Event</option>
+                  <option value="weekly">Frequency: Occurs Every Week</option>
+                  <option value="biweekly">Frequency: Occurs Every Other Week</option>
+                  <option value="monthly">Frequency: Occurs Once a Month</option>
+              </select>
+          </div>
+
+          <div>
+              <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Event Date & Start Time</label>
+              <input type="datetime-local" value={eventDate} onChange={e => setEventDate(e.target.value)} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500" />
           </div>
 
           <textarea value={eventDesc} onChange={e => setEventDesc(e.target.value)} placeholder="Event Description..." className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 outline-none focus:border-blue-500 h-24" />
@@ -199,10 +210,10 @@ export default function AdminEvents() {
               <div className="flex items-center gap-2 mb-1">
                   <h4 className="font-bold text-white text-lg">{e.title}</h4>
                   {e.status === 'pending' && <span className="bg-yellow-900/30 text-yellow-500 border border-yellow-500/50 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest animate-pulse">Needs Approval</span>}
-                  {new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z') < new Date() && <span className="bg-gray-800 text-gray-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest">Past Event</span>}
+                  {e.event_date && new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z') < new Date() && <span className="bg-gray-800 text-gray-500 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest">Past Event</span>}
               </div>
               <span className="text-[10px] text-gray-400 uppercase tracking-widest">
-                  {new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z').toLocaleString()} • {e.venue}
+                  {e.event_date ? new Date(e.event_date.includes('Z') ? e.event_date : e.event_date + 'Z').toLocaleString() : 'Unknown Date'} • {e.venue}
               </span>
             </div>
             

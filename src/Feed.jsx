@@ -13,16 +13,9 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
   const fetchPosts = async () => {
     setLoading(true)
     
-    // N+1 Fix: Fetch everything needed for rendering in a single query
-    // Notice how we changed "profiles:user_id" to "profiles:author_id"
     let query = supabase
       .from('posts')
-      .select(`
-        *,
-        profiles:author_id (username, profile_pic, account_type),
-        likes (id, user_id),
-        comments (id, content, user_id, created_at)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (targetUserId) {
@@ -34,7 +27,25 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
     }
 
     const { data, error } = await query
-    if (!error && data) setPosts(data)
+    const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic, account_type')
+
+    if (!error && data) {
+        const formatted = data.map(post => {
+             const author = profiles?.find(p => p.id === post.author_id) || {}
+             return {
+                 id: `post_${post.id}`,
+                 type: 'post',
+                 timestamp: new Date(post.created_at || 0).getTime() || 0,
+                 data: {
+                     ...post,
+                     username: author.username || 'Unknown',
+                     profile_pic: author.profile_pic,
+                     account_type: author.account_type
+                 }
+             }
+        })
+        setPosts(formatted)
+    }
     setLoading(false)
   }
 
@@ -51,22 +62,9 @@ export default function Feed({ session, targetUserId = null, isFriend = false, i
           <p className="text-gray-500 font-bold tracking-widest uppercase text-sm">No vibes broadcasted yet.</p>
         </div>
       ) : (
-        posts.map(post => {
-          const formattedItem = {
-             id: `post_${post.id}`,
-             type: 'post',
-             timestamp: new Date(post.created_at).getTime(),
-             data: {
-                 ...post,
-                 username: post.profiles?.username || 'Unknown',
-                 profile_pic: post.profiles?.profile_pic,
-                 likes: post.likes || [],
-                 comments: post.comments || []
-             }
-          }
-          
-          return <FeedPost key={post.id} item={formattedItem} currentUser={session.user} />
-        })
+        posts.map(post => (
+          <FeedPost key={post.id} item={post} currentUser={session.user} />
+        ))
       )}
     </div>
   )

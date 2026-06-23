@@ -117,24 +117,37 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     const from = (currentPage - 1) * ITEMS_PER_PAGE
     const to = from + ITEMS_PER_PAGE - 1
     
-    // 1. Fetch Posts
-    const { data: rawPosts } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).range(from, to)
-    const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic')
+    // 1. Fetch Posts Safely
+    const { data: rawPosts, error: postErr } = await supabase
+        .from('posts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to)
     
+    if (postErr) console.error("Feed Post Error:", postErr)
+
+    const { data: profiles, error: profErr } = await supabase.from('profiles').select('id, username, profile_pic')
+    if (profErr) console.error("Profiles Load Error:", profErr)
+
     const formattedPosts = (rawPosts || []).map(post => {
         const author = profiles?.find(p => p.id === post.author_id) || {}
         return {
-            id: `post_${post.id}`, type: 'post', timestamp: new Date(post.created_at).getTime(),
+            id: `post_${post.id}`, type: 'post', timestamp: new Date(post.created_at || 0).getTime() || 0,
             data: { ...post, username: author.username || 'Unknown', profile_pic: author.profile_pic }
         }
     })
 
     // 2. Fetch Events
-    const { data: rawEvents } = await supabase.from('events').select('*').eq('status', 'approved').gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-    const formattedEvents = (rawEvents || []).map(event => ({
-        id: `event_${event.id}`, type: 'event', timestamp: new Date(event.created_at).getTime(),
-        data: event
-    }))
+    const { data: rawEvents, error: eventErr } = await supabase.from('events').select('*').eq('status', 'approved').limit(30).order('id', { ascending: false })
+    if (eventErr) console.error("Feed Event Error:", eventErr)
+
+    const formattedEvents = (rawEvents || []).map(event => {
+        const ts = new Date(event.created_at || event.event_date || 0).getTime();
+        return {
+            id: `event_${event.id}`, type: 'event', timestamp: isNaN(ts) ? 0 : ts,
+            data: event
+        }
+    })
 
     // Combine and Sort
     const combined = [...formattedPosts, ...formattedEvents].sort((a, b) => b.timestamp - a.timestamp)
@@ -250,12 +263,20 @@ export default function MainFeed({ currentUser, onViewEntity }) {
           <div className="text-center p-12"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>
       ) : (
           feed.map((item) => {
+              if (!item || !item.data) return null; // 🟢 Safety Guard
+
               if (item.type === 'post') {
                   return <FeedPost key={item.id} item={item} currentUser={currentUser} onViewEntity={onViewEntity} />
               }
               if (item.type === 'event') {
-                  const eventDate = new Date(item.data.event_date)
-                  const dayString = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+                  let dayString = 'Unknown Date';
+                  try {
+                      if (item.data.event_date) {
+                          const safeDateStr = item.data.event_date.includes('Z') || item.data.event_date.includes('+') ? item.data.event_date : item.data.event_date + 'Z';
+                          const evDate = new Date(safeDateStr);
+                          if (!isNaN(evDate)) dayString = evDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+                      }
+                  } catch (e) {}
                   
                   return (
                       <div key={item.id} className="bg-[#090812] border border-gray-800 p-4 sm:p-6 rounded-3xl mb-4 shadow-lg cursor-pointer hover:border-purple-500/50 transition-colors group" onClick={() => onViewEntity(item.data.venue)}>

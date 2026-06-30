@@ -10,6 +10,7 @@ import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
 import SongBook from './Songbook'
 import { GRADIENTS } from './themeConstants'
+import { toast } from './GlobalToast'
 
 const GEM_STATS = {
     'Quartz': { mult: 2, uses: 1, color: 'text-pink-300' },
@@ -107,7 +108,11 @@ export default function Profile({ session }) {
     if (current.includes(item)) current = current.filter(i => i !== item)
     else current = [...current, item]
 
-    await supabase.from('profiles').update({ [`pref_${type}`]: current }).eq('id', session.user.id)
+    const { error } = await supabase.from('profiles').update({ [`pref_${type}`]: current }).eq('id', session.user.id)
+    if (error) {
+        toast.error("Network Error: Could not save preferences.")
+        return
+    }
     setProfile(prev => ({ ...prev, [`pref_${type}`]: current }))
   }
 
@@ -122,11 +127,16 @@ export default function Profile({ session }) {
 
       currentGems[gemName] -= 1
 
-      await supabase.from('profiles').update({
+      const { error } = await supabase.from('profiles').update({
           inv_gems: currentGems,
           active_multiplier: stats.mult,
           multiplier_uses_left: stats.uses
       }).eq('id', session.user.id)
+
+      if (error) {
+          alert("Network Error: Could not consume gem.")
+          return
+      }
 
       alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
       fetchProfileData()

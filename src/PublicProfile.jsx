@@ -7,6 +7,7 @@ import ProfileVenue from './ProfileVenue'
 import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
 import { GRADIENTS } from './themeConstants'
+import { toast } from './GlobalToast'
 
 // 🟢 Drop this near the top of your file
 const Linkify = ({ text }) => {
@@ -108,18 +109,29 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
       const statusType = isPage ? 'following' : 'friend'
       
       if (isConnection) {
-          await supabase.from('connections').delete()
+          const { error } = await supabase.from('connections').delete()
               .eq('follower_id', currentUser.id)
               .eq('target_id', entity.id)
+          
+          if (error) {
+              toast.error("Network error: " + error.message)
+              return
+          }
+
           setFollowersCount(prev => Math.max(0, prev - 1))
           setIsConnection(false)
       } else {
-          await supabase.from('connections').insert({
+          const { error } = await supabase.from('connections').insert({
               follower_id: currentUser.id,
               target_id: entity.id,
               connection_type: statusType
           })
           
+          if (error) {
+              toast.error("Network error: " + error.message)
+              return
+          }
+
           if (isPage) {
               await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'follow_venue' })
           }

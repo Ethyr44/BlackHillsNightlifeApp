@@ -11,10 +11,12 @@ export default function SongBook({ currentUser, profileUser, isOwnProfile = true
   const [setlistTrigger, setSetlistTrigger] = useState(0)
 
   useEffect(() => {
+    let isMounted = true; // Track the active query
+
     const searchTimeout = setTimeout(async () => {
       const q = searchQuery.trim()
       if (q.length < 2) {
-        setResults([])
+        if (isMounted) setResults([])
         return
       }
       setLoading(true)
@@ -26,11 +28,19 @@ export default function SongBook({ currentUser, profileUser, isOwnProfile = true
         .limit(50)
       
       if (error) console.error("Search Error:", error)
-      if (!error && data) setResults(data)
-      setLoading(false)
+      
+      // Only update the UI if this is STILL the active query
+      if (isMounted) {
+          if (!error && data) setResults(data)
+          setLoading(false)
+      }
     }, 400)
     
-    return () => clearTimeout(searchTimeout)
+    return () => {
+        // Cleanup: invalidate this specific timeout's state update
+        isMounted = false; 
+        clearTimeout(searchTimeout);
+    }
   }, [searchQuery])
 
   const handleSaveToVault = async (songId, songTitle, category) => {

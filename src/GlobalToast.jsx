@@ -11,7 +11,7 @@ export function GlobalToast() {
 
     useEffect(() => {
         const handleAddToast = (e) => {
-            const id = Date.now()
+            const id = Date.now() + Math.random().toString(36).substring(2, 9);
             const newToast = { id, ...e.detail }
             setToasts(prev => [...prev, newToast])
 

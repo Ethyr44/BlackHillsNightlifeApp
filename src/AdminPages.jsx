@@ -102,9 +102,19 @@ export default function AdminPages() {
     }
 
     if (editingPageId) {
-      await supabase.from('pages').update(payload).eq('id', editingPageId)
+      const { error } = await supabase.from('pages').update(payload).eq('id', editingPageId)
+      if (error) {
+        alert(`Operation Failed: ${error.message}`)
+        setLoading(false)
+        return
+      }
     } else {
-      await supabase.from('pages').insert([payload])
+      const { error } = await supabase.from('pages').insert([payload])
+      if (error) {
+        alert(`Operation Failed: ${error.message}`)
+        setLoading(false)
+        return
+      }
     }
 
     setPageName(''); setPageType('Venue'); setEditingPageId(null); setProfilePic(''); setSlideshowUrls([]);
@@ -135,7 +145,11 @@ export default function AdminPages() {
 
   const deletePage = async (id) => {
     if (!window.confirm("Delete this page?")) return
-    await supabase.from('pages').delete().eq('id', id)
+    const { error } = await supabase.from('pages').delete().eq('id', id)
+    if (error) {
+        alert(`Operation Failed: ${error.message}`)
+        return
+    }
     fetchPages()
   }
 

@@ -440,9 +440,10 @@ export default function Map({ currentUser, onViewEntity }) {
       }
   }
 
-  // 🟢 FULLSCREEN EDGE-TO-EDGE CONTAINER STYLE
+  // 🟢 FULLSCREEN EDGE-TO-EDGE CONTAINER STYLE FIX
   const mapContainerStyle = {
-    height: 'calc(100vh - 130px)', 
+    flex: '1 1 auto', 
+    minHeight: '70vh', // Forces a height if the flexbox crushes the absolute container
     width: '100%',
     margin: '0',
     overflow: 'hidden',

@@ -64,8 +64,17 @@ function MainApp() {
   // 🟢 FIXED: Default tab is now 'Home'
   const activeTab = searchParams.get('tab') || "Home"
   
-  // 🟢 NEW: State to track which Hub is currently active
-  const [activeHub, setActiveHub] = useState(HUB_MAP[activeTab] || 'SOCIAL')
+  // 🟢 THE FIX: Immediate Projector Intercept
+  // If the URL is "?tab=Projector", render ONLY the Projector and nothing else!
+  if (activeTab === 'Projector') {
+      return (
+          <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white font-['Bebas_Neue'] text-4xl animate-pulse">Loading Display...</div>}>
+              <Projector />
+          </Suspense>
+      )
+  }
+
+  const activeHub = HUB_MAP[activeTab] || 'SOCIAL'; // Pure derived state
 
   const [session, setSession] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
@@ -265,8 +274,6 @@ function MainApp() {
 
   // 🟢 UPDATED: Change Tab function now dynamically switches the active Hub
   const changeTab = (newTab) => {
-      const newHub = HUB_MAP[newTab];
-      if (newHub) setActiveHub(newHub); 
       setSearchParams({ tab: newTab });
   }
 
@@ -448,7 +455,6 @@ function MainApp() {
         ) : (
           <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
             <div key={activeTab} className="animate-fade-in w-full h-full mt-4">
-              {activeTab === 'Projector' && <Projector />}
               {activeTab === 'Search' && searchResults && (
                 <div className="p-4 animate-fade-in">
                   <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>

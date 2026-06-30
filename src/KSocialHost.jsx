@@ -126,7 +126,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     const updateSessionSettings = async () => {
         const payload = { title: sessionTitle, voting_style: votingStyle, voting_icon: votingIcon }
-        await supabase.from('active_sessions').update(payload).eq('id', activeSession.id)
+        const { error } = await supabase.from('active_sessions').update(payload).eq('id', activeSession.id)
+        if (error) {
+            toast.error("Error updating settings: " + error.message)
+            return
+        }
         setActiveSession({ ...activeSession, ...payload })
         setShowSettingsModal(false)
         triggerGlobalSync(true) 
@@ -134,19 +138,36 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     const closeSession = async () => {
         if (!window.confirm("End this session? All singers and scores will be wiped.")) return
-        await supabase.from('session_singers').delete().eq('session_id', activeSession.id)
-        await supabase.from('active_sessions').delete().eq('id', activeSession.id)
+        
+        const { error: singersError } = await supabase.from('session_singers').delete().eq('session_id', activeSession.id)
+        if (singersError) {
+            toast.error("Error clearing singers: " + singersError.message)
+        }
+
+        const { error: sessionError } = await supabase.from('active_sessions').delete().eq('id', activeSession.id)
+        if (sessionError) {
+            toast.error("Error closing session: " + sessionError.message)
+            return
+        }
+
         setActiveSession(null)
         setView('start_menu')
         if (onExit) onExit()
     }
 
     const handleApproveRequest = async (id, isApproved) => {
+        let error;
         if (isApproved) {
-            await supabase.from('session_singers').update({ status: 'queued' }).eq('id', id)
-            toast.success("Contender added to stage!")
+            const { error: updateError } = await supabase.from('session_singers').update({ status: 'queued' }).eq('id', id)
+            error = updateError
+            if (!error) toast.success("Contender added to stage!")
         } else {
-            await supabase.from('session_singers').delete().eq('id', id)
+            const { error: deleteError } = await supabase.from('session_singers').delete().eq('id', id)
+            error = deleteError
+        }
+        if (error) {
+            toast.error("DB Error: " + error.message)
+            return
         }
         triggerGlobalSync(true) // Auto Sync
     }
@@ -188,34 +209,56 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
     const handleSingerAction = async (singerId, action) => {
         if (action === 'voting') {
+            const { error } = await supabase.from('session_singers').update({ status: 'voting' }).eq('id', singerId)
+            if (error) return toast.error("Action failed: " + error.message)
+            
             setActiveVotingSinger(singerId)
             setVotingTimeLeft(30)
-            await supabase.from('session_singers').update({ status: 'voting' }).eq('id', singerId)
             triggerGlobalSync(true) 
         } 
         else if (action === 'complete') {
             const singer = singers.find(s => s.id === singerId)
-            if (singer.user_id) await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
+            if (singer.user_id) {
+                const { error: rpcError } = await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
+                if (rpcError) toast.error("Failed to mark song as sung: " + rpcError.message)
+            }
 
             let currentSetlist = Array.isArray(singer.setlist) ? singer.setlist : []
+            
+            // 🟢 THE FIX: Loop the Setlist
+            let nextSetlist = currentSetlist;
+            let nextSong = { id: 'manual-entry', title: 'TBD', artist: 'TBD' };
+
             if (currentSetlist.length > 1) {
-                const nextSetlist = currentSetlist.slice(1)
-                const nextSong = nextSetlist[0]
-                
-                // 🟢 FIX: Session Score Accumulation! (total_points is NO LONGER reset)
-                const { error } = await supabase.from('session_singers').update({
-                    status: 'queued', song_id: nextSong.id, song_title: nextSong.title, song_artist: nextSong.artist,
-                    setlist: nextSetlist, previous_score: singer.score_performance || 0,
-                    score_performance: 0, score_wow: 0, score_originality: 0, super_votes: 0
-                }).eq('id', singerId)
-                if (error) return toast.error("Failed to cycle: " + error.message)
+                // They have songs remaining in the current set
+                nextSetlist = currentSetlist.slice(1);
+                nextSong = nextSetlist[0];
             } else {
-                await supabase.from('session_singers').delete().eq('id', singerId)
+                 // They finished their last song. Set to TBD, but keep them in rotation.
+                 nextSetlist = []; 
+                 nextSong = { id: 'finished', title: 'Finished Set', artist: 'Needs new songs' };
             }
+
+            const { error } = await supabase.from('session_singers').update({
+                status: 'queued', 
+                song_id: nextSong.id, 
+                song_title: nextSong.title, 
+                song_artist: nextSong.artist,
+                setlist: nextSetlist, 
+                previous_score: singer.score_performance || 0,
+                score_performance: 0, 
+                score_wow: 0, 
+                score_originality: 0, 
+                super_votes: 0
+                // NOTE: total_points is deliberately NOT overwritten here, preserving their grand total
+            }).eq('id', singerId)
+            
+            if (error) return toast.error("Failed to cycle: " + error.message)
             triggerGlobalSync(true) 
         } 
         else {
-            await supabase.from('session_singers').update({ status: action }).eq('id', singerId)
+            const { error } = await supabase.from('session_singers').update({ status: action }).eq('id', singerId)
+            if (error) return toast.error("Action failed: " + error.message)
             triggerGlobalSync(true) 
         }
     }
@@ -265,6 +308,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                         <option value="tap">Tap-to-Vote (Multi-tap)</option>
                                         <option value="stars">1-5 Rating (Classic)</option>
                                         <option value="vibe">Vibe Check (Categories)</option>
+                                    <option value="full">Full (Tap + Vibe Check)</option>
                                     </select>
                                 </div>
                                 <div>
@@ -501,6 +545,7 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                                     <option value="tap">Tap-to-Vote (Multi-tap)</option>
                                     <option value="stars">1-5 Rating (Classic)</option>
                                     <option value="vibe">Vibe Check (Categories)</option>
+                                    <option value="full">Full (Tap + Vibe Check)</option>
                                 </select>
                             </div>
                             <div className="flex gap-2 mt-4 pt-4 border-t border-gray-800">

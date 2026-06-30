@@ -32,7 +32,6 @@ export default function Projector() {
 
         fetchAll(sessionId)
 
-        // 🟢 THE SMOOTH SYNC FIX (No page reloading)
         const queueSub = supabase.channel(`projector-channel-${sessionId}`)
             .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, () => fetchAll(sessionId))
             .on('broadcast', { event: 'force-reload' }, () => fetchAll(sessionId))
@@ -42,7 +41,7 @@ export default function Projector() {
     }, [])
 
     useEffect(() => {
-        const views = ['scoreboard', 'stage', 'qr']
+        const views = ['scoreboard', 'stage'] // 🟢 Removed 'qr' from the rotation
         let i = 0
         const interval = setInterval(() => {
             i = (i + 1) % views.length
@@ -75,7 +74,6 @@ export default function Projector() {
     return (
         <div className="min-h-screen bg-[#050505] text-white overflow-hidden font-sans selection:bg-blue-500/30 flex flex-col">
             
-            {/* 🟢 STYLED FROM projector.js */}
             <div className="px-12 py-6 border-b border-gray-800 bg-gradient-to-b from-blue-900/20 to-black flex justify-between items-center shadow-2xl relative">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#00f5ff] to-[#ff2d78]"></div>
                 <div>
@@ -84,9 +82,16 @@ export default function Projector() {
                     </h1>
                     <span className="text-gray-400 uppercase tracking-widest font-bold text-sm ml-1">{session?.venue_name || session?.business_name || 'Black Hills Nightlife'}</span>
                 </div>
-                <div className="text-right">
-                    <span className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Room Code</span>
-                    <span className="font-['Bebas_Neue'] text-5xl tracking-[0.2em] text-white">{session?.session_code}</span>
+                
+                {/* 🟢 THE FIX: Persistent QR Code embedded in the header */}
+                <div className="text-right flex items-center gap-6">
+                     <div className="bg-white p-2 rounded-xl">
+                        <QRCode value={`${window.location.origin}/?join=${session?.id}`} size={64} />
+                    </div>
+                    <div>
+                        <span className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Room Code</span>
+                        <span className="font-['Bebas_Neue'] text-5xl tracking-[0.2em] text-white">{session?.session_code}</span>
+                    </div>
                 </div>
             </div>
 
@@ -160,19 +165,6 @@ export default function Projector() {
                                 <p className="text-gray-600 font-bold uppercase tracking-widest text-4xl">Stage is Empty</p>
                             </div>
                         )}
-                    </div>
-                )}
-
-                {currentView === 'qr' && (
-                    <div className="animate-fade-in max-w-3xl mx-auto w-full text-center">
-                        <h2 className="text-6xl font-['Bebas_Neue'] text-[#ff2d78] tracking-widest mb-4">WANT TO SING?</h2>
-                        <p className="text-gray-400 text-2xl font-bold uppercase tracking-widest mb-12">Scan to enter the queue directly from your phone!</p>
-                        
-                        <div className="inline-block bg-white p-12 rounded-[3rem] shadow-[0_0_50px_rgba(255,45,120,0.3)] border-4 border-white/20">
-                            <QRCode value={`${window.location.origin}/?join=${session?.id}`} size={350} />
-                        </div>
-                        
-                        <p className="text-gray-500 text-xl font-bold uppercase tracking-widest mt-12">No App Download Required</p>
                     </div>
                 )}
             </div>

@@ -2,19 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+    
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.dicebear.com blob:;
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        font-src 'self' https://fonts.gstatic.com data:;
+        img-src 'self' data: blob: https://maps.gstatic.com https://*.googleapis.com https://api.dicebear.com https://api.qrserver.com https://*.supabase.co;
+        connect-src 'self' wss://*.supabase.co https://*.supabase.co https://maps.googleapis.com https://*.googleapis.com ws://localhost:* wss://localhost:* wss://*.ngrok-free.dev https://*.ngrok-free.dev;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
+    ">
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌆</text></svg>">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
-        <!-- PWA iOS / Theme tags -->
     <meta name="theme-color" content="#030712">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
-    <!-- SEO & Open Graph Meta Tags -->
     <meta name="description" content="The ultimate nightlife and entertainment guide for the Black Hills.">
     <meta property="og:title" content="Black Hills Nightlife">
     <meta property="og:description" content="The ultimate nightlife and entertainment guide for the Black Hills.">

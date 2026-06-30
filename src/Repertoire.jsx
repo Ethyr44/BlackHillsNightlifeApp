@@ -51,13 +51,21 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
   }, [searchQuery, songs])
 
   const handleUpdateCategory = async (entryId, newCat) => {
-      await supabase.from('user_songs').update({ category: newCat }).eq('id', entryId)
+      const { error } = await supabase.from('user_songs').update({ category: newCat }).eq('id', entryId)
+      if (error) {
+          alert("Error updating category: " + error.message)
+          return
+      }
       fetchSonglist()
   }
 
   const handleDeleteSong = async (entryId) => {
       if (window.confirm("Remove this song from your vault?")) {
-          await supabase.from('user_songs').delete().eq('id', entryId)
+          const { error } = await supabase.from('user_songs').delete().eq('id', entryId)
+          if (error) {
+              alert("Error deleting song: " + error.message)
+              return
+          }
           fetchSonglist()
       }
   }
@@ -70,7 +78,13 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
           if (newSetlist.length >= 7) return alert("Setlist is full! (Max 7)")
           newSetlist.push(songId)
       }
-      await supabase.from('profiles').update({ active_setlist: newSetlist }).eq('id', userId)
+      
+      const { error } = await supabase.from('profiles').update({ active_setlist: newSetlist }).eq('id', userId)
+      if (error) {
+          alert("Network Error: Could not update setlist.")
+          return
+      }
+
       setActiveSetlist(newSetlist)
       if (setTrigger) setTrigger(prev => prev + 1)
       window.dispatchEvent(new Event('setlistUpdated'))
@@ -86,7 +100,11 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
   const handleReject = async (entryId) => {
       if (!window.confirm("Reject this song suggestion?")) return;
       
-      await supabase.from('user_songs').delete().eq('id', entryId);
+      const { error } = await supabase.from('user_songs').delete().eq('id', entryId);
+      if (error) {
+          alert("Error rejecting suggestion: " + error.message)
+          return
+      }
       fetchSonglist();
   }
 

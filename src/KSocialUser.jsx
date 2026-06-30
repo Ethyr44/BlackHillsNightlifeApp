@@ -6,22 +6,24 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [session, setSession] = useState(null)
     const [singers, setSingers] = useState([])
     const [isLoading, setIsLoading] = useState(true)
-
     const [activeView, setActiveView] = useState('Menu')
+    
+    // 🟢 FIX: This stops the white screen crash during the Voting phase
+    const [votedFor, setVotedFor] = useState({})
     
     // Arcade & Voting
     const [tapCount, setTapCount] = useState(0)
+    const [fullModeTaps, setFullModeTaps] = useState(0) // 🟢 New state for "Full" mode
+    
     const [superVoteActive, setSuperVoteActive] = useState(false)
     const [hasUsedSupervote, setHasUsedSupervote] = useState(() => localStorage.getItem(`sv_${sessionId}`) === 'used')
     const [multiStars, setMultiStars] = useState({ performance: 0, wow: 0, originality: 0 })
 
-    // Setlist
     const [userSetlist, setUserSetlist] = useState([])
     const [searchQuery, setSearchQuery] = useState('')
     const [songResults, setSongResults] = useState([])
     const [searching, setSearching] = useState(false)
 
-    // Guest Flow
     const [isGuest, setIsGuest] = useState(!currentUser || currentUser.account_type === 'Temp/Guest')
     const [tempName, setTempName] = useState('')
     const [tempStageName, setTempStageName] = useState('')
@@ -48,7 +50,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         if (!currentUser) return setIsLoading(false)
         fetchAll()
         
-        // 🟢 SMOOTH SYNC (Listens for broadcast, executes silent React update)
         const sub = supabase.channel(`public-ksocial-${sessionId}`)
             .on('postgres', { event: '*', schema: 'public', table: 'session_singers', filter: `session_id=eq.${sessionId}` }, fetchAll)
             .on('broadcast', { event: 'force-reload' }, fetchAll) 
@@ -60,7 +61,13 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const activeSinger = singers.find(s => s.status === 'singing' || s.status === 'voting' || s.status === 'results')
     const myEntry = singers.find(s => s.user_id === currentUser?.id)
 
-    // 🟢 AUTO-NAVIGATE: Pushes user to Stage if voting starts
+    // Reset Full Mode Taps when a new singer goes on stage
+    useEffect(() => {
+        if (activeSinger?.status === 'singing') {
+            setFullModeTaps(0);
+        }
+    }, [activeSinger?.id, activeSinger?.status])
+
     useEffect(() => {
         if (activeSinger?.status === 'voting' && activeView !== 'Stage') {
             setActiveView('Stage')
@@ -68,29 +75,29 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         }
     }, [activeSinger?.status])
 
-    // Tap-to-Vote Synchronization
+    // Standard "Tap" Mode Synchronization
     useEffect(() => {
         if (tapCount > 0 && activeSinger?.status === 'voting' && session?.voting_style === 'tap') {
             const timer = setTimeout(async () => {
                 const pointsToSend = tapCount
                 setTapCount(0) 
-                await supabase.rpc('add_singer_score', { p_singer_id: activeSinger.id, p_score: pointsToSend })
+                await supabase.rpc('submit_stage_vote', {
+                    p_singer_id: activeSinger.id,
+                    p_voting_style: 'tap',
+                    p_taps: pointsToSend,
+                    p_perf_stars: 0, p_wow_stars: 0, p_orig_stars: 0, p_is_supervote: superVoteActive
+                })
             }, 1000)
             return () => clearTimeout(timer)
         }
-    }, [tapCount, activeSinger, session])
+    }, [tapCount, activeSinger, session, superVoteActive])
 
-    // 🟢 THE RATE-LIMIT FIX: Anonymous Guest Setup
     const handleCreateGuest = async (e) => {
         e.preventDefault()
         setTempLoading(true)
-        
         try {
-            // This bypasses email limits entirely!
             const { data, error } = await supabase.auth.signInAnonymously()
-            
             if (error) throw error
-
             if (data?.user) {
                 await supabase.from('profiles').insert([{ 
                     id: data.user.id, username: tempStageName, account_type: 'Temp/Guest', details: { realName: tempName } 
@@ -99,7 +106,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             }
         } catch (err) {
             toast.error("Auth limit hit. Generating local pass...")
-            // Fallback: If anonymous auth is turned off in Supabase dashboard, we fake it locally so testing isn't blocked.
             setTimeout(() => { window.location.href = '/?mode=register' }, 2000)
         }
     }
@@ -113,25 +119,25 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         setSearching(false)
     }
 
+    const updateSetlistOnServer = async (newSetlistIds) => {
+        if (isGuest || !currentUser) return;
+        const { error } = await supabase.rpc('update_user_setlist', { p_user_id: currentUser.id, p_new_setlist: newSetlistIds });
+        if (error) toast.error("Failed to update setlist: " + error.message);
+    }
+
     const addToSetlist = async (song) => {
         if (userSetlist.length >= 7) return toast.error("Setlist max is 7 songs.")
         if (userSetlist.find(s => s.id === song.id)) return toast.error("Song already in setlist.")
-        
         const newList = [...userSetlist, song]
         setUserSetlist(newList)
-        
-        if (!isGuest && currentUser) {
-            await supabase.from('profiles').update({ active_setlist: newList.map(s => s.id) }).eq('id', currentUser.id)
-        }
+        await updateSetlistOnServer(newList.map(s => s.id));
         toast.success("Added to Setlist!")
     }
 
     const removeFromSetlist = async (indexToRemove) => {
         const newList = userSetlist.filter((_, idx) => idx !== indexToRemove)
         setUserSetlist(newList)
-        if (!isGuest && currentUser) {
-            await supabase.from('profiles').update({ active_setlist: newList.map(s => s.id) }).eq('id', currentUser.id)
-        }
+        await updateSetlistOnServer(newList.map(s => s.id));
     }
 
     const submitQueueToHost = async () => {
@@ -146,11 +152,16 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         toast.success("Setlist submitted to Host!")
     }
 
-    // 🟢 VOTING ENGINE
+    // 🟢 VOTING ENGINE INTERACTIONS
     const handleTapVote = () => {
-        const multiplier = superVoteActive ? 2 : 1
-        setTapCount(prev => prev + multiplier)
-        if (navigator.vibrate) navigator.vibrate(superVoteActive ? [50, 50, 50] : 50) 
+        if (session?.voting_style === 'full') {
+            setFullModeTaps(prev => prev + 1);
+            if (navigator.vibrate) navigator.vibrate(50);
+        } else {
+            const multiplier = superVoteActive ? 2 : 1
+            setTapCount(prev => prev + multiplier)
+            if (navigator.vibrate) navigator.vibrate(superVoteActive ? [50, 50, 50] : 50) 
+        }
     }
 
     const activateSuperVote = () => {
@@ -160,31 +171,32 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         toast.success("⚡ SuperVote Active!")
     }
 
-    const submitVibeCheck = async () => {
+    const submitFinalVote = async () => {
         if (!activeSinger) return
-        let multiplier = superVoteActive ? 5 : 1
 
-        const addedPerf = multiStars.performance * multiplier
-        const addedWow = multiStars.wow * multiplier
-        const addedOrig = multiStars.originality * multiplier
-        const totalAdded = addedPerf + addedWow + addedOrig
+        // 🟢 FIX: Perfectly mapped parameters to the SQL function
+        const { error } = await supabase.rpc('submit_stage_vote', {
+            p_singer_id: activeSinger.id,
+            p_voting_style: session.voting_style,
+            p_taps: fullModeTaps,
+            p_perf_stars: multiStars.performance,
+            p_wow_stars: multiStars.wow,
+            p_orig_stars: multiStars.originality,
+            p_is_supervote: superVoteActive
+        })
 
-        await supabase.from('session_singers').update({
-            score_performance: (activeSinger.score_performance || 0) + addedPerf,
-            score_wow: (activeSinger.score_wow || 0) + addedWow,
-            score_originality: (activeSinger.score_originality || 0) + addedOrig,
-            total_points: (activeSinger.total_points || 0) + totalAdded,
-            super_votes: (activeSinger.super_votes || 0) + (superVoteActive ? 1 : 0)
-        }).eq('id', activeSinger.id)
-
-        setMultiStars({ performance: 0, wow: 0, originality: 0 })
-        setSuperVoteActive(false)
-        toast.success("Votes Locked In!")
+        if (error) {
+            toast.error(error.message) 
+        } else {
+            setVotedFor(prev => ({ ...prev, [activeSinger.id]: true }))
+            setMultiStars({ performance: 0, wow: 0, originality: 0 })
+            setSuperVoteActive(false)
+            toast.success("Votes Locked In!")
+        }
     }
 
     if (isLoading) return <div className="text-white text-center py-20 animate-pulse">Connecting to Stage...</div>
 
-    // 1. THE GUEST FLOW
     if (!currentUser) {
         return (
             <div className="max-w-md mx-auto p-6 animate-fade-in pb-20">
@@ -216,7 +228,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
     if (!session) return <div className="text-white text-center py-20">Session ended. <button onClick={onExit} className="text-blue-400 block w-full mt-4">Return Home</button></div>
 
-    // 2. THE MASTER MENU
     if (activeView === 'Menu') {
         return (
             <div className="max-w-md mx-auto p-4 animate-fade-in min-h-[80vh] flex flex-col">
@@ -235,7 +246,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                     <button onClick={() => setActiveView('Setlist')} className="bg-[#090812] border border-gray-800 hover:border-blue-500/50 p-6 rounded-3xl flex flex-col items-center justify-center gap-2 transition-all group">
                         <span className="text-4xl group-hover:scale-110 transition-transform">📝</span>
                         <span className="text-white font-bold tracking-wide mt-2">Setlist</span>
-                        {/* 🟢 Setlist Count Live */}
                         <span className="text-[9px] text-blue-400 uppercase tracking-widest font-bold bg-blue-900/20 px-2 py-0.5 rounded">{userSetlist.length} / 7 Songs</span>
                     </button>
                     
@@ -275,7 +285,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         return (
             <div className="max-w-md mx-auto p-4 animate-fade-in pb-20">
                 <button onClick={() => setActiveView('Menu')} className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-white mb-6">← Back to Menu</button>
-                
                 <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">Your Setlist</h3>
                 <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-6">{userSetlist.length} / 7 Songs Ready</p>
 
@@ -303,7 +312,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                         <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Title or Artist..." className="flex-1 bg-black border border-gray-700 text-white rounded-lg p-3 text-sm outline-none focus:border-blue-500" />
                         <button type="submit" disabled={searching} className="bg-blue-600 text-white px-4 rounded-lg text-xs font-bold uppercase tracking-widest">{searching ? '...' : 'Find'}</button>
                     </form>
-
                     <div className="space-y-2">
                         {songResults.map(song => (
                             <div key={song.id} className="flex justify-between items-center bg-[#090812] border border-gray-800 p-3 rounded-xl">
@@ -320,7 +328,6 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         )
     }
 
-    // 🟢 NEW: ITEMS & INVENTORY TAB
     if (activeView === 'Items') {
         const items = currentUser?.inventory || {}
         return (
@@ -364,25 +371,50 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             
             {activeView === 'Stage' && (
                  <div className="space-y-6">
-                     <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 text-center relative overflow-hidden shadow-xl">
-                         <h3 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-6">Live Stage Monitor</h3>
-                         {activeSinger ? (
-                             <div className="animate-fade-in relative z-10">
-                                 <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4 border bg-[#ff2d78]/20 text-[#ff2d78] border-[#ff2d78]/50">
-                                     {activeSinger.status}
-                                 </span>
-                                 <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{activeSinger.singer_name}</h3>
-                                 <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{activeSinger.song_title}</p>
-                             </div>
-                         ) : (
-                             <div className="py-8 relative z-10">
-                                 <span className="text-4xl opacity-50 mb-4 block">🎤</span>
-                                 <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Stage is Empty</p>
-                             </div>
-                         )}
-                     </div>
+                    {/* 🟢 LIVE STAGE MONITOR */}
+                    <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 text-center relative overflow-hidden shadow-xl">
+                        <h3 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-6">Live Stage Monitor</h3>
+                        
+                        {/* 🟢 "Full" Mode Pre-Voting Tap Input */}
+                        {activeSinger?.status === 'singing' && session?.voting_style === 'full' && activeSinger.user_id !== currentUser?.id && (
+                           <div className="mb-8 z-10 relative">
+                               <p className="text-blue-400 font-bold uppercase tracking-widest text-[10px] mb-4 animate-pulse">Voting is open during performance!</p>
+                               <button onClick={handleTapVote} className="active:scale-95 mx-auto flex flex-col items-center justify-center bg-blue-600 text-white rounded-full w-32 h-32 border-4 border-white/20 shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+                                   <span className="font-['Bebas_Neue'] text-3xl tracking-widest">TAP</span>
+                               </button>
+                               <p className="text-white font-bold text-xs mt-3">You've tapped <span className="text-blue-400 text-lg">{fullModeTaps}</span> times</p>
+                           </div>
+                        )}
 
-                     {/* 🟢 THE VOTING MECHANICS */}
+                        {activeSinger ? (
+                            <div className="animate-fade-in relative z-10">
+                                <span className="inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4 border bg-[#ff2d78]/20 text-[#ff2d78] border-[#ff2d78]/50">
+                                    {activeSinger.status}
+                                </span>
+                                <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">{activeSinger.singer_name}</h3>
+                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{activeSinger.song_title}</p>
+                            </div>
+                        ) : (
+                            <div className="py-8 relative z-10">
+                                <span className="text-4xl opacity-50 mb-4 block">🎤</span>
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Stage is Empty</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* 🟢 THE RESULTS DISPLAY */}
+                    {activeSinger?.status === 'results' && (
+                        <div className="bg-black/60 border border-blue-500/30 rounded-3xl p-8 text-center shadow-[0_0_30px_rgba(59,130,246,0.2)] animate-fade-in mt-6">
+                            <h3 className="text-4xl sm:text-5xl font-['Bebas_Neue'] text-white mb-2 leading-none">
+                                {activeSinger.singer_name} scored <span className="text-blue-400">{activeSinger.total_points || 0}</span> Points!
+                            </h3>
+                            <p className="text-gray-400 font-bold uppercase tracking-widest text-sm mt-4">
+                                Total Voters = <span className="text-white">{activeSinger.voter_count || 0}</span>
+                            </p>
+                        </div>
+                    )}
+
+                     {/* 🟢 THE MAIN VOTING MECHANICS */}
                      {activeSinger?.status === 'voting' && activeSinger.user_id !== currentUser?.id && !votedFor[activeSinger.id] && (
                          <div className="bg-black/60 border border-[#ff2d78]/30 rounded-3xl p-6 text-center animate-fade-in shadow-[0_0_30px_rgba(255,45,120,0.15)]">
                              
@@ -411,9 +443,16 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                                  </div>
                              )}
 
-                             {session.voting_style === 'vibe' && (
+                             {(session.voting_style === 'vibe' || session.voting_style === 'full') && (
                                  <div className="text-left">
                                      <h3 className="text-2xl font-['Bebas_Neue'] text-blue-400 tracking-widest text-center mb-4">Vibe Check</h3>
+                                     
+                                     {session.voting_style === 'full' && fullModeTaps > 0 && (
+                                         <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-xl mb-4 text-center">
+                                             <p className="text-blue-400 font-bold uppercase tracking-widest text-[10px]">Taps Recorded: {fullModeTaps}</p>
+                                         </div>
+                                     )}
+
                                      <div className="space-y-4 bg-[#090812] border border-gray-800 p-4 rounded-2xl">
                                          {[{ key: 'performance', label: 'Vocals', emoji: '🎤' }, { key: 'wow', label: 'Energy', emoji: '🔥' }, { key: 'originality', label: 'Style', emoji: '✨' }].map(cat => (
                                              <div key={cat.key}>
@@ -432,12 +471,11 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                              )}
 
                              {session.voting_style !== 'tap' && (
-                                 <button onClick={submitVibeCheck} disabled={multiStars.performance === 0} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg">
+                                 <button onClick={submitFinalVote} disabled={multiStars.performance === 0} className="w-full mt-6 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-all shadow-lg">
                                      Lock In Votes
                                  </button>
                              )}
 
-                             {/* 🟢 SUPERVOTE: Locked to 1 per user per session! */}
                              {!hasUsedSupervote && !superVoteActive && (
                                  <button onClick={activateSuperVote} className="mt-4 w-full bg-yellow-900/30 border border-yellow-500/50 text-yellow-500 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-yellow-500 hover:text-black transition-colors">
                                      ⚡ Use SuperVote (Once Per Session)
@@ -461,7 +499,10 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                                  <h4 className="text-white font-bold truncate">{s.singer_name}</h4>
                                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest truncate">{s.song_title}</p>
                              </div>
-                             <span className="text-xl font-['Bebas_Neue'] text-blue-400">{s.total_points || s.score_performance || 0}</span>
+                             <div className="flex flex-col items-end">
+                                <span className="text-xl font-['Bebas_Neue'] text-blue-400">{s.total_points || s.score_performance || 0}</span>
+                                {s.voter_count > 0 && <span className="text-[8px] text-gray-500 uppercase tracking-widest font-bold">{s.voter_count} Votes</span>}
+                             </div>
                          </div>
                      ))}
                  </div>

@@ -134,15 +134,23 @@ export default function AdminEvents() {
 
   const toggleApproval = async (id, currentStatus) => {
       const newStatus = currentStatus === 'pending' ? 'approved' : 'pending'
-      await supabase.from('events').update({ status: newStatus }).eq('id', id)
+      const { error } = await supabase.from('events').update({ status: newStatus }).eq('id', id)
+      if (error) {
+          toast.error(`Update Failed: ${error.message}`)
+          return
+      }
       toast.success(`Event marked as ${newStatus}`)
       fetchData()
   }
 
   const deleteEvent = async (id) => {
     if (!window.confirm("Delete this event completely?")) return
-    await supabase.from('events').delete().eq('id', id)
-    toast.success("Event deleted")
+    const { error } = await supabase.from('events').delete().eq('id', id)
+    if (error) {
+        toast.error(`Operation Failed: ${error.message}`)
+        return
+    }
+    toast.success("Event deleted successfully")
     fetchData()
   }
 

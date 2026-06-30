@@ -82,7 +82,13 @@ export default function Settings({ currentUser, setCurrentUser }) {
           navigator.geolocation.getCurrentPosition(
               async (position) => {
                   const { latitude, longitude } = position.coords
-                  await supabase.from('profiles').update({ current_lat: latitude, current_lng: longitude, last_active: new Date().toISOString() }).eq('id', currentUser.id)
+                  const { error } = await supabase.from('profiles').update({ current_lat: latitude, current_lng: longitude, last_active: new Date().toISOString() }).eq('id', currentUser.id)
+                  
+                  if (error) {
+                      alert("Error linking location: " + error.message)
+                      return
+                  }
+
                   setLocationEnabled(true)
                   localStorage.setItem('bhnl_location_enabled', 'true')
                   alert("Location linked! You are now visible on the BHNL Map.")
@@ -94,7 +100,11 @@ export default function Settings({ currentUser, setCurrentUser }) {
               { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
           )
       } else {
-          supabase.from('profiles').update({ current_lat: null, current_lng: null }).eq('id', currentUser.id).then(() => {
+          supabase.from('profiles').update({ current_lat: null, current_lng: null }).eq('id', currentUser.id).then(({ error }) => {
+              if (error) {
+                  alert("Error unlinking location: " + error.message)
+                  return
+              }
               setLocationEnabled(false)
               localStorage.setItem('bhnl_location_enabled', 'false')
           })

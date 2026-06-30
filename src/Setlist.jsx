@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import SongRow from './SongRow'
+import { toast } from './GlobalToast'
 
 export default function Setlist({ session, isOwner = true }) {
   const [setlistIds, setSetlistIds] = useState([])
@@ -38,8 +39,19 @@ export default function Setlist({ session, isOwner = true }) {
   }, [setlistIds])
 
   const handleRemove = async (indexToRemove) => {
+    // 1. Define the intended state
     const newSetlist = setlistIds.filter((_, idx) => idx !== indexToRemove)
-    await supabase.from('profiles').update({ active_setlist: newSetlist }).eq('id', session.user.id)
+    
+    // 2. Await the database action FIRST
+    const { error } = await supabase.from('profiles').update({ active_setlist: newSetlist }).eq('id', session.user.id)
+    
+    // 3. Block the UI update if the server rejects it
+    if (error) {
+        toast.error(`Network error: Could not remove song.`)
+        return; 
+    }
+    
+    // 4. Safely update local state and broadcast
     setSetlistIds(newSetlist)
     window.dispatchEvent(new Event('setlistUpdated'))
   }

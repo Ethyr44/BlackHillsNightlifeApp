@@ -5,6 +5,7 @@ import { toast } from './GlobalToast'
 export default function Shop({ currentUser }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [purchasingId, setPurchasingId] = useState(null)
 
   useEffect(() => {
     fetchShopItems()
@@ -42,61 +43,23 @@ export default function Shop({ currentUser }) {
   }
 
   const handlePurchase = async (item) => {
-    // 🟢 THE FIX: Unsuccessful Purchase Toast
-    if (currentUser.lifestyle_points < item.cost_lp) {
-        return toast.error("Insufficient funds. Could not Purchase Item.");
-    }
-    
-    let newLp = currentUser.lifestyle_points - (item.cost_lp || 0);
-    let newIron = (currentUser.cur_iron || 0) - (item.cost_iron || 0);
-    let newWood = (currentUser.cur_wood || 0) - (item.cost_wood || 0);
-    let newStone = (currentUser.cur_stone || 0) - (item.cost_stone || 0);
-    
-    if (newIron < 0 || newWood < 0 || newStone < 0) {
-        return toast.error("Insufficient funds. Could not Purchase Item.");
-    }
+    setPurchasingId(item.id)
 
-    const newInventory = { ...(currentUser.inv_items || {}) };
-    const newGems = { ...(currentUser.inv_gems || {}) };
-    
-    // 🟢 Track the updated item count for the Toast
-    let updatedCount = 0;
-
-    if (item.name === 'Wood' || (item.item_type === 'Resource' && item.name.includes('Wood'))) {
-        newWood += 1;
-        updatedCount = newWood;
-    } else if (item.name === 'Stone' || (item.item_type === 'Resource' && item.name.includes('Stone'))) {
-        newStone += 1;
-        updatedCount = newStone;
-    } else if (item.name === 'Iron' || (item.item_type === 'Resource' && item.name.includes('Iron'))) {
-        newIron += 1;
-        updatedCount = newIron;
-    } else if (['Quartz', 'Amethyst', 'Jade', 'Emerald', 'Sapphire', 'Ruby', 'Diamond'].includes(item.name) || item.item_type === 'Gem') {
-        newGems[item.name] = (newGems[item.name] || 0) + 1;
-        updatedCount = newGems[item.name];
-    } else {
-        newInventory[item.name] = (newInventory[item.name] || 0) + 1;
-        updatedCount = newInventory[item.name];
-    }
-
-    const { error } = await supabase
-        .from('profiles')
-        .update({
-            lifestyle_points: newLp,
-            cur_iron: newIron,
-            cur_wood: newWood,
-            cur_stone: newStone,
-            inv_items: newInventory,
-            inv_gems: newGems
-        })
-        .eq('id', currentUser.id);
+    // This RPC function must be created in your Supabase SQL editor.
+    // It should handle all balance checks, deductions, and inventory updates atomically.
+    const { error } = await supabase.rpc('purchase_shop_item', {
+        p_user_id: currentUser.id,
+        p_item_id: item.id
+    });
 
     if (error) {
-        return toast.error("Transaction failed: " + error.message);
+        toast.error(error.message); // The RPC should return a user-friendly error.
+    } else {
+        toast.success(`${item.name} purchased!`);
+        // The user's profile state will update automatically via the subscription in App.jsx
     }
 
-    // 🟢 THE FIX: Successful Purchase Toast
-    toast.success(`Success! Item Purchased! Inventory: ${updatedCount}, L$ Remaining: ${newLp}`);
+    setPurchasingId(null)
   }
 
   const getThemeClasses = (color) => {
@@ -175,11 +138,12 @@ export default function Shop({ currentUser }) {
                             
                             <button 
                                 onClick={() => handlePurchase(item)}
+                                disabled={!canAfford || purchasingId === item.id}
                                 className={`w-full py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${
-                                    canAfford ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:bg-blue-500' : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
+                                    canAfford ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:bg-blue-500 disabled:bg-gray-800' : 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                 }`}
                             >
-                                {canAfford ? 'Claim' : 'Locked'}
+                                {purchasingId === item.id ? '...' : canAfford ? 'Claim' : 'Locked'}
                             </button>
                         </div>
                     </div>

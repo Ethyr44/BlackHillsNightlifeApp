@@ -79,20 +79,31 @@ const getVenueStatus = (venue) => {
     });
     if (hasActiveEvent) return { color: 'bg-pink-500', label: 'LIVE' };
 
+    // HELPER: Handles standard hours AND midnight crossovers
+    const checkIsActive = (current, openTime, closeTime) => {
+        if (closeTime < openTime) {
+            // Midnight crossover (e.g., Open 1600, Close 200)
+            // Active if it's late evening (>= 1600) OR early morning (<= 200)
+            return current >= openTime || current <= closeTime;
+        }
+        // Standard daytime hours (e.g., Open 0900, Close 1700)
+        return current >= openTime && current <= closeTime;
+    };
+
     // 2. Green: Happy Hour
     const hh = venue.happy_hour_schedule?.[dayName];
-    if (hh?.isOpen) {
+    if (hh?.isOpen && hh.open && hh.close) {
         const open = parseInt(hh.open.replace(':', ''));
         const close = parseInt(hh.close.replace(':', ''));
-        if (currentTime >= open && currentTime <= close) return { color: 'bg-green-500', label: 'HH' };
+        if (checkIsActive(currentTime, open, close)) return { color: 'bg-green-500', label: 'HH' };
     }
 
     // 3. Red: Open Hours
     const op = venue.hours_of_operation?.[dayName];
-    if (op?.isOpen) {
+    if (op?.isOpen && op.open && op.close) {
         const open = parseInt(op.open.replace(':', ''));
         const close = parseInt(op.close.replace(':', ''));
-        if (currentTime >= open && currentTime <= close) return { color: 'bg-red-500', label: 'OPEN' };
+        if (checkIsActive(currentTime, open, close)) return { color: 'bg-red-500', label: 'OPEN' };
     }
 
     return { color: 'bg-gray-600', label: 'OFF' };

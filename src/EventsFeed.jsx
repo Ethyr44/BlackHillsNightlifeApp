@@ -19,7 +19,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
   const [selectedVenueInfo, setSelectedVenueInfo] = useState(null)
   const [selectedEventInfo, setSelectedEventInfo] = useState(null)
   const [isEditingEvent, setIsEditingEvent] = useState(false)
-  const [editFormData, setEditFormData] = useState({ title: '', description: '', event_type: 'Live Music' })
+  const [editFormData, setEditFormData] = useState({ title: '', description: '', event_type: 'Live Music', recurring_pattern: 'none', event_date: '' })
 
   useEffect(() => {
       if ("geolocation" in navigator) {
@@ -33,8 +33,11 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   const fetchFeedData = async () => {
     setLoading(true)
-    const { data: venuesData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').order('name', { ascending: true })
-    const { data: eventsData } = await supabase.from('events').select('*').eq('status', 'approved')
+    const { data: venuesData, error: vErr } = await supabase.from('pages').select('*').eq('page_type', 'Venue').order('name', { ascending: true })
+    if (vErr) console.error("Venue Load Error:", vErr)
+
+    const { data: eventsData, error: eErr } = await supabase.from('events').select('*').eq('status', 'approved')
+    if (eErr) console.error("Events Load Error:", eErr)
 
     const today = new Date()
 
@@ -48,30 +51,33 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
             slotDate.setDate(today.getDate() + i)
             const dayName = slotDate.toLocaleDateString('en-US', { weekday: 'short' })
 
-            // PRIORITY 1: Is there a specific one-off event in the events table?
+            // 🟢 THE FIX: The Bulletproof Event Matcher from your Backup
             let matchedEvent = eventsData?.find(e => {
-                if (e.venue !== venue.name) return false;
-                if (e.recurring_weekly) return false;
-                
-                const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
-                const eDate = new Date(safeDateStr);
-                
-                return eDate.getFullYear() === slotDate.getFullYear() &&
-                       eDate.getMonth() === slotDate.getMonth() &&
-                       eDate.getDate() === slotDate.getDate();
-            })
+                if (e.venue !== venue.name || !e.event_date) return false;
 
-            // PRIORITY 2: If no one-off event, check for a recurring weekly event in the events table
-            if (!matchedEvent) {
-                matchedEvent = eventsData?.find(e => {
-                    if (e.venue !== venue.name) return false;
-                    if (!e.recurring_weekly) return false;
-                    
+                try {
                     const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
                     const eDate = new Date(safeDateStr);
-                    return eDate.getDay() === slotDate.getDay();
-                })
-            }
+                    if (isNaN(eDate.getTime())) return false; 
+
+                    const pattern = (e.recurring_pattern && e.recurring_pattern !== 'null' && e.recurring_pattern !== '') ? e.recurring_pattern : (e.recurring_weekly ? 'weekly' : 'none');
+
+                    if (pattern === 'none') {
+                        // Strict Local Date String Matching 
+                        return eDate.toLocaleDateString() === slotDate.toLocaleDateString();
+                    } else {
+                        if (eDate.getDay() !== slotDate.getDay()) return false;
+                        const startDay = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate());
+                        const currentDay = new Date(slotDate.getFullYear(), slotDate.getMonth(), slotDate.getDate());
+                        if (currentDay < startDay) return false;
+
+                        if (pattern === 'weekly') return true;
+                        if (pattern === 'biweekly') return Math.round((currentDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24 * 7)) % 2 === 0;
+                        if (pattern === 'monthly') return Math.ceil(startDay.getDate() / 7) === Math.ceil(currentDay.getDate() / 7);
+                        return false;
+                    }
+                } catch (err) { return false; }
+            })
 
             // PRIORITY 3 (FALLBACK): Legacy JSON data from the pages table
             if (!matchedEvent) {
@@ -89,6 +95,16 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
     setRawLineups(builtLineups)
     setLoading(false)
+  }
+
+  // 🟢 NEW: Explicitly handle sorting resets
+  const handleSortChange = (mode) => {
+      setSortMode(mode);
+      setPage(1);
+  }
+  const handleFilterChange = (type) => {
+      setEventTypeFilter(type);
+      setPage(1);
   }
 
   // Dynamic Sorting Engine
@@ -121,13 +137,19 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
               const scoreB = getEventScore(b);
               if (scoreA !== scoreB) return scoreA - scoreB;
           }
-          return getDist(a) - getDist(b);
+          const distA = getDist(a);
+          const distB = getDist(b);
+          if (distA === Infinity && distB === Infinity) return 0;
+          if (distA === Infinity) return 1;
+          if (distB === Infinity) return -1;
+          if (isNaN(distA) || isNaN(distB)) return 0;
+          return distA - distB;
       });
 
       setVenueLineups(sorted);
-      setDisplayedVenues(sorted.slice(0, ITEMS_PER_PAGE));
-      setPage(1); 
-  }, [rawLineups, userLoc, sortMode, eventTypeFilter]);
+      // 🟢 FIX: Maintain depth so the UI doesn't bounce to the top!
+      setDisplayedVenues(sorted.slice(0, page * ITEMS_PER_PAGE));
+  }, [rawLineups, userLoc, sortMode, eventTypeFilter, page]);
 
   const loadMore = () => {
       const nextVenues = venueLineups.slice(0, (page + 1) * ITEMS_PER_PAGE)
@@ -139,10 +161,25 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       setSelectedVenueInfo(venue)
       setSelectedEventInfo({ slot })
       setIsEditingEvent(false)
-      if (slot.event) {
-          setEditFormData({ title: slot.event.title || '', description: slot.event.description || '', event_type: slot.event.event_type || 'Live Music' })
-      } else {
-          setEditFormData({ title: '', description: '', event_type: 'Live Music' })
+      if (slot.event) { // If editing an existing event
+          const pattern = slot.event.recurring_pattern || (slot.event.recurring_weekly ? 'weekly' : 'none')
+          
+          // Format the existing UTC date to a local datetime-local string
+          const d = new Date(slot.event.event_date.includes('Z') ? slot.event.event_date : slot.event.event_date + 'Z')
+          const offset = d.getTimezoneOffset() * 60000
+          const localISOTime = (new Date(d - offset)).toISOString().slice(0, 16)
+
+          setEditFormData({ title: slot.event.title || '', description: slot.event.description || '', event_type: slot.event.event_type || 'Live Music', recurring_pattern: pattern, event_date: localISOTime })
+      } else { // If creating a new event
+          // Use the slot's date but normalize the time to a default (e.g., 7 PM)
+          const defaultDate = new Date(slot.date)
+          defaultDate.setHours(19, 0, 0, 0) // Set to 7:00 PM
+
+          // Format for the datetime-local input
+          const offset = defaultDate.getTimezoneOffset() * 60000
+          const localISOTime = (new Date(defaultDate - offset)).toISOString().slice(0, 16)
+
+          setEditFormData({ title: '', description: '', event_type: 'Live Music', recurring_pattern: 'none', event_date: localISOTime })
       }
   }
 
@@ -151,26 +188,29 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
           title: editFormData.title || `${selectedVenueInfo.name} Event`, // Ensure title exists
           description: editFormData.description,
           event_type: editFormData.event_type,
+          recurring_pattern: editFormData.recurring_pattern,
+          recurring_weekly: editFormData.recurring_pattern === 'weekly',
           venue: selectedVenueInfo.name,
-          event_date: selectedEventInfo.slot.date.toISOString(),
+          event_date: new Date(editFormData.event_date).toISOString(),
           status: 'approved'
       }
 
       let newEventObj = { ...payload }
 
-      // 1. Save to Database
+      // 🟢 THE FIX: Added error checking to surface DB rejections
       if (selectedEventInfo.slot.event?.id) {
-          const { data } = await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id).select().single()
+          const { data, error } = await supabase.from('events').update(payload).eq('id', selectedEventInfo.slot.event.id).select().single()
+          if (error) return toast.error("DB Error: " + error.message)
           if (data) newEventObj = data
           toast.success("Event updated!")
       } else {
-          const { data } = await supabase.from('events').insert([payload]).select().single()
+          const { data, error } = await supabase.from('events').insert([payload]).select().single()
+          if (error) return toast.error("DB Error: " + error.message)
           if (data) newEventObj = data
           toast.success("Event created!")
       }
 
-      // 2. Optimistic UI Update: Instantly inject the new event into the rawLineups state
-      // This triggers the sorting engine and updates the VenueCard emojis immediately!
+      // Optimistic UI Update
       setRawLineups(prevRaw => prevRaw.map(v => {
           if (v.id === selectedVenueInfo.id) {
               const updatedSchedule = v.schedule.map(s => {
@@ -186,19 +226,20 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
       setIsEditingEvent(false)
       setSelectedEventInfo(null)
-      
-      // Still run the background fetch to ensure absolute parity with the cloud
-      fetchFeedData()
   }
 
   const handleDeleteEvent = async () => {
       if (!selectedEventInfo?.slot?.event?.id) return
       if (!window.confirm("Are you sure you want to permanently delete this event?")) return
       
-      const { error } = await supabase.from('events').delete().eq('id', selectedEventInfo.slot.event.id)
+      // 🟢 THE FIX: Add .select() to force the DB to confirm the deletion
+      const { data, error } = await supabase.from('events').delete().eq('id', selectedEventInfo.slot.event.id).select()
       
       if (error) {
           toast.error(`Error deleting event: ${error.message}`)
+      } else if (data && data.length === 0) {
+          // If no error, but 0 rows deleted, your Database RLS policies are blocking the action!
+          toast.error("Database refused deletion. Check your RLS policies.")
       } else {
           toast.success("Event deleted successfully!")
           
@@ -218,7 +259,8 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
           setIsEditingEvent(false)
           setSelectedEventInfo(null)
-          fetchFeedData()
+          
+          // 🟢 THE FIX: Removed fetchFeedData() from here to prevent Race Conditions!
       }
   }
 
@@ -230,7 +272,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
             <>
                 <div className="flex gap-2 mb-4 px-1">
                     <button
-                        onClick={() => setSortMode('distance')}
+                        onClick={() => handleSortChange('distance')}
                         className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${
                             sortMode === 'distance' 
                             ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]' 
@@ -240,7 +282,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                         📍 Nearest First
                     </button>
                     <button
-                        onClick={() => setSortMode('eventsFirst')}
+                        onClick={() => handleSortChange('eventsFirst')}
                         className={`flex-1 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${
                             sortMode === 'eventsFirst' 
                             ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.4)]' 
@@ -255,7 +297,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                     {['All', 'Karaoke', 'Live Music', 'Comedy', 'Open Mic', 'Trivia', 'Drinks'].map(type => (
                         <button 
                             key={type}
-                            onClick={() => setEventTypeFilter(type)}
+                            onClick={() => handleFilterChange(type)}
                             className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest whitespace-nowrap transition-all ${
                                 eventTypeFilter === type 
                                 ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]' 
@@ -304,9 +346,22 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                                 <input type="text" value={editFormData.title} onChange={e => setEditFormData({...editFormData, title: e.target.value})} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" />
                             </div>
                             <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Event Date & Time</label>
+                                <input type="datetime-local" value={editFormData.event_date} onChange={e => setEditFormData({...editFormData, event_date: e.target.value})} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none" />
+                            </div>
+                            <div>
                                 <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Event Type</label>
                                 <select value={editFormData.event_type} onChange={e => setEditFormData({...editFormData, event_type: e.target.value})} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none">
                                     {Object.keys(EVENT_EMOJIS).map(type => <option key={type} value={type}>{EVENT_EMOJIS[type]} {type}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1 block">Frequency</label>
+                                <select value={editFormData.recurring_pattern} onChange={e => setEditFormData({...editFormData, recurring_pattern: e.target.value})} className="w-full bg-black border border-gray-700 text-white rounded-lg p-3 text-sm focus:border-blue-500 outline-none">
+                                    <option value="none">One-Time Event</option>
+                                    <option value="weekly">Occurs Every Week</option>
+                                    <option value="biweekly">Occurs Every Other Week</option>
+                                    <option value="monthly">Occurs Once a Month</option>
                                 </select>
                             </div>
                             <div>
@@ -331,9 +386,16 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                                 <div className="space-y-4">
                                     <div>
                                         <h4 className="text-white text-xl font-bold">{selectedEventInfo.slot.event.title}</h4>
-                                        <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold bg-purple-900/20 px-2 py-1 rounded border border-purple-500/30 inline-block mt-2">
-                                            {EVENT_EMOJIS[selectedEventInfo.slot.event.event_type] || '🗓️'} {selectedEventInfo.slot.event.event_type}
-                                        </span>
+                                        <div className="flex gap-2 mt-2">
+                                            <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold bg-purple-900/20 px-2 py-1 rounded border border-purple-500/30 inline-block">
+                                                {EVENT_EMOJIS[selectedEventInfo.slot.event.event_type] || '🗓️'} {selectedEventInfo.slot.event.event_type}
+                                            </span>
+                                            {(selectedEventInfo.slot.event.recurring_pattern && selectedEventInfo.slot.event.recurring_pattern !== 'none' || selectedEventInfo.slot.event.recurring_weekly) && (
+                                                <span className="text-[10px] text-blue-400 uppercase tracking-widest font-bold bg-blue-900/20 px-2 py-1 rounded border border-blue-500/30 inline-block">
+                                                    🔄 {selectedEventInfo.slot.event.recurring_pattern === 'biweekly' ? 'Bi-Weekly' : selectedEventInfo.slot.event.recurring_pattern === 'monthly' ? 'Monthly' : 'Weekly'}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="bg-black/50 p-4 rounded-xl border border-gray-800">
                                         <p className="text-gray-300 text-sm whitespace-pre-wrap">{selectedEventInfo.slot.event.description || "No specific details provided."}</p>

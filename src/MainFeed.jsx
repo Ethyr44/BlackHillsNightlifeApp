@@ -4,7 +4,7 @@ import FeedPost from './FeedPost'
 import { EVENT_EMOJIS } from './VenueCard'
 import { toast } from './GlobalToast'
 
-// 🟢 NEW: Fetches and displays rich link previews (Images, Titles, etc.)
+// 🟢 Fetches and displays rich link previews (Images, Titles, etc.)
 const LinkPreview = ({ url }) => {
     const [preview, setPreview] = useState(null)
     const [loading, setLoading] = useState(true)
@@ -12,7 +12,6 @@ const LinkPreview = ({ url }) => {
     useEffect(() => {
         const fetchPreview = async () => {
             try {
-                // Using Microlink's free public API for rich embeds
                 const res = await fetch(`https://api.microlink.io?url=${encodeURIComponent(url)}`)
                 const data = await res.json()
                 if (data.status === 'success') {
@@ -53,14 +52,13 @@ const LinkPreview = ({ url }) => {
     )
 }
 
-// 🟢 UPDATED: Extracts the URL and attaches the rich preview underneath the text
+// 🟢 Extracts the URL and attaches the rich preview underneath the text
 const Linkify = ({ text }) => {
     if (!text) return null;
     
     const urlRegex = /((?:https?:\/\/|www\.)[^\s]+)/g;
     const parts = text.split(urlRegex);
     
-    // Find the first URL to generate a preview block for
     const match = text.match(urlRegex);
     const firstUrl = match ? (match[0].startsWith('www.') ? `https://${match[0]}` : match[0]) : null;
 
@@ -86,8 +84,6 @@ const Linkify = ({ text }) => {
                     return part;
                 })}
             </p>
-            
-            {/* 🟢 Render the rich card preview below the text */}
             {firstUrl && <LinkPreview url={firstUrl} />}
         </div>
     );
@@ -100,15 +96,61 @@ export default function MainFeed({ currentUser, onViewEntity }) {
   const [hasMore, setHasMore] = useState(true)
   const ITEMS_PER_PAGE = 50
 
-  // 🟢 NEW: Post Creation State
   const [newPostContent, setNewPostContent] = useState('')
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [isPosting, setIsPosting] = useState(false)
 
+  // 🟢 INITIAL FETCH
   useEffect(() => {
     fetchLivingFeed()
   }, [page])
+
+  // 🟢 THE FIX: REALTIME SUPABASE LISTENER
+  useEffect(() => {
+    const realtimeFeed = supabase.channel('public-feed-inserts')
+      .on('postgres', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+          // Fetch the author's profile info to attach to the post
+          const { data: prof } = await supabase.from('profiles').select('username, profile_pic').eq('id', payload.new.author_id).maybeSingle()
+          
+          const formattedPost = {
+              id: `post_${payload.new.id}`,
+              type: 'post',
+              timestamp: new Date(payload.new.created_at || 0).getTime(),
+              data: {
+                  ...payload.new,
+                  username: prof?.username || 'Unknown',
+                  profile_pic: prof?.profile_pic
+              }
+          }
+          
+          setFeed(current => {
+              // Prevent duplicates if fetchLivingFeed caught it at the exact same time
+              if (current.find(item => item.id === formattedPost.id)) return current;
+              return [formattedPost, ...current].sort((a, b) => b.timestamp - a.timestamp);
+          })
+      })
+      .on('postgres', { event: 'INSERT', schema: 'public', table: 'events' }, (payload) => {
+          // Only auto-inject events if they are approved
+          if (payload.new.status !== 'approved') return;
+          
+          const ts = new Date(payload.new.created_at || payload.new.event_date || 0).getTime();
+          const formattedEvent = {
+              id: `event_${payload.new.id}`,
+              type: 'event',
+              timestamp: isNaN(ts) ? 0 : ts,
+              data: payload.new
+          }
+
+          setFeed(current => {
+              if (current.find(item => item.id === formattedEvent.id)) return current;
+              return [formattedEvent, ...current].sort((a, b) => b.timestamp - a.timestamp);
+          })
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(realtimeFeed)
+  }, [])
 
   const fetchLivingFeed = async (reset = false) => {
     if (page === 1 || reset) setLoading(true)
@@ -117,7 +159,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     const from = (currentPage - 1) * ITEMS_PER_PAGE
     const to = from + ITEMS_PER_PAGE - 1
     
-    // 1. Fetch Posts Safely
     const { data: rawPosts, error: postErr } = await supabase
         .from('posts')
         .select('*')
@@ -137,7 +178,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
         }
     })
 
-    // 2. Fetch Events
     const { data: rawEvents, error: eventErr } = await supabase.from('events').select('*').eq('status', 'approved').limit(30).order('id', { ascending: false })
     if (eventErr) console.error("Feed Event Error:", eventErr)
 
@@ -149,10 +189,8 @@ export default function MainFeed({ currentUser, onViewEntity }) {
         }
     })
 
-    // Combine and Sort
     const combined = [...formattedPosts, ...formattedEvents].sort((a, b) => b.timestamp - a.timestamp)
     
-    // 🟢 FIX 3: STRICT DEDUPLICATION to permanently stop the React Key Error
     setFeed(prev => {
         const newArray = reset ? combined : [...prev, ...combined]
         const seenIds = new Set()
@@ -171,7 +209,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     setLoading(false)
   }
 
-  // 🟢 NEW: Image Upload Handlers
   const handleImageSelect = (e) => {
       const file = e.target.files[0]
       if (file) {
@@ -187,7 +224,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
       
       let imageUrl = null
       
-      // Upload Image if present
       if (selectedImage) {
           try {
               const fileExt = selectedImage.name.split('.').pop()
@@ -205,7 +241,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
           }
       }
 
-      // Insert Post Record
       const { error } = await supabase.from('posts').insert([{
           author_id: currentUser.id,
           content: newPostContent,
@@ -217,7 +252,7 @@ export default function MainFeed({ currentUser, onViewEntity }) {
           setSelectedImage(null)
           setImagePreview(null)
           toast.success("Vibe posted!")
-          fetchLivingFeed(true) // Force fresh fetch
+          // The realtime listener will now catch this instantly!
       } else {
           toast.error(error.message)
       }
@@ -227,7 +262,6 @@ export default function MainFeed({ currentUser, onViewEntity }) {
   return (
     <div className="max-w-2xl mx-auto mt-4 p-4 animate-fade-in pb-12">
       
-      {/* 🟢 NEW: The Post Creation UI */}
       <div className="bg-[#090812] border-2 border-gray-800 p-4 sm:p-6 rounded-3xl mb-6 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
           <form onSubmit={handleCreatePost}>
               <textarea 
@@ -258,12 +292,11 @@ export default function MainFeed({ currentUser, onViewEntity }) {
           </form>
       </div>
 
-      {/* The Living Feed Loop */}
       {loading && page === 1 ? (
           <div className="text-center p-12"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>
       ) : (
           feed.map((item) => {
-              if (!item || !item.data) return null; // 🟢 Safety Guard
+              if (!item || !item.data) return null; 
 
               if (item.type === 'post') {
                   return <FeedPost key={item.id} item={item} currentUser={currentUser} onViewEntity={onViewEntity} />

@@ -72,7 +72,12 @@ export default function Home({ changeTab, currentUser }) {
             
             {/* 🟢 THE FIX: Official Logo & Welcome Text */}
             <div className="text-center mb-8 flex flex-col items-center">
-                <img src="/pwa-192x192.png" alt="Black Hills Nightlife Logo" className="w-24 h-24 mb-4 rounded-3xl shadow-[0_0_20px_rgba(59,130,246,0.3)] object-cover bg-black" />
+                {/* 🟢 Swapped pwa-192x192.png for BHNLLogo512x512.png */}
+                <img 
+                    src="/BHNLLogo512x512.png" 
+                    alt="Black Hills Nightlife Logo" 
+                    className="w-24 h-24 mb-4 rounded-3xl shadow-[0_0_20px_rgba(59,130,246,0.3)] object-cover bg-black" 
+                />
                 <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Welcome back,</p>
                 <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest">{currentUser?.username || 'Guest'}</h2>
             </div>

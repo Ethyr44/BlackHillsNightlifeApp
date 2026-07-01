@@ -8,6 +8,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
   const [rawLineups, setRawLineups] = useState([]) 
   const [sortMode, setSortMode] = useState('distance') 
   const [eventTypeFilter, setEventTypeFilter] = useState('All')
+  const [venueSearch, setVenueSearch] = useState('') // 🟢 NEW
   
   const [venueLineups, setVenueLineups] = useState([])
   const [displayedVenues, setDisplayedVenues] = useState([])
@@ -97,6 +98,16 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
       let sorted = [...rawLineups];
       
+      // 🟢 NEW: Local Venue Search Filter (Checks Name, Address, and Tags)
+      if (venueSearch.trim()) {
+          const query = venueSearch.toLowerCase()
+          sorted = sorted.filter(venue => 
+              (venue.name && venue.name.toLowerCase().includes(query)) || 
+              (venue.address && venue.address.toLowerCase().includes(query)) ||
+              (venue.tags && venue.tags.join(' ').toLowerCase().includes(query))
+          )
+      }
+
       if (eventTypeFilter !== 'All') {
           sorted = sorted.filter(venue => 
               venue.schedule.some(slot => slot.event?.event_type === eventTypeFilter)
@@ -127,7 +138,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       setVenueLineups(sorted);
       setDisplayedVenues(sorted.slice(0, ITEMS_PER_PAGE));
       setPage(1); 
-  }, [rawLineups, userLoc, sortMode, eventTypeFilter]);
+  }, [rawLineups, userLoc, sortMode, eventTypeFilter, venueSearch]);
 
   const loadMore = () => {
       const nextVenues = venueLineups.slice(0, (page + 1) * ITEMS_PER_PAGE)
@@ -228,6 +239,20 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
             <div className="text-center p-12"><div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div></div>
         ) : (
             <>
+                {/* 🟢 NEW: Venue-Specific Search Bar */}
+                <div className="mb-4 px-1">
+                    <div className="relative flex items-center">
+                        <span className="absolute left-4 text-gray-500 text-lg">🔍</span>
+                        <input 
+                            type="text" 
+                            value={venueSearch}
+                            onChange={(e) => setVenueSearch(e.target.value)}
+                            placeholder="Search by venue, address, or vibe..." 
+                            className="w-full bg-[#0B0F19] border border-gray-800 text-white rounded-2xl py-3 pl-12 pr-4 text-xs font-bold tracking-widest focus:outline-none focus:border-blue-500 transition-colors shadow-inner"
+                        />
+                    </div>
+                </div>
+
                 <div className="flex gap-2 mb-4 px-1">
                     <button
                         onClick={() => setSortMode('distance')}

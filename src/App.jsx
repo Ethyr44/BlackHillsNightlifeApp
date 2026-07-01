@@ -281,8 +281,15 @@ function MainApp() {
     if (e && e.preventDefault) e.preventDefault();
     if (searchQuery.trim()) {
       const query = `%${searchQuery}%`
-      const { data: pages } = await supabase.from('pages').select('*').ilike('name', query)
-      const { data: profiles } = await supabase.from('profiles').select('*').ilike('username', query)
+      
+      // 🟢 UPDATED: Uses .or() to search Venue Names AND Page Types
+      const { data: pages } = await supabase.from('pages')
+          .select('*')
+          .or(`name.ilike.${query},page_type.ilike.${query}`)
+          
+      const { data: profiles } = await supabase.from('profiles')
+          .select('*')
+          .ilike('username', query)
       
       setSearchResults({ pages: pages || [], profiles: profiles || [] })
       setSearchParams({ tab: 'Search' })

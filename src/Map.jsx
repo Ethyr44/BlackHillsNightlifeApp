@@ -115,7 +115,7 @@ export default function Map({ currentUser, onViewEntity }) {
         if (!document.getElementById('google-maps-script')) {
             const script = document.createElement('script')
             script.id = 'google-maps-script'
-            script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyD4wqqOrYrTCgelaTzepbdKd6NV7XOMsBE&libraries=places,marker&map_ids=e48372c619f58e7f83289663&v=weekly&loading=async&callback=initMap`
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_API_KEY}&libraries=places,marker&map_ids=e48372c619f58e7f83289663&v=weekly&loading=async&callback=initMap`
             script.async = true
             script.defer = true
             document.head.appendChild(script)

@@ -6,7 +6,6 @@ export default function ProfileVenue({ profile, isOwner, onViewEntity }) {
     const [events, setEvents] = useState([])
     const [loading, setLoading] = useState(true)
     
-    // 🟢 FIX: Map top-level columns to a local object so the rest of your UI code works
     const venueData = {
         name: profile.name,
         address: profile.address,
@@ -43,7 +42,7 @@ export default function ProfileVenue({ profile, isOwner, onViewEntity }) {
     return (
         <div className="animate-fade-in space-y-6">
             
-            {/* 🟢 Inject the VenueCard here */}
+            {/* The VenueCard Weekly Planner */}
             <div className="px-4">
                 <VenueCard venue={profile} currentUser={null} onOpenVenue={onViewEntity} onOpenEvent={() => {}} onAdminEdit={() => {}} /> 
             </div>
@@ -56,13 +55,27 @@ export default function ProfileVenue({ profile, isOwner, onViewEntity }) {
                     <p className="text-gray-400 text-sm mb-2">📞 {venueData.phone || 'No phone listed'}</p>
                     <p className="text-gray-400 text-sm mb-4">✉️ {venueData.email || 'No email listed'}</p>
                     
-                    {venueData.hours && (
-                        <div className="bg-black/50 p-4 rounded-2xl border border-gray-800">
+                    {/* Standard Operating Hours */}
+                    {venueData.hours && Object.keys(venueData.hours).length > 0 && (
+                        <div className="bg-black/50 p-4 rounded-2xl border border-gray-800 mb-4">
                             <h4 className="text-[10px] text-gray-500 font-bold uppercase mb-2">Hours</h4>
                             {Object.entries(venueData.hours).map(([day, time]) => (
                                 <div key={day} className="flex justify-between text-xs text-gray-300">
                                     <span>{day}</span>
                                     <span>{time.isOpen === false ? 'Closed' : `${time.open || ''} - ${time.close || ''}`}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* 🟢 NEW: Happy Hour Schedule */}
+                    {venueData.happyHour && Object.keys(venueData.happyHour).length > 0 && (
+                        <div className="bg-[#0B1510] p-4 rounded-2xl border border-green-500/30 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+                            <h4 className="text-[10px] text-green-400 font-bold uppercase mb-2">Happy Hour Specials</h4>
+                            {Object.entries(venueData.happyHour).map(([day, time]) => (
+                                <div key={day} className="flex justify-between text-xs text-green-100/70 mb-1">
+                                    <span>{day}</span>
+                                    <span>{time.isOpen === false ? 'None' : `${time.open || ''} - ${time.close || ''}`}</span>
                                 </div>
                             ))}
                         </div>
@@ -75,13 +88,16 @@ export default function ProfileVenue({ profile, isOwner, onViewEntity }) {
                     )}
                 </div>
 
-                <div className="bg-[#090812] border border-blue-900/30 p-6 rounded-3xl shadow-lg">
+                <div className="bg-[#090812] border border-blue-900/30 p-6 rounded-3xl shadow-lg h-fit">
                     <h3 className="text-blue-400 font-bold uppercase tracking-widest text-[10px] mb-4">Digital Presence</h3>
                     <div className="flex flex-wrap gap-2">
                         {venueData.website && <a href={venueData.website} target="_blank" rel="noreferrer" className="bg-blue-900/20 text-blue-400 px-4 py-2 rounded-xl text-xs font-bold transition-colors hover:bg-blue-600 hover:text-white">Website</a>}
                         {venueData.facebook && <a href={venueData.facebook} target="_blank" rel="noreferrer" className="bg-blue-900/20 text-blue-400 px-4 py-2 rounded-xl text-xs font-bold transition-colors hover:bg-blue-600 hover:text-white">Facebook</a>}
                         {venueData.ig && <a href={venueData.ig} target="_blank" rel="noreferrer" className="bg-pink-900/20 text-pink-400 px-4 py-2 rounded-xl text-xs font-bold transition-colors hover:bg-pink-600 hover:text-white">Instagram</a>}
                         {venueData.tiktok && <a href={venueData.tiktok} target="_blank" rel="noreferrer" className="bg-gray-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition-colors hover:bg-gray-700">TikTok</a>}
+                        {!venueData.website && !venueData.facebook && !venueData.ig && !venueData.tiktok && (
+                            <span className="text-gray-500 text-xs italic">No digital links provided.</span>
+                        )}
                     </div>
                 </div>
             </div>

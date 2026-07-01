@@ -9,7 +9,6 @@ import ProfilePerformer from './ProfilePerformer'
 import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
 
-// 🟢 Drop this near the top of your file
 const Linkify = ({ text }) => {
     if (!text) return null;
     const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -26,7 +25,7 @@ const Linkify = ({ text }) => {
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="text-blue-400 hover:text-blue-300 underline underline-offset-2 break-all"
-                            onClick={(e) => e.stopPropagation()} // Prevents the post container click from firing
+                            onClick={(e) => e.stopPropagation()} 
                         >
                             {part}
                         </a>
@@ -52,7 +51,6 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
   const dynamicSecondary = entity.secondary_color || (isPage ? '#b347ff' : '#9333ea')
   const dynamicAccent = entity.accent_color || (isPage ? '#ff2d78' : '#10b981')
 
-  // 🟢 THE FIX: Allow 'Regular' users to show their karaoke catalogs to the public!
   const showKaraokeFeatures = !isPage && ['Regular', 'Singer', 'Host', 'Admin'].includes(entity.account_type)
 
   useEffect(() => {
@@ -206,23 +204,6 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
             </button>
         </div>
 
-        {isPage && (
-            <div className="space-y-6 mb-8">
-                <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-cyan-400"></div>
-                    <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest text-white mb-6">Venue Details</h3>
-                    <div className="space-y-4 relative z-10">
-                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
-                            <p className="flex items-start gap-3 text-gray-300 text-sm"><span className="text-xl">📍</span> <span>{entity.address || "Address not provided"}</span></p>
-                        </div>
-                        <div className="bg-black/50 border border-gray-800 rounded-xl p-4">
-                            <p className="flex items-center gap-3 text-gray-300 text-sm"><span className="text-xl">📞</span> <span>{entity.phone || "Phone not provided"}</span></p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
         {!isPage && (
             <div className="space-y-6 mb-8">
                 <div className="bg-[#090812] border-2 border-gray-800 rounded-3xl p-6 shadow-xl relative overflow-hidden">
@@ -242,35 +223,29 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
             </div>
         )}
 
-        {/* DYNAMIC ROLE PROFILES */}
-        {entity.account_type === 'Venue' ? (
+        {/* 🟢 DYNAMIC ROLE PROFILES */}
+        {entity.account_type === 'Venue' || (isPage && (!entity.page_type || entity.page_type === 'Venue')) ? (
             <div className="mt-6">
                 <ProfileVenue profile={entity} isOwner={false} onViewEntity={onViewEntity} />
             </div>
-        ) : entity.account_type === 'Performer' ? (
+        ) : entity.account_type === 'Performer' || (isPage && entity.page_type === 'Performer') ? (
             <div className="mt-6">
                 <ProfilePerformer profile={entity} isOwner={false} onViewEntity={onViewEntity} />
             </div>
-        ) : entity.account_type === 'Host' ? (
+        ) : entity.account_type === 'Host' || (isPage && entity.page_type === 'Host') ? (
             <div className="mt-6">
                 <ProfileHost profile={entity} isOwner={false} onViewEntity={onViewEntity} />
             </div>
         ) : (
             <>
-                {/* SECTION 2: KARAOKE FEATURES (Regular & Singer Only) */}
+                {/* KARAOKE FEATURES (Regular & Singer Only) */}
                 {showKaraokeFeatures && (
                     <div className="mt-6 animate-fade-in space-y-6">
-                        
-                        {/* 1. Setlist Top */}
                         <Setlist session={{ user: { id: entity.id } }} isOwner={false} />
-                        
-                        {/* 2. Suggest Song Middle */}
                         <div className="bg-[#090812] border-2 border-green-500/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 to-emerald-400"></div>
                             <SongBook currentUser={currentUser} profileUser={entity} isOwnProfile={false} embedded={true} />
                         </div>
-
-                        {/* 3. Repertoire Bottom */}
                         <Repertoire userId={entity.id} isOwner={false} canSuggest={true} currentUser={currentUser} profileUser={entity} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
                     </div>
                 )}

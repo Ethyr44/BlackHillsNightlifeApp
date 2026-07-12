@@ -13,17 +13,88 @@ import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
 
 const GEM_STATS = {
-    'Quartz': { mult: 2, uses: 1, color: 'text-pink-300' },
-    'Amethyst': { mult: 2, uses: 2, color: 'text-purple-400' },
-    'Jade': { mult: 3, uses: 1, color: 'text-emerald-400' },
-    'Emerald': { mult: 3, uses: 2, color: 'text-green-500' },
-    'Sapphire': { mult: 4, uses: 1, color: 'text-blue-500' },
-    'Ruby': { mult: 2, uses: 5, color: 'text-red-500' },
-    'Diamond': { mult: 4, uses: 4, color: 'text-cyan-300' },
+  'Quartz':   { mult: 2, uses: 1, color: '#f9a8d4', glow: 'rgba(249,168,212,0.3)' },
+  'Amethyst': { mult: 2, uses: 2, color: '#c084fc', glow: 'rgba(192,132,252,0.3)' },
+  'Jade':     { mult: 3, uses: 1, color: '#34d399', glow: 'rgba(52,211,153,0.3)' },
+  'Emerald':  { mult: 3, uses: 2, color: '#10b981', glow: 'rgba(16,185,129,0.3)' },
+  'Sapphire': { mult: 4, uses: 1, color: '#4f8cff', glow: 'rgba(79,140,255,0.3)' },
+  'Ruby':     { mult: 2, uses: 5, color: '#f87171', glow: 'rgba(248,113,113,0.3)' },
+  'Diamond':  { mult: 4, uses: 4, color: '#67e8f9', glow: 'rgba(103,232,249,0.3)' },
+}
+
+const PREF_STYLES = {
+  events:  { active: 'bg-[rgba(34,212,200,0.15)] border-[#22d4c8] text-[#22d4c8]', inactive: 'bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]' },
+  venues:  { active: 'bg-[rgba(168,85,247,0.15)] border-[rgba(168,85,247,0.8)] text-[#c084fc]', inactive: 'bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]' },
+  genres:  { active: 'bg-[rgba(245,85,122,0.15)] border-[rgba(245,85,122,0.8)] text-[#f5557a]', inactive: 'bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]' },
+}
+
+function RankBadge({ label, value, color }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.05)',
+      backdropFilter: 'blur(16px)',
+      border: `1px solid ${color}40`,
+      borderRadius: 12,
+      padding: '6px 14px',
+      textAlign: 'center',
+      boxShadow: `0 0 12px ${color}22`,
+    }}>
+      <span style={{ display: 'block', fontSize: 9, color, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</span>
+      <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{value}</span>
+    </div>
+  )
+}
+
+function SectionCard({ children, accent, style = {} }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.04)',
+      backdropFilter: 'blur(20px)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 20,
+      padding: '20px 20px',
+      position: 'relative',
+      overflow: 'hidden',
+      ...style,
+    }}>
+      {accent && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: '20px 20px 0 0' }} />
+      )}
+      {children}
+    </div>
+  )
+}
+
+function SectionLabel({ children }) {
+  return (
+    <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.4)', marginBottom: 10 }}>
+      {children}
+    </span>
+  )
+}
+
+function ResourcePill({ emoji, label, value, accent }) {
+  return (
+    <div style={{
+      background: `${accent}14`,
+      border: `1px solid ${accent}40`,
+      borderRadius: 14,
+      padding: '10px 6px',
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 4,
+    }}>
+      <span style={{ fontSize: 22 }}>{emoji}</span>
+      <span style={{ fontWeight: 700, color: accent, fontSize: 15 }}>{value}</span>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: `${accent}99` }}>{label}</span>
+    </div>
+  )
 }
 
 export default function Profile({ session }) {
-  const currentUser = session?.user;
+  const currentUser = session?.user
   const [profile, setProfile] = useState(null)
   const [isEditingTheme, setIsEditingTheme] = useState(false)
   const [showInventory, setShowInventory] = useState(false)
@@ -31,13 +102,13 @@ export default function Profile({ session }) {
   const [newPostText, setNewPostText] = useState('')
   const [friendsCount, setFriendsCount] = useState(0)
   const [setlistTrigger, setSetlistTrigger] = useState(0)
-  
+
   const [bhnlRank, setBhnlRank] = useState('#--')
   const [ksocialRank, setKsocialRank] = useState('#--')
   const [systemOptions, setSystemOptions] = useState({ venues: [], events: [], genres: [] })
   const [isEditingPrefs, setIsEditingPrefs] = useState(false)
-  const [isPrefsExpanded, setIsPrefsExpanded] = useState(false) // 🟢 Controls Dropdown
-  
+  const [isPrefsExpanded, setIsPrefsExpanded] = useState(false)
+
   const [showFriendsList, setShowFriendsList] = useState(false)
   const [friendsList, setFriendsList] = useState([])
   const [loadingFriends, setLoadingFriends] = useState(false)
@@ -45,12 +116,10 @@ export default function Profile({ session }) {
   useEffect(() => {
     if (!session) return
     fetchProfileData()
-
     const pointListener = supabase.channel('profile-points')
-      .on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` }, 
-      (payload) => setProfile(payload.new)
-    ).subscribe()
-
+      .on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${session.user.id}` },
+        (payload) => setProfile(payload.new)
+      ).subscribe()
     return () => supabase.removeChannel(pointListener)
   }, [session])
 
@@ -58,16 +127,14 @@ export default function Profile({ session }) {
     const { data: pData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (pData) setProfile(pData)
 
-    // 🟢 THE FIX: Deduplicate Mutual Friendships
     const { data: connections } = await supabase.from('connections')
-        .select('follower_id, target_id')
-        .or(`target_id.eq.${session.user.id},follower_id.eq.${session.user.id}`)
-        .eq('connection_type', 'friend')
-        
+      .select('follower_id, target_id')
+      .or(`target_id.eq.${session.user.id},follower_id.eq.${session.user.id}`)
+      .eq('connection_type', 'friend')
     const uniqueFriends = new Set()
     connections?.forEach(c => {
-        if (c.follower_id !== session.user.id) uniqueFriends.add(c.follower_id)
-        if (c.target_id !== session.user.id) uniqueFriends.add(c.target_id)
+      if (c.follower_id !== session.user.id) uniqueFriends.add(c.follower_id)
+      if (c.target_id !== session.user.id) uniqueFriends.add(c.target_id)
     })
     setFriendsCount(uniqueFriends.size)
 
@@ -76,385 +143,569 @@ export default function Profile({ session }) {
 
     const { data: allProfiles } = await supabase.from('profiles').select('id, lifestyle_points, league_monthly')
     if (allProfiles) {
-       const sortedBhnl = [...allProfiles].sort((a,b) => (b.lifestyle_points || 0) - (a.lifestyle_points || 0))
-       const sortedKsocial = [...allProfiles].sort((a,b) => (b.league_monthly || 0) - (a.league_monthly || 0))
-       
-       const bIndex = sortedBhnl.findIndex(p => p.id === session.user.id)
-       const kIndex = sortedKsocial.findIndex(p => p.id === session.user.id)
-       
-       setBhnlRank(bIndex !== -1 ? `#${bIndex + 1}` : '#--')
-       setKsocialRank(kIndex !== -1 ? `#${kIndex + 1}` : '#--')
+      const sortedBhnl = [...allProfiles].sort((a, b) => (b.lifestyle_points || 0) - (a.lifestyle_points || 0))
+      const sortedKsocial = [...allProfiles].sort((a, b) => (b.league_monthly || 0) - (a.league_monthly || 0))
+      const bIndex = sortedBhnl.findIndex(p => p.id === session.user.id)
+      const kIndex = sortedKsocial.findIndex(p => p.id === session.user.id)
+      setBhnlRank(bIndex !== -1 ? `#${bIndex + 1}` : '#--')
+      setKsocialRank(kIndex !== -1 ? `#${kIndex + 1}` : '#--')
     }
 
     const { data: sysData } = await supabase.from('system_categories').select('*')
     if (sysData) {
-        setSystemOptions({
-            events: sysData.filter(d => d.category_type === 'event').map(d => d.name),
-            venues: sysData.filter(d => d.category_type === 'venue').map(d => d.name),
-            genres: sysData.filter(d => d.category_type === 'genre').map(d => d.name)
-        })
+      setSystemOptions({
+        events: sysData.filter(d => d.category_type === 'event').map(d => d.name),
+        venues: sysData.filter(d => d.category_type === 'venue').map(d => d.name),
+        genres: sysData.filter(d => d.category_type === 'genre').map(d => d.name),
+      })
     }
   }
 
   const handlePostSubmit = async () => {
     if (!newPostText.trim()) return
-    const newPost = { author_id: session.user.id, content: newPostText, likes: 0, comments: 0 }
-    const { error } = await supabase.from('posts').insert([newPost])
-    if (!error) { setNewPostText(''); fetchProfileData(); }
+    const { error } = await supabase.from('posts').insert([{ author_id: session.user.id, content: newPostText, likes: 0, comments: 0 }])
+    if (!error) { setNewPostText(''); fetchProfileData() }
   }
 
   const handleUpdatePrefs = async (type, item) => {
     let current = profile[`pref_${type}`] || []
     if (current.includes(item)) current = current.filter(i => i !== item)
     else current = [...current, item]
-
     const { error } = await supabase.from('profiles').update({ [`pref_${type}`]: current }).eq('id', session.user.id)
-    if (error) {
-        toast.error("Network Error: Could not save preferences.")
-        return
-    }
+    if (error) { toast.error('Network Error: Could not save preferences.'); return }
     setProfile(prev => ({ ...prev, [`pref_${type}`]: current }))
   }
 
   const consumeGem = async (gemName) => {
-      if (profile.multiplier_uses_left > 0) {
-          return alert(`You already have an active ${profile.active_multiplier}x Multiplier! Exhaust it before activating another gem.`)
-      }
-      
-      const stats = GEM_STATS[gemName]
-      const currentGems = profile.inv_gems || {}
-      if (!currentGems[gemName] || currentGems[gemName] < 1) return
-
-      currentGems[gemName] -= 1
-
-      const { error } = await supabase.from('profiles').update({
-          inv_gems: currentGems,
-          active_multiplier: stats.mult,
-          multiplier_uses_left: stats.uses
-      }).eq('id', session.user.id)
-
-      if (error) {
-          alert("Network Error: Could not consume gem.")
-          return
-      }
-
-      alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
-      fetchProfileData()
+    if (profile.multiplier_uses_left > 0) {
+      return alert(`You already have an active ${profile.active_multiplier}x Multiplier! Exhaust it before activating another gem.`)
+    }
+    const stats = GEM_STATS[gemName]
+    const currentGems = profile.inv_gems || {}
+    if (!currentGems[gemName] || currentGems[gemName] < 1) return
+    currentGems[gemName] -= 1
+    const { error } = await supabase.from('profiles').update({
+      inv_gems: currentGems,
+      active_multiplier: stats.mult,
+      multiplier_uses_left: stats.uses,
+    }).eq('id', session.user.id)
+    if (error) { alert('Network Error: Could not consume gem.'); return }
+    alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
+    fetchProfileData()
   }
 
   const handleOpenFriends = async () => {
-      setShowFriendsList(true)
-      setLoadingFriends(true)
-      
-      // Find mutual / connected relationships involving this user
-      const { data: inbound } = await supabase.from('connections').select('follower_id').eq('target_id', session.user.id).eq('connection_type', 'friend')
-      const { data: outbound } = await supabase.from('connections').select('target_id').eq('follower_id', session.user.id).eq('connection_type', 'friend')
-      
-      const friendIds = new Set([
-          ...(inbound?.map(c => c.follower_id) || []),
-          ...(outbound?.map(c => c.target_id) || [])
-      ])
-
-      if (friendIds.size > 0) {
-          const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic, account_type').in('id', Array.from(friendIds))
-          setFriendsList(profiles || [])
-      } else {
-          setFriendsList([])
-      }
-      setLoadingFriends(false)
+    setShowFriendsList(true)
+    setLoadingFriends(true)
+    const { data: inbound } = await supabase.from('connections').select('follower_id').eq('target_id', session.user.id).eq('connection_type', 'friend')
+    const { data: outbound } = await supabase.from('connections').select('target_id').eq('follower_id', session.user.id).eq('connection_type', 'friend')
+    const friendIds = new Set([
+      ...(inbound?.map(c => c.follower_id) || []),
+      ...(outbound?.map(c => c.target_id) || []),
+    ])
+    if (friendIds.size > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic, account_type').in('id', Array.from(friendIds))
+      setFriendsList(profiles || [])
+    } else {
+      setFriendsList([])
+    }
+    setLoadingFriends(false)
   }
 
-  if (!profile) return <div className="p-10 text-center text-blue-400 font-bold uppercase tracking-widest animate-pulse">Loading Identity...</div>
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: 40, height: 40, border: '3px solid rgba(79,140,255,0.2)', borderTopColor: '#4f8cff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#4f8cff', opacity: 0.7 }}>Loading Identity...</p>
+        </div>
+      </div>
+    )
+  }
 
   const latestPost = posts.length > 0 ? posts[0] : null
-  const gradientClass = profile.bg_gradient ? GRADIENTS[profile.bg_gradient] : GRADIENTS['deep-space']
-  const dynamicSecondary = profile.secondary_color || '#9333ea'
+  const dynamicSecondary = profile.secondary_color || '#7c3aed'
   const showKaraokeFeatures = ['Regular', 'Singer', 'Host', 'Admin'].includes(profile.account_type)
-
   const gems = profile.inv_gems || {}
   const items = profile.inv_items || {}
 
   return (
     <>
-      <div className="max-w-2xl mx-auto p-4 animate-fade-in relative z-10 pb-32 space-y-6">
-        
-        <div className="relative pt-8">
-            <div className="absolute top-0 left-0 right-0 flex justify-center gap-[100px] sm:gap-[130px] z-20 pointer-events-none">
-                <div className="bg-black/80 backdrop-blur border border-blue-500/50 rounded-lg px-3 py-1 text-center shadow-[0_0_10px_rgba(59,130,246,0.3)]">
-                    <span className="block text-[8px] text-blue-400 font-bold uppercase tracking-widest leading-none mb-1">BHNL Rank</span>
-                    <span className="font-['Bebas_Neue'] text-xl text-white leading-none">{bhnlRank}</span>
-                </div>
-                <div className="bg-black/80 backdrop-blur border border-[#00f5ff]/50 rounded-lg px-3 py-1 text-center shadow-[0_0_10px_rgba(0,245,255,0.3)]">
-                    <span className="block text-[8px] text-[#00f5ff] font-bold uppercase tracking-widest leading-none mb-1">KSocial Rank</span>
-                    <span className="font-['Bebas_Neue'] text-xl text-white leading-none">{ksocialRank}</span>
-                </div>
-            </div>
+      <div className="max-w-2xl mx-auto px-4 pb-32 space-y-4 animate-fade-in" style={{ paddingTop: 8 }}>
 
-            <ProfileHeader 
-                profile={profile} 
-                latestPost={latestPost} 
-                friendsCount={friendsCount} 
-                onEditTheme={() => setIsEditingTheme(true)} 
-                onOpenFriends={handleOpenFriends} 
-            />
+        {/* Rank badges + profile header */}
+        <div style={{ position: 'relative', paddingTop: 24 }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 100, zIndex: 20, pointerEvents: 'none' }}>
+            <RankBadge label="BHNL Rank" value={bhnlRank} color="#4f8cff" />
+            <RankBadge label="KSocial Rank" value={ksocialRank} color="#22d4c8" />
+          </div>
+          <ProfileHeader
+            profile={profile}
+            latestPost={latestPost}
+            friendsCount={friendsCount}
+            onEditTheme={() => setIsEditingTheme(true)}
+            onOpenFriends={handleOpenFriends}
+          />
         </div>
 
-        {/* 🟢 THE INVENTORY BUTTON */}
-        <button 
-            onClick={() => setShowInventory(true)} 
-            className="w-full bg-black/80 backdrop-blur-md border border-green-500/50 hover:border-green-400 text-green-400 py-3.5 rounded-xl font-bold uppercase tracking-widest transition-all shadow-[0_0_15px_rgba(34,197,94,0.2)] flex items-center justify-center gap-2"
+        {/* Inventory CTA */}
+        <button
+          onClick={() => setShowInventory(true)}
+          style={{
+            width: '100%',
+            background: 'rgba(16,185,129,0.08)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: 16,
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            color: '#34d399',
+            fontWeight: 700,
+            fontSize: 12,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            boxShadow: '0 0 20px rgba(16,185,129,0.12)',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.15)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.6)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(16,185,129,0.08)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)' }}
         >
-            <span className="text-xl">🎒</span> Open Inventory & Wallet
+          <span style={{ fontSize: 18 }}>🎒</span> Open Inventory & Wallet
         </button>
 
-        {isEditingTheme && <ThemeEditorModal session={session} profile={profile} onClose={() => setIsEditingTheme(false)} onUpdate={setProfile} />}
+        {isEditingTheme && (
+          <ThemeEditorModal session={session} profile={profile} onClose={() => setIsEditingTheme(false)} onUpdate={setProfile} />
+        )}
 
-        {/* POST FEED COMPOSER */}
-        <div className="bg-[#090812]/80 border-2 rounded-3xl p-6 relative overflow-hidden transition-all duration-300" style={{ borderColor: dynamicSecondary, boxShadow: `0 0 25px ${dynamicSecondary}33, inset 0 0 10px ${dynamicSecondary}22` }}>
-            <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest mb-6 text-white" style={{ textShadow: `0 0 15px ${dynamicSecondary}, 0 0 25px ${dynamicSecondary}` }}>My Updates</h3>
-            <div className="flex gap-2 mb-6 relative z-10">
-                <input type="text" value={newPostText} onChange={(e) => setNewPostText(e.target.value)} placeholder="What's your vibe today?" className="flex-1 bg-black/60 border border-gray-700 text-white rounded-full py-3 px-5 focus:outline-none text-sm backdrop-blur-sm focus:border-white transition-colors" />
-                <button onClick={handlePostSubmit} className="text-white px-6 py-3 rounded-full text-xs font-bold uppercase tracking-widest transition-all shadow-lg" style={{ backgroundColor: dynamicSecondary, boxShadow: `0 0 15px ${dynamicSecondary}66` }}>Post</button>
-            </div>
-        </div>
+        {/* Post composer */}
+        <SectionCard accent={`linear-gradient(90deg, ${dynamicSecondary}, #4f8cff)`}>
+          <h3 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 14, marginTop: 6 }}>
+            My Updates
+          </h3>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={newPostText}
+              onChange={e => setNewPostText(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handlePostSubmit()}
+              placeholder="What's your vibe today?"
+              style={{
+                flex: 1,
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 99,
+                padding: '10px 18px',
+                color: '#fff',
+                fontSize: 14,
+                outline: 'none',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = 'rgba(79,140,255,0.5)'}
+              onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+            />
+            <button
+              onClick={handlePostSubmit}
+              style={{
+                background: `linear-gradient(135deg, ${dynamicSecondary}, #4f8cff)`,
+                border: 'none',
+                borderRadius: 99,
+                padding: '10px 20px',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                boxShadow: `0 4px 16px ${dynamicSecondary}44`,
+                transition: 'opacity 0.2s, transform 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.transform = 'scale(1.03)' }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)' }}
+            >
+              Post
+            </button>
+          </div>
+        </SectionCard>
 
-        {/* CATEGORY PREFERENCES */}
-        <div className="bg-black/40 border border-gray-800 rounded-3xl p-6 transition-all duration-300">
-            <div className="flex justify-between items-center cursor-pointer select-none" onClick={() => setIsPrefsExpanded(!isPrefsExpanded)}>
-                <h3 className="text-2xl font-['Bebas_Neue'] text-gray-300 tracking-widest">My Vibe</h3>
-                <div className="flex items-center gap-3">
-                    <button onClick={(e) => { e.stopPropagation(); setIsEditingPrefs(!isEditingPrefs); if (!isPrefsExpanded) setIsPrefsExpanded(true); }} className="text-xs font-bold text-blue-400 uppercase tracking-widest bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-500/30 hover:bg-blue-900/40 transition-colors">
-                        {isEditingPrefs ? 'Done' : 'Edit'}
-                    </button>
-                    <span className={`text-gray-500 text-lg transition-transform duration-300 ${isPrefsExpanded ? 'rotate-180' : ''}`}>▼</span>
-                </div>
+        {/* Category preferences accordion */}
+        <SectionCard>
+          <div
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setIsPrefsExpanded(!isPrefsExpanded)}
+          >
+            <h3 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 16, fontWeight: 700, color: 'rgba(255,255,255,0.75)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              My Vibe
+            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                onClick={e => { e.stopPropagation(); setIsEditingPrefs(!isEditingPrefs); if (!isPrefsExpanded) setIsPrefsExpanded(true) }}
+                style={{
+                  background: 'rgba(79,140,255,0.12)',
+                  border: '1px solid rgba(79,140,255,0.3)',
+                  borderRadius: 8,
+                  padding: '4px 12px',
+                  color: '#4f8cff',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s',
+                }}
+              >
+                {isEditingPrefs ? 'Done' : 'Edit'}
+              </button>
+              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 14, transition: 'transform 0.3s', transform: isPrefsExpanded ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block' }}>▼</span>
             </div>
-            
-            {isPrefsExpanded && (
-            <div className="space-y-4 mt-4 animate-fade-in">
-                <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Event Styles</span>
-                    <div className="flex flex-wrap gap-2">
-                        {(isEditingPrefs ? systemOptions.events : (profile.pref_events || [])).map(item => {
-                            const isSelected = (profile.pref_events || []).includes(item)
-                            if (!isEditingPrefs && !isSelected) return null
-                            return (
-                                <button key={item} onClick={() => isEditingPrefs && handleUpdatePrefs('events', item)} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${isSelected ? 'bg-cyan-900/30 border-cyan-500 text-cyan-300' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
-                                    {item}
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-                <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Venue Styles</span>
-                    <div className="flex flex-wrap gap-2">
-                        {(isEditingPrefs ? systemOptions.venues : (profile.pref_venues || [])).map(item => {
-                            const isSelected = (profile.pref_venues || []).includes(item)
-                            if (!isEditingPrefs && !isSelected) return null
-                            return (
-                                <button key={item} onClick={() => isEditingPrefs && handleUpdatePrefs('venues', item)} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${isSelected ? 'bg-purple-900/30 border-purple-500 text-purple-300' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
-                                    {item}
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-                <div>
-                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest block mb-2">Music Genres</span>
-                    <div className="flex flex-wrap gap-2">
-                        {(isEditingPrefs ? systemOptions.genres : (profile.pref_genres || [])).map(item => {
-                            const isSelected = (profile.pref_genres || []).includes(item)
-                            if (!isEditingPrefs && !isSelected) return null
-                            return (
-                                <button key={item} onClick={() => isEditingPrefs && handleUpdatePrefs('genres', item)} className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border transition-colors ${isSelected ? 'bg-[#ff2d78]/20 border-[#ff2d78] text-[#ff2d78]' : 'bg-gray-900 border-gray-800 text-gray-500'}`}>
-                                    {item}
-                                </button>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
-            )}
-        </div>
+          </div>
 
-        {/* 🟢 DYNAMIC ROLE DASHBOARDS */}
+          {isPrefsExpanded && (
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }} className="animate-fade-in">
+              {['events', 'venues', 'genres'].map(type => {
+                const labels = { events: 'Event Styles', venues: 'Venue Styles', genres: 'Music Genres' }
+                const prefKey = `pref_${type}`
+                const options = isEditingPrefs ? systemOptions[type] : (profile[prefKey] || [])
+                const styles = PREF_STYLES[type]
+                return (
+                  <div key={type}>
+                    <SectionLabel>{labels[type]}</SectionLabel>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {options.map(item => {
+                        const isSelected = (profile[prefKey] || []).includes(item)
+                        if (!isEditingPrefs && !isSelected) return null
+                        return (
+                          <button
+                            key={item}
+                            onClick={() => isEditingPrefs && handleUpdatePrefs(type, item)}
+                            style={{
+                              padding: '4px 12px',
+                              borderRadius: 99,
+                              border: `1px solid`,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              letterSpacing: '0.1em',
+                              textTransform: 'uppercase',
+                              cursor: isEditingPrefs ? 'pointer' : 'default',
+                              transition: 'all 0.2s',
+                            }}
+                            className={isSelected ? styles.active : styles.inactive}
+                          >
+                            {item}
+                          </button>
+                        )
+                      })}
+                      {options.filter(item => isEditingPrefs || (profile[prefKey] || []).includes(item)).length === 0 && (
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', fontStyle: 'italic' }}>Nothing selected yet.</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </SectionCard>
+
+        {/* Dynamic role dashboards */}
         {profile.account_type === 'Venue' ? (
-            <div className="mt-8 pt-8 border-t border-gray-800">
-                <ProfileVenue profile={profile} isOwner={true} onViewEntity={null} />
-            </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 8 }}>
+            <ProfileVenue profile={profile} isOwner={true} onViewEntity={null} />
+          </div>
         ) : profile.account_type === 'Performer' ? (
-            <div className="mt-8 pt-8 border-t border-gray-800">
-                <ProfilePerformer profile={profile} isOwner={true} onViewEntity={null} />
-            </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 8 }}>
+            <ProfilePerformer profile={profile} isOwner={true} onViewEntity={null} />
+          </div>
         ) : profile.account_type === 'Host' ? (
-            <div className="mt-8 pt-8 border-t border-gray-800">
-                <ProfileHost profile={profile} isOwner={true} onViewEntity={null} />
-                <div className="mt-6">
-                    <HostTracker session={session} />
-                </div>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 8 }}>
+            <ProfileHost profile={profile} isOwner={true} onViewEntity={null} />
+            <div style={{ marginTop: 16 }}>
+              <HostTracker session={session} />
             </div>
+          </div>
         ) : (
-            <>
-                {/* SECTION 2: KARAOKE FEATURES */}
-                {showKaraokeFeatures && (
-                    <div className="mt-6 animate-fade-in space-y-6">
-                        
-                        {/* 1. Setlist Top */}
-                        <Setlist session={session} isOwner={true} />
-
-                        {/* 2. Suggest Song Middle */}
-                        <div className="bg-[#090812] border-2 border-blue-900/30 rounded-3xl p-6 shadow-xl relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-purple-600"></div>
-                            <SongBook currentUser={currentUser} profileUser={profile} isOwnProfile={true} embedded={true} />
-                        </div>
-
-                        {/* 3. Repertoire Bottom */}
-                        <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
-                    </div>
-                )}
-            </>
+          showKaraokeFeatures && (
+            <div className="animate-fade-in space-y-4">
+              <Setlist session={session} isOwner={true} />
+              <SectionCard accent="linear-gradient(90deg, #4f8cff, #22d4c8)">
+                <SongBook currentUser={currentUser} profileUser={profile} isOwnProfile={true} embedded={true} />
+              </SectionCard>
+              <Repertoire userId={session.user.id} isOwner={true} canSuggest={false} trigger={setlistTrigger} setTrigger={setSetlistTrigger} />
+            </div>
+          )
         )}
       </div>
 
-      {/* 🟢 THE FRIENDS LIST MODAL */}
+      {/* ── FRIENDS LIST MODAL ── */}
       {showFriendsList && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-[#090812] border border-gray-800 rounded-3xl w-full max-w-md p-6 relative max-h-[80vh] flex flex-col shadow-2xl">
-                  <button onClick={() => setShowFriendsList(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white bg-gray-900 w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors z-10">✕</button>
-                  <h3 className="text-3xl font-['Bebas_Neue'] tracking-widest text-blue-400 mb-6">Friends List</h3>
-                  
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 hide-scrollbar">
-                      {loadingFriends ? (
-                          <p className="text-center text-gray-500 text-xs font-bold uppercase tracking-widest py-8 animate-pulse">Loading Friends...</p>
-                      ) : friendsList.length === 0 ? (
-                          <p className="text-center text-gray-500 text-xs font-bold uppercase tracking-widest py-8">No friends found.</p>
-                      ) : (
-                          friendsList.map(f => (
-                              <div key={f.id} className="flex items-center gap-3 bg-black/40 border border-gray-800 p-3 rounded-xl hover:border-blue-500/50 transition-colors">
-                                  <img src={f.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${f.username}`} alt={f.username} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 bg-black object-cover" />
-                                  <div>
-                                      <h4 className="text-white font-bold text-lg leading-tight">{f.username}</h4>
-                                      <span className="text-[9px] bg-blue-900/30 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-widest">{f.account_type}</span>
-                                  </div>
-                              </div>
-                          ))
-                      )}
+        <div
+          className="animate-fade-in"
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(7,13,26,0.85)',
+            backdropFilter: 'blur(20px)', zIndex: 100,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+          }}
+        >
+          <div style={{
+            background: 'rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 24,
+            width: '100%',
+            maxWidth: 420,
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 24,
+            boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+            position: 'relative',
+          }}>
+            <button
+              onClick={() => setShowFriendsList(false)}
+              style={{
+                position: 'absolute', top: 16, right: 16,
+                background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                borderRadius: '50%', width: 32, height: 32,
+                color: 'rgba(255,255,255,0.6)', fontSize: 14, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+            >✕</button>
+
+            <div style={{ marginBottom: 6 }}>
+              <div style={{ width: 3, height: 20, background: 'linear-gradient(180deg,#4f8cff,#22d4c8)', borderRadius: 99, display: 'inline-block', marginRight: 10, verticalAlign: 'middle' }} />
+              <span style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Friends</span>
+            </div>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 600, marginBottom: 16 }}>{friendsCount} connection{friendsCount !== 1 ? 's' : ''}</p>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }} className="hide-scrollbar">
+              {loadingFriends ? (
+                <p style={{ textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '32px 0' }} className="animate-pulse">
+                  Loading...
+                </p>
+              ) : friendsList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <p style={{ fontSize: 32, marginBottom: 8 }}>👥</p>
+                  <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>No friends yet.</p>
+                </div>
+              ) : (
+                friendsList.map(f => (
+                  <div key={f.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 14, padding: '10px 14px',
+                    transition: 'border-color 0.2s',
+                  }}>
+                    <img
+                      src={f.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${f.username}`}
+                      alt={f.username}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ width: 42, height: 42, borderRadius: '50%', border: '2px solid rgba(79,140,255,0.3)', objectFit: 'cover', background: '#0e1e3d' }}
+                    />
+                    <div>
+                      <h4 style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>{f.username}</h4>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
+                        background: 'rgba(79,140,255,0.15)', border: '1px solid rgba(79,140,255,0.3)',
+                        color: '#4f8cff', borderRadius: 6, padding: '2px 6px', display: 'inline-block', marginTop: 3,
+                      }}>{f.account_type}</span>
+                    </div>
                   </div>
-              </div>
+                ))
+              )}
+            </div>
           </div>
+        </div>
       )}
 
-      {/* 🟢 THE INVENTORY & WALLET MODAL */}
+      {/* ── INVENTORY & WALLET MODAL ── */}
       {showInventory && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 overflow-y-auto p-4 animate-fade-in">
-              <div className="max-w-md mx-auto bg-[#090812] border-2 border-gray-800 rounded-3xl mt-10 p-6 shadow-[0_0_50px_rgba(34,197,94,0.1)] mb-20">
-                  <div className="flex justify-between items-start mb-6 border-b border-gray-800 pb-4">
-                      <div>
-                          <h2 className="text-4xl font-['Bebas_Neue'] tracking-widest text-white">Vault</h2>
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Inventory & Assets</p>
-                      </div>
-                      <button onClick={() => setShowInventory(false)} className="text-gray-500 hover:text-white bg-gray-900 w-8 h-8 rounded-full flex items-center justify-center font-bold">✕</button>
-                  </div>
+        <div
+          className="animate-fade-in"
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(7,13,26,0.9)',
+            backdropFilter: 'blur(24px)',
+            zIndex: 50, overflowY: 'auto', padding: 16,
+          }}
+        >
+          <div style={{
+            maxWidth: 460,
+            margin: '40px auto 80px',
+            background: 'rgba(255,255,255,0.04)',
+            backdropFilter: 'blur(24px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 24,
+            padding: 24,
+            boxShadow: '0 0 60px rgba(16,185,129,0.08)',
+            position: 'relative',
+          }}>
+            {/* Accent bar */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #10b981, #4f8cff, #22d4c8)', borderRadius: '24px 24px 0 0' }} />
 
-                  {/* SECTION 6: ACTIVE MULTIPLIER (Dynamic) */}
-                  {profile.multiplier_uses_left > 0 && (
-                      <div className="bg-green-900/20 border border-green-500/50 p-4 rounded-xl mb-6 shadow-[0_0_15px_rgba(34,197,94,0.2)] animate-pulse">
-                          <h4 className="text-green-400 font-bold uppercase tracking-widest text-xs flex justify-between">
-                              <span>Active Bonus: {profile.active_multiplier}x Pts</span>
-                              <span>{profile.multiplier_uses_left} Uses Left</span>
-                          </h4>
-                      </div>
-                  )}
-
-                  {/* SECTION 1 & 2: CURRENCY */}
-                  <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="bg-black border border-blue-900/50 p-4 rounded-xl text-center shadow-inner">
-                          <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Lifestyle Points</span>
-                          <span className="text-3xl font-['Bebas_Neue'] text-blue-400">{profile.lifestyle_points || 0} L$</span>
-                      </div>
-                      <div className="bg-black border border-green-900/50 p-4 rounded-xl text-center shadow-inner">
-                          <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Available USD</span>
-                          <span className="text-3xl font-['Bebas_Neue'] text-green-400">${profile.cur_usd || '0.00'}</span>
-                      </div>
-                  </div>
-
-                  {/* SECTION 3: WALLET / KEYS */}
-                  <div className="mb-6">
-                      <div className="flex justify-between items-center mb-3 border-b border-gray-800 pb-1">
-                          <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest">Wallet & Keys</h4>
-                          {/* 🟢 NEW: Visit Shop Button */}
-                          <button onClick={() => window.location.search = '?tab=Shop'} className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase tracking-widest transition-colors flex items-center gap-1 bg-blue-900/20 px-2 py-1 rounded">
-                              Visit Shop <span>↗</span>
-                          </button>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                          <div className="bg-amber-900/20 border border-amber-900/50 p-3 rounded-xl text-center">
-                              <span className="block text-2xl mb-1">🪵</span>
-                              <span className="block text-amber-500 font-bold">{profile.cur_wood || 0}</span>
-                              <span className="block text-[8px] uppercase tracking-widest text-amber-700 font-bold">Wood</span>
-                          </div>
-                          <div className="bg-slate-800/30 border border-slate-700 p-3 rounded-xl text-center">
-                              <span className="block text-2xl mb-1">🪨</span>
-                              <span className="block text-slate-400 font-bold">{profile.cur_stone || 0}</span>
-                              <span className="block text-[8px] uppercase tracking-widest text-slate-500 font-bold">Stone</span>
-                          </div>
-                          <div className="bg-gray-800/50 border border-gray-600 p-3 rounded-xl text-center">
-                              <span className="block text-2xl mb-1">⛓️</span>
-                              <span className="block text-gray-300 font-bold">{profile.cur_iron || 0}</span>
-                              <span className="block text-[8px] uppercase tracking-widest text-gray-500 font-bold">Iron</span>
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* SECTION 4: GEMS */}
-                  <div className="mb-6">
-                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Rare Gems</h4>
-                      {Object.keys(gems).length === 0 ? (
-                          <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest text-center py-4 bg-black rounded-xl">No gems acquired yet.</p>
-                      ) : (
-                          <div className="grid grid-cols-2 gap-3">
-                              {Object.entries(gems).map(([gemName, amount]) => {
-                                  if (amount < 1) return null;
-                                  const stats = GEM_STATS[gemName]
-                                  return (
-                                      <div key={gemName} className="bg-black border border-gray-800 p-3 rounded-xl flex flex-col justify-between">
-                                          <div className="flex justify-between items-start mb-2">
-                                              <span className={`font-bold ${stats?.color || 'text-white'}`}>{gemName}</span>
-                                              <span className="text-xs bg-gray-800 px-2 py-0.5 rounded text-white font-bold">x{amount}</span>
-                                          </div>
-                                          <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-3">Boost: {stats?.mult}x ({stats?.uses} Uses)</span>
-                                          <button onClick={() => consumeGem(gemName)} className="w-full bg-gray-900 hover:bg-gray-800 border border-gray-700 text-xs text-white font-bold uppercase tracking-widest py-1.5 rounded transition-colors">
-                                              Consume
-                                          </button>
-                                      </div>
-                                  )
-                              })}
-                          </div>
-                      )}
-                  </div>
-
-                  {/* SECTION 5: ITEMS */}
-                  <div>
-                      <h4 className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3 border-b border-gray-800 pb-1">Equipment & Items</h4>
-                      {Object.keys(items).length === 0 ? (
-                          <p className="text-gray-600 text-[10px] font-bold uppercase tracking-widest text-center py-4 bg-black rounded-xl">No items acquired yet.</p>
-                      ) : (
-                          <div className="space-y-2">
-                              {Object.entries(items).map(([itemName, amount]) => {
-                                  if (amount < 1) return null;
-                                  return (
-                                      <div key={itemName} className="bg-black border border-gray-800 px-4 py-3 rounded-xl flex justify-between items-center">
-                                          <span className="text-white font-bold text-sm">{itemName}</span>
-                                          <span className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400 font-bold uppercase tracking-widest">Qty: {amount}</span>
-                                      </div>
-                                  )
-                              })}
-                          </div>
-                      )}
-                  </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              <div>
+                <h2 style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 24, fontWeight: 800, color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase', lineHeight: 1 }}>Vault</h2>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>Inventory & Assets</p>
               </div>
+              <button
+                onClick={() => setShowInventory(false)}
+                style={{
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                  borderRadius: '50%', width: 32, height: 32,
+                  color: 'rgba(255,255,255,0.6)', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >✕</button>
+            </div>
+
+            {/* Active multiplier banner */}
+            {profile.multiplier_uses_left > 0 && (
+              <div style={{
+                background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)',
+                borderRadius: 12, padding: '10px 14px', marginBottom: 16,
+                boxShadow: '0 0 16px rgba(16,185,129,0.15)',
+                animation: 'pulse-soft 2s ease-in-out infinite',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#34d399' }}>
+                  <span>Active Bonus: {profile.active_multiplier}x Pts</span>
+                  <span>{profile.multiplier_uses_left} Uses Left</span>
+                </div>
+              </div>
+            )}
+
+            {/* Currency row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+              <div style={{
+                background: 'rgba(79,140,255,0.08)', border: '1px solid rgba(79,140,255,0.25)',
+                borderRadius: 14, padding: '14px 10px', textAlign: 'center',
+              }}>
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(79,140,255,0.7)', marginBottom: 4 }}>Lifestyle Points</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 26, fontWeight: 800, color: '#4f8cff' }}>{profile.lifestyle_points || 0} L$</span>
+              </div>
+              <div style={{
+                background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.25)',
+                borderRadius: 14, padding: '14px 10px', textAlign: 'center',
+              }}>
+                <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(16,185,129,0.7)', marginBottom: 4 }}>Available USD</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 26, fontWeight: 800, color: '#34d399' }}>${profile.cur_usd || '0.00'}</span>
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <SectionLabel>Wallet & Keys</SectionLabel>
+                <button
+                  onClick={() => window.location.search = '?tab=Shop'}
+                  style={{
+                    background: 'rgba(79,140,255,0.12)', border: '1px solid rgba(79,140,255,0.25)',
+                    borderRadius: 8, padding: '3px 10px', fontSize: 10, fontWeight: 700,
+                    letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4f8cff', cursor: 'pointer',
+                  }}
+                >
+                  Shop ↗
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                <ResourcePill emoji="🪵" label="Wood" value={profile.cur_wood || 0} accent="#f59e0b" />
+                <ResourcePill emoji="🪨" label="Stone" value={profile.cur_stone || 0} accent="#94a3b8" />
+                <ResourcePill emoji="⛓️" label="Iron" value={profile.cur_iron || 0} accent="#9ca3af" />
+              </div>
+            </div>
+
+            {/* Gems */}
+            <div style={{ marginBottom: 20 }}>
+              <SectionLabel>Rare Gems</SectionLabel>
+              {Object.keys(gems).length === 0 ? (
+                <div style={{
+                  background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: '16px 10px',
+                  textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)',
+                  fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                }}>No gems acquired yet.</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  {Object.entries(gems).map(([gemName, amount]) => {
+                    if (amount < 1) return null
+                    const stats = GEM_STATS[gemName]
+                    return (
+                      <div key={gemName} style={{
+                        background: `${stats?.glow || 'rgba(255,255,255,0.05)'}`,
+                        border: `1px solid ${stats?.color || '#fff'}33`,
+                        borderRadius: 14, padding: '12px 12px 10px',
+                        display: 'flex', flexDirection: 'column', gap: 6,
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 700, color: stats?.color || '#fff', fontSize: 13 }}>{gemName}</span>
+                          <span style={{
+                            background: 'rgba(255,255,255,0.1)', borderRadius: 6,
+                            padding: '2px 7px', fontSize: 11, fontWeight: 700, color: '#fff',
+                          }}>×{amount}</span>
+                        </div>
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }}>
+                          Boost: {stats?.mult}× ({stats?.uses} uses)
+                        </span>
+                        <button
+                          onClick={() => consumeGem(gemName)}
+                          style={{
+                            background: 'rgba(255,255,255,0.07)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: 8, padding: '6px 0',
+                            color: '#fff', fontSize: 10, fontWeight: 700,
+                            letterSpacing: '0.08em', textTransform: 'uppercase',
+                            cursor: 'pointer', transition: 'background 0.2s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.13)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                        >
+                          Consume
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Items */}
+            <div>
+              <SectionLabel>Equipment & Items</SectionLabel>
+              {Object.keys(items).length === 0 ? (
+                <div style={{
+                  background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: '16px 10px',
+                  textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)',
+                  fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                }}>No items acquired yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {Object.entries(items).map(([itemName, amount]) => {
+                    if (amount < 1) return null
+                    return (
+                      <div key={itemName} style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 10, padding: '10px 14px',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      }}>
+                        <span style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>{itemName}</span>
+                        <span style={{
+                          background: 'rgba(255,255,255,0.08)', borderRadius: 6,
+                          padding: '3px 10px', fontSize: 10, fontWeight: 700,
+                          letterSpacing: '0.08em', textTransform: 'uppercase',
+                          color: 'rgba(255,255,255,0.5)',
+                        }}>Qty: {amount}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
+        </div>
       )}
     </>
   )

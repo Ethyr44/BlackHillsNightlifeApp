@@ -2,193 +2,253 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
 export default function Leaderboard({ currentUser, onViewEntity }) {
-  const [activeBoard, setActiveBoard] = useState('BHNL') // 'BHNL', 'KSocial', 'Trivia', 'CRAWL'
+  const [activeBoard, setActiveBoard] = useState('BHNL')
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // 🟢 NEW: Crawl Specific States
   const [activeCrawlId, setActiveCrawlId] = useState(null)
   const [teamScores, setTeamScores] = useState([])
 
-  // 🟢 NEW: Check if a Karaoke Crawl is running
   useEffect(() => {
     supabase.from('active_tournaments').select('id').eq('status', 'active').maybeSingle()
-        .then(({data}) => { if (data) setActiveCrawlId(data.id) })
+      .then(({ data }) => { if (data) setActiveCrawlId(data.id) })
   }, [])
 
   useEffect(() => {
     async function fetchLeaderboard() {
       setLoading(true)
-      
-      // 🟢 NEW: If viewing the Crawl, aggregate the Team Scores
-      if (activeBoard === 'CRAWL' && activeCrawlId) {
-          const { data } = await supabase
-              .from('tournament_history')
-              .select('points_earned, profiles!inner(current_team)')
-              .eq('tournament_id', activeCrawlId)
-          
-          if (data) {
-              const totals = data.reduce((acc, row) => {
-                  const team = row.profiles.current_team || 'Unassigned'
-                  acc[team] = (acc[team] || 0) + row.points_earned
-                  return acc
-              }, {})
 
-              const sortedTeams = Object.keys(totals)
-                  .map(team => ({ team_name: team, period_points: totals[team] }))
-                  .sort((a, b) => b.period_points - a.period_points)
-              
-              setTeamScores(sortedTeams)
-          }
-          setLoading(false)
-          return // Stops the function so it doesn't run the normal user fetch
+      if (activeBoard === 'CRAWL' && activeCrawlId) {
+        const { data } = await supabase
+          .from('tournament_history')
+          .select('points_earned, profiles!inner(current_team)')
+          .eq('tournament_id', activeCrawlId)
+        if (data) {
+          const totals = data.reduce((acc, row) => {
+            const team = row.profiles.current_team || 'Unassigned'
+            acc[team] = (acc[team] || 0) + row.points_earned
+            return acc
+          }, {})
+          setTeamScores(
+            Object.keys(totals)
+              .map(team => ({ team_name: team, period_points: totals[team] }))
+              .sort((a, b) => b.period_points - a.period_points)
+          )
+        }
+        setLoading(false)
+        return
       }
 
-      // 🔵 ORIGINAL: Standard Leaderboard Logic
-      let orderBy = activeBoard === 'BHNL' ? 'lifestyle_points' : 'league_monthly'
-      
-      const { data, error } = await supabase
+      const orderBy = activeBoard === 'BHNL' ? 'lifestyle_points' : 'league_monthly'
+      const { data } = await supabase
         .from('profiles')
         .select('*')
         .order(orderBy, { ascending: false, nullsFirst: false })
-        .order('id', { ascending: true }) // 🟢 Secondary sort ensures ties are always stable
-        .limit(100) // 🟢 Request extra rows so we can safely deduplicate
-      
-      if (!error && data) {
-          const seenIds = new Set()
-          const uniqueUsers = []
-          
-          for (const u of data) {
-              if (!seenIds.has(u.id)) {
-                  seenIds.add(u.id)
-                  uniqueUsers.push({
-                      user_id: u.id,
-                      username: u.username,
-                      account_type: u.account_type,
-                      profile_pic: u.profile_pic,
-                      period_points: u[orderBy] || 0
-                  })
-                  if (uniqueUsers.length === 20) break; // Keep strictly 20 unique users
-              }
+        .order('id', { ascending: true })
+        .limit(100)
+
+      if (data) {
+        const seen = new Set()
+        const unique = []
+        for (const u of data) {
+          if (!seen.has(u.id)) {
+            seen.add(u.id)
+            unique.push({ user_id: u.id, username: u.username, account_type: u.account_type, profile_pic: u.profile_pic, period_points: u[orderBy] || 0 })
+            if (unique.length === 20) break
           }
-          setUsers(uniqueUsers)
+        }
+        setUsers(unique)
       } else {
-          setUsers([])
+        setUsers([])
       }
       setLoading(false)
     }
-    
+
     if (activeBoard !== 'Trivia') fetchLeaderboard()
-    else { setUsers([]); setLoading(false); }
-  }, [activeBoard, activeCrawlId]) // Added activeCrawlId to dependencies
+    else { setUsers([]); setLoading(false) }
+  }, [activeBoard, activeCrawlId])
+
+  const TABS = ['BHNL', 'KSocial', 'Trivia', ...(activeCrawlId ? ['CRAWL'] : [])]
+
+  const RANK_STYLES = [
+    { bg: 'rgba(245,197,66,0.12)', border: 'rgba(245,197,66,0.3)', numColor: '#f5c542', glow: '0 0 12px rgba(245,197,66,0.3)', medal: '🥇' },
+    { bg: 'rgba(180,190,210,0.08)', border: 'rgba(180,190,210,0.2)', numColor: 'rgba(200,210,230,0.7)', glow: 'none', medal: '🥈' },
+    { bg: 'rgba(200,140,80,0.08)', border: 'rgba(200,140,80,0.2)', numColor: '#cd7c3a', glow: 'none', medal: '🥉' },
+  ]
 
   return (
-    <div className="max-w-2xl mx-auto animate-fade-in pb-32">
-      <div className="p-4 pt-6 sticky top-[68px] sm:top-[76px] bg-[#030712]/95 backdrop-blur-xl z-40 border-b border-gray-800 shadow-xl">
-         <h2 className="text-5xl font-['Bebas_Neue'] text-white tracking-wider" style={{ textShadow: '0 0 15px rgba(255,255,255,0.2)' }}>
-            THE RANKINGS
-         </h2>
-         
-         <div className="flex gap-2 mt-4 bg-gray-900 p-1.5 rounded-xl border border-gray-800 shadow-inner overflow-x-auto hide-scrollbar">
-            {/* 🔵 ORIGINAL TABS */}
-            {['BHNL', 'KSocial', 'Trivia'].map(tab => (
-               <button 
-                 key={tab} 
-                 onClick={() => setActiveBoard(tab)}
-                 className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                    activeBoard === tab 
-                    ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)]' 
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                 }`}
-               >
-                 {tab}
-               </button>
-            ))}
+    <div className="max-w-2xl mx-auto animate-fade-in-up pb-32">
 
-            {/* 🟢 NEW: Dynamic Crawl Tab */}
-            {activeCrawlId && (
-                <button 
-                    onClick={() => setActiveBoard('CRAWL')}
-                    className={`flex-1 min-w-[80px] py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${
-                        activeBoard === 'CRAWL' 
-                        ? 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]' 
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800'
-                    }`}
-                >
-                    CRAWL
-                </button>
-            )}
-         </div>
+      {/* Sticky header */}
+      <div
+        className="sticky top-0 px-4 pt-6 pb-4 z-40"
+        style={{
+          background: 'rgba(7,13,26,0.85)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}
+      >
+        <h2
+          className="text-2xl font-bold text-white mb-4"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          Rankings
+        </h2>
+
+        {/* Tab pills */}
+        <div
+          className="flex gap-1.5 p-1 rounded-xl overflow-x-auto"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {TABS.map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveBoard(tab)}
+              className="flex-1 min-w-[72px] py-2 px-3 rounded-lg text-[11px] font-semibold uppercase tracking-wider transition-all duration-150"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                ...(activeBoard === tab
+                  ? {
+                      background: 'linear-gradient(135deg, #4f8cff, #2463d4)',
+                      color: '#fff',
+                      boxShadow: '0 2px 12px rgba(79,140,255,0.35)',
+                    }
+                  : {
+                      color: 'rgba(255,255,255,0.35)',
+                    }),
+              }}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="p-4">
+      <div className="px-4 pt-4 space-y-2">
         {loading ? (
-            <div className="flex justify-center p-10">
-                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            </div>
+          <div className="flex justify-center py-16">
+            <div className="w-8 h-8 border-2 border-[#4f8cff]/20 border-t-[#4f8cff] rounded-full animate-spin" />
+          </div>
         ) : activeBoard === 'CRAWL' ? (
-            // 🟢 NEW: Crawl Team Rankings UI
-            <div className="space-y-4">
-                {teamScores.length === 0 && <p className="text-center text-gray-500 text-xs py-10 font-bold uppercase tracking-widest">No points scored yet.</p>}
-                {teamScores.map((team, index) => (
-                    <div key={team.team_name} className={`flex items-center p-4 rounded-3xl border-2 transition-colors ${index === 0 ? 'bg-yellow-900/20 border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.2)]' : 'bg-[#090812] border-gray-800'}`}>
-                        <div className="w-10 text-2xl font-['Bebas_Neue'] text-gray-500">{index + 1}</div>
-                        <div className="flex-1">
-                            <h4 className={`font-bold text-xl leading-tight ${index === 0 ? 'text-yellow-400' : 'text-white'}`}>Team {team.team_name}</h4>
-                            <span className="text-[10px] font-bold text-purple-500 uppercase tracking-widest bg-purple-900/20 px-2 py-0.5 rounded border border-purple-500/20">Crawl Team</span>
-                        </div>
-                        <div className="text-right">
-                            <span className={`font-['Bebas_Neue'] text-4xl ${index === 0 ? 'text-yellow-400' : 'text-purple-400'}`} style={{ textShadow: index === 0 ? '0 0 10px rgba(234,179,8,0.8)' : '0 0 5px rgba(168,85,247,0.5)' }}>
-                                {team.period_points}
-                            </span>
-                            <span className="block text-[10px] uppercase text-gray-500 font-bold tracking-widest mt-1">Total Pts</span>
-                        </div>
-                    </div>
-                ))}
-            </div>
+          teamScores.length === 0 ? (
+            <EmptyState label="No points scored yet." />
+          ) : (
+            teamScores.map((team, i) => (
+              <div
+                key={team.team_name}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all duration-150"
+                style={{
+                  background: i < 3 ? RANK_STYLES[i].bg : 'rgba(255,255,255,0.025)',
+                  border: `1px solid ${i < 3 ? RANK_STYLES[i].border : 'rgba(255,255,255,0.06)'}`,
+                  boxShadow: i < 3 ? RANK_STYLES[i].glow : 'none',
+                }}
+              >
+                <span className="text-lg w-6 text-center">{i < 3 ? RANK_STYLES[i].medal : <span className="text-xs font-bold text-white/20" style={{ fontFamily: 'Inter, sans-serif' }}>#{i + 1}</span>}</span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-white/80" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                    Team {team.team_name}
+                  </p>
+                </div>
+                <span
+                  className="text-lg font-bold"
+                  style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", color: i < 3 ? RANK_STYLES[i].numColor : 'rgba(255,255,255,0.55)' }}
+                >
+                  {team.period_points}
+                </span>
+              </div>
+            ))
+          )
         ) : users.length === 0 ? (
-            <div className="text-center p-10 border border-dashed border-gray-800 rounded-3xl">
-                <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Leaderboard Empty</p>
-                <p className="text-gray-600 text-xs mt-2">Rankings will update as points are earned.</p>
-            </div>
+          <EmptyState label="No rankings yet." />
         ) : (
-            // 🔵 ORIGINAL: Standard User Rankings UI
-            <div className="space-y-4">
-              {users.map((user, index) => {
-                  const isTop3 = index < 3
-                  const isMe = currentUser?.username === user.username
-                  
-                  return (
-                    <div key={user.user_id} className={`flex items-center p-4 rounded-3xl border-2 transition-colors ${isMe ? 'bg-yellow-900/10 border-yellow-500/50' : 'bg-[#090812] border-gray-800 hover:border-gray-600'}`}>
-                      <div className="w-10 text-2xl font-['Bebas_Neue'] text-gray-500">{index + 1}</div>
-                      <img 
-                        src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}`} 
-                        alt={user.username} 
-                        onClick={() => onViewEntity(user.username)}
-                        loading="lazy"
-                        decoding="async"
-                        className={`w-12 h-12 rounded-full border-2 ${isMe ? 'border-yellow-400' : isTop3 ? 'border-blue-500' : 'border-gray-700'} object-cover bg-black cursor-pointer hover:border-blue-400 transition-colors`} 
-                        referrerPolicy="no-referrer" 
-                        onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}` }} 
-                      />
-                      <div className="flex-1 ml-4">
-                        <h4 onClick={() => onViewEntity(user.username)} className={`font-bold text-lg leading-tight cursor-pointer transition-colors ${isMe ? 'text-yellow-400' : 'text-white hover:text-blue-400'}`}>
-                            {user.username} {isMe && <span className="text-[10px] ml-1 text-yellow-500">(You)</span>}
-                        </h4>
-                        <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-900/20 px-2 py-0.5 rounded border border-blue-500/20">{user.account_type}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-['Bebas_Neue'] text-3xl text-blue-400" style={{ textShadow: '0 0 5px rgba(59,130,246,0.5)' }}>
-                            {user.period_points}
-                        </span>
-                        <span className="block text-[10px] uppercase text-gray-500 font-bold tracking-widest mt-1">Pts</span>
-                      </div>
-                    </div>
-                  )
-              })}
-            </div>
+          users.map((user, i) => {
+            const isMe = currentUser?.username === user.username
+            const rank = RANK_STYLES[i]
+            return (
+              <div
+                key={user.user_id}
+                className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-150"
+                style={{
+                  background: isMe
+                    ? 'rgba(245,197,66,0.08)'
+                    : i < 3 ? rank.bg : 'rgba(255,255,255,0.025)',
+                  border: `1px solid ${isMe ? 'rgba(245,197,66,0.25)' : i < 3 ? rank.border : 'rgba(255,255,255,0.06)'}`,
+                  boxShadow: isMe ? '0 0 16px rgba(245,197,66,0.12)' : 'none',
+                }}
+              >
+                {/* Rank */}
+                <div className="w-7 text-center flex-shrink-0">
+                  {i < 3
+                    ? <span className="text-base">{rank.medal}</span>
+                    : <span className="text-xs font-bold text-white/25" style={{ fontFamily: 'Inter, sans-serif' }}>#{i + 1}</span>
+                  }
+                </div>
+
+                {/* Avatar */}
+                <img
+                  src={user.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}`}
+                  alt={user.username}
+                  loading="lazy" decoding="async"
+                  onClick={() => onViewEntity(user.username)}
+                  className="w-9 h-9 rounded-full object-cover flex-shrink-0 cursor-pointer transition-transform hover:scale-105"
+                  style={{ border: `2px solid ${isMe ? 'rgba(245,197,66,0.5)' : i < 3 ? rank.border : 'rgba(255,255,255,0.1)'}` }}
+                  referrerPolicy="no-referrer"
+                  onError={e => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(user.username)}` }}
+                />
+
+                {/* Name + badge */}
+                <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => onViewEntity(user.username)}
+                    className="text-sm font-semibold text-left truncate block transition-colors hover:text-[#4f8cff]"
+                    style={{ color: isMe ? '#f5c542' : 'rgba(255,255,255,0.85)', fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+                  >
+                    {user.username}
+                    {isMe && <span className="ml-1.5 text-[9px] font-semibold uppercase tracking-wider text-[#f5c542]/60" style={{ fontFamily: 'Inter, sans-serif' }}>You</span>}
+                  </button>
+                  <span
+                    className="text-[9px] font-semibold uppercase tracking-wider text-white/25"
+                    style={{ fontFamily: 'Inter, sans-serif' }}
+                  >
+                    {user.account_type}
+                  </span>
+                </div>
+
+                {/* Points */}
+                <div className="text-right flex-shrink-0">
+                  <span
+                    className="text-base font-bold"
+                    style={{
+                      fontFamily: "'Plus Jakarta Sans', sans-serif",
+                      color: isMe ? '#f5c542' : i < 3 ? rank.numColor : 'rgba(255,255,255,0.6)',
+                    }}
+                  >
+                    {user.period_points.toLocaleString()}
+                  </span>
+                  <span className="block text-[9px] text-white/20 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>pts</span>
+                </div>
+              </div>
+            )
+          })
         )}
       </div>
+    </div>
+  )
+}
+
+function EmptyState({ label }) {
+  return (
+    <div className="py-16 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-white/[0.04] flex items-center justify-center mx-auto mb-4">
+        <svg className="w-6 h-6 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+        </svg>
+      </div>
+      <p className="text-sm text-white/30 font-medium" style={{ fontFamily: 'Inter, sans-serif' }}>{label}</p>
     </div>
   )
 }

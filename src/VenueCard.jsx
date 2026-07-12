@@ -13,187 +13,177 @@ export const EVENT_EMOJIS = {
   'Featured': '⭐',
   'Community': '👥',
   'Ticketed': '🎫',
-  'General': '❗'
+  'General': '❗',
 }
 
-// 🟢 1. Create a helper to detect if a URL is "Real" (Not a default/placeholder)
 const hasCustomImage = (url) => {
-    if (!url) return false;
-    // Your AdminPages.jsx uses dicebear or shapes/svg for placeholders. 
-    // We check if the string contains those patterns to exclude them.
-    return url.startsWith('http') && !url.includes('dicebear') && !url.includes('shapes/svg');
-};
+  if (!url) return false
+  return url.startsWith('http') && !url.includes('dicebear') && !url.includes('shapes/svg')
+}
 
-// 🟢 NEW: Custom Realtime Hook for Live Counters
 function useLiveVenueCount(venueName) {
   const [count, setCount] = useState(0)
-
   useEffect(() => {
     if (!venueName) return
-
-    // 1. Fetch the initial count
     const fetchCount = async () => {
-      const { count: initialCount } = await supabase
+      const { count: n } = await supabase
         .from('venue_checkins')
         .select('*', { count: 'exact', head: true })
         .eq('venue_name', venueName)
-      
-      setCount(initialCount || 0)
+      setCount(n || 0)
     }
-    
     fetchCount()
-
-    // 2. Subscribe to Realtime Inserts/Deletes for THIS specific venue
     const channel = supabase.channel(`public:venue_checkins:${venueName}`)
-      .on(
-        'postgres', 
-        { event: 'INSERT', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, 
-        () => setCount(c => c + 1)
-      )
-      .on(
-        'postgres', 
-        { event: 'DELETE', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, 
-        () => setCount(c => Math.max(0, c - 1))
-      )
+      .on('postgres', { event: 'INSERT', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, () => setCount(c => c + 1))
+      .on('postgres', { event: 'DELETE', schema: 'public', table: 'venue_checkins', filter: `venue_name=eq.${venueName}` }, () => setCount(c => Math.max(0, c - 1)))
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => supabase.removeChannel(channel)
   }, [venueName])
-
   return count
 }
 
-// Add this helper inside VenueCard.jsx
 const getVenueStatus = (venue) => {
-    const now = new Date();
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
-    const currentTime = now.getHours() * 100 + now.getMinutes();
+  const now = new Date()
+  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+  const currentTime = now.getHours() * 100 + now.getMinutes()
 
-    // 1. Pink: Events occurring right now (Higher priority than Open/Happy Hour)
-    const hasActiveEvent = venue.schedule?.some(slot => {
-        if (!slot.event) return false;
-        // Logic: if event date is today (and we're in the event time range)
-        return slot.date.toDateString() === now.toDateString(); 
-    });
-    if (hasActiveEvent) return { color: 'bg-pink-500', label: 'LIVE' };
+  const checkActive = (current, open, close) => {
+    if (close < open) return current >= open || current <= close
+    return current >= open && current <= close
+  }
 
-    // HELPER: Handles standard hours AND midnight crossovers
-    const checkIsActive = (current, openTime, closeTime) => {
-        if (closeTime < openTime) {
-            // Midnight crossover (e.g., Open 1600, Close 200)
-            // Active if it's late evening (>= 1600) OR early morning (<= 200)
-            return current >= openTime || current <= closeTime;
-        }
-        // Standard daytime hours (e.g., Open 0900, Close 1700)
-        return current >= openTime && current <= closeTime;
-    };
+  const hh = venue.happy_hour_schedule?.[dayName]
+  if (hh?.isOpen && hh.open && hh.close) {
+    const o = parseInt(hh.open.replace(':', '')), c = parseInt(hh.close.replace(':', ''))
+    if (checkActive(currentTime, o, c)) return { label: 'HH', color: '#22d4c8', glow: 'rgba(34,212,200,0.6)' }
+  }
 
-    // 2. Green: Happy Hour
-    const hh = venue.happy_hour_schedule?.[dayName];
-    if (hh?.isOpen && hh.open && hh.close) {
-        const open = parseInt(hh.open.replace(':', ''));
-        const close = parseInt(hh.close.replace(':', ''));
-        if (checkIsActive(currentTime, open, close)) return { color: 'bg-green-500', label: 'HH' };
-    }
+  const op = venue.hours_of_operation?.[dayName]
+  if (op?.isOpen && op.open && op.close) {
+    const o = parseInt(op.open.replace(':', '')), c = parseInt(op.close.replace(':', ''))
+    if (checkActive(currentTime, o, c)) return { label: 'Open', color: '#34d399', glow: 'rgba(52,211,153,0.6)' }
+  }
 
-    // 3. Red: Open Hours
-    const op = venue.hours_of_operation?.[dayName];
-    if (op?.isOpen && op.open && op.close) {
-        const open = parseInt(op.open.replace(':', ''));
-        const close = parseInt(op.close.replace(':', ''));
-        if (checkIsActive(currentTime, open, close)) return { color: 'bg-red-500', label: 'OPEN' };
-    }
-
-    return { color: 'bg-gray-600', label: 'OFF' };
-};
+  return { label: 'Closed', color: 'rgba(255,255,255,0.2)', glow: 'transparent' }
+}
 
 export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent, onAdminEdit }) {
-  // 🟢 NEW: Tap into the live count using the hook
   const liveCount = useLiveVenueCount(venue.name)
-  const venueStatus = getVenueStatus(venue)
+  const status = getVenueStatus(venue)
+  const hasBg = hasCustomImage(venue.profile_pic)
 
   return (
-    <div className="flex flex-col w-full h-[220px] rounded-[30px] overflow-hidden shadow-[0_15px_30px_rgba(0,0,0,0.6)] flex-shrink-0 transition-transform hover:scale-[1.02] border border-blue-900/30 group">
-      
-      {/* Info Section */}
-      <div className="relative flex-1 flex bg-[#0B0F19] overflow-hidden p-4 sm:p-6">
-        
-        {/* 🟢 2. The Conditional Backdrop */}
-        {hasCustomImage(venue.profile_pic) ? (
-            <>
-                <img 
-                    src={venue.profile_pic} 
-                    alt={venue.name} 
-                    loading="lazy"
-                    decoding="async"
-                    className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                />
-                {/* Overlay for readability */}
-                <div className="absolute inset-0 bg-black/60" />
-            </>
+    <div
+      className="w-full rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+      style={{
+        background: 'rgba(255,255,255,0.035)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
+      }}
+    >
+      {/* Top section */}
+      <div className="relative flex overflow-hidden" style={{ minHeight: 120 }}>
+
+        {/* Background image or gradient */}
+        {hasBg ? (
+          <>
+            <img
+              src={venue.profile_pic} alt={venue.name} loading="lazy" decoding="async"
+              className="absolute inset-0 w-full h-full object-cover opacity-30 transition-opacity duration-500 hover:opacity-40"
+            />
+            <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(7,13,26,0.85) 0%, rgba(7,13,26,0.4) 100%)' }} />
+          </>
         ) : (
-            <>
-                {/* Background Ambient Glows */}
-                <div className="absolute top-[-50%] right-[-10%] w-[350px] h-[350px] bg-purple-600/20 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/30 transition-colors duration-700"></div>
-                <div className="absolute bottom-[-30%] right-[20%] w-[200px] h-[200px] bg-blue-600/20 rounded-full blur-2xl pointer-events-none group-hover:bg-blue-500/30 transition-colors duration-700"></div>
-                <div className="absolute top-[20%] right-[50%] w-[100px] h-[100px] bg-cyan-500/10 rounded-full blur-xl pointer-events-none"></div>
-            </>
+          <div className="absolute inset-0 opacity-10" style={{ background: 'linear-gradient(135deg, #4f8cff 0%, #f5557a 100%)' }} />
         )}
 
-        {/* Left Side (Status & Users) */}
-        <div className="relative z-10 flex flex-col justify-between w-[35%] border-r border-white/5 pr-4">
-          
-          {/* Status Indicator (Restored to Top Left flow) */}
-          <div className="flex items-center gap-2 text-white text-xs font-bold uppercase tracking-widest mt-1">
-            <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_10px_currentColor] animate-pulse ${venueStatus.color}`}></span>
-            <span className="drop-shadow-md text-gray-300">{venueStatus.label}</span>
+        {/* Left pane: status + count */}
+        <div className="relative z-10 flex flex-col justify-between px-4 py-4 w-[38%] border-r border-white/[0.06]">
+          {/* Status pill */}
+          <div className="flex items-center gap-2">
+            <span
+              className="w-2 h-2 rounded-full flex-shrink-0"
+              style={{
+                backgroundColor: status.color,
+                boxShadow: `0 0 8px ${status.glow}`,
+                animation: status.label === 'Open' || status.label === 'HH' ? 'pulse-soft 2s ease-in-out infinite' : 'none',
+              }}
+            />
+            <span
+              className="text-[10px] font-semibold uppercase tracking-wider"
+              style={{ color: status.color, fontFamily: 'Inter, sans-serif' }}
+            >
+              {status.label}
+            </span>
           </div>
 
-          {/* REALISTIC 1-40 COUNTER RESTORED (Using liveCount hook) */}
+          {/* Visit counter */}
           <div>
-            <div className="text-5xl sm:text-6xl font-bold text-white mb-[-8px] font-['Bebas_Neue'] tracking-widest drop-shadow-lg">
+            <div
+              className="font-black leading-none mb-1"
+              style={{ fontSize: 42, fontFamily: "'Plus Jakarta Sans', sans-serif", color: 'rgba(255,255,255,0.9)' }}
+            >
               {liveCount}
             </div>
-            <div className="text-[9px] sm:text-[10px] text-gray-400 uppercase tracking-widest font-bold mt-2">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-white/30" style={{ fontFamily: 'Inter, sans-serif' }}>
               BHNL Visits
             </div>
           </div>
-          
         </div>
 
-        {/* Right Side (7-Days Schedule) */}
-        <div className="relative z-10 flex items-center w-[65%] pl-4 pr-1 gap-2 overflow-x-auto hide-scrollbar flex-nowrap">
+        {/* Right pane: 7-day schedule */}
+        <div className="relative z-10 flex items-center flex-1 px-3 gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {(venue.schedule || []).map((slot, i) => (
-            <button 
-                key={i} 
-                onClick={() => onOpenEvent(slot, venue)}
-                className="flex flex-col items-center justify-center gap-2 hover:bg-white/10 py-2 px-1 rounded-xl transition-all min-w-[40px] sm:min-w-[48px] flex-shrink-0"
+            <button
+              key={i}
+              onClick={() => onOpenEvent(slot, venue)}
+              className="flex flex-col items-center justify-center gap-1.5 py-2 px-2 rounded-xl transition-all duration-150 hover:bg-white/[0.08] active:scale-90 min-w-[44px] flex-shrink-0"
             >
-              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{slot.day}</div>
-              <div className="text-2xl sm:text-3xl flex items-center justify-center hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]">
-                {slot.event ? EVENT_EMOJIS[slot.event.event_type] || EVENT_EMOJIS['General'] : <span className="text-gray-700 text-xl opacity-50">➖</span>}
-              </div>
+              <span
+                className="text-[9px] font-semibold uppercase tracking-wider text-white/35"
+                style={{ fontFamily: 'Inter, sans-serif' }}
+              >
+                {slot.day}
+              </span>
+              <span className="text-xl leading-none">
+                {slot.event
+                  ? EVENT_EMOJIS[slot.event.event_type] || EVENT_EMOJIS['General']
+                  : <span style={{ opacity: 0.18 }}>—</span>
+                }
+              </span>
             </button>
           ))}
         </div>
+
+        {/* Admin dot menu */}
+        {currentUser?.account_type === 'Admin' && (
+          <button
+            onClick={() => onAdminEdit(venue)}
+            className="absolute top-3 right-3 z-20 w-7 h-7 rounded-full flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.1] transition-all"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx={12} cy={5} r={1.5} /><circle cx={12} cy={12} r={1.5} /><circle cx={12} cy={19} r={1.5} />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="h-[50px] bg-[#05070A] border-t border-blue-900/40 text-white flex items-center justify-between px-4 sm:px-6 text-xs sm:text-sm font-bold uppercase tracking-widest">
-        <button onClick={() => onOpenVenue(venue)} className="hover:text-cyan-400 truncate flex-1 text-left transition-colors">
-            {venue.name}
+      {/* Bottom bar */}
+      <div
+        className="flex items-center justify-between px-4 py-3"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.2)' }}
+      >
+        <button
+          onClick={() => onOpenVenue(venue)}
+          className="text-sm font-semibold text-white/80 hover:text-white transition-colors truncate flex-1 text-left"
+          style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
+        >
+          {venue.name}
         </button>
-        
-        <div className="flex items-center gap-4">
-            <span className="text-gray-500 text-[10px] sm:text-xs">{venue.currentTime}</span>
-            {currentUser?.account_type === 'Admin' && (
-                <button onClick={() => onAdminEdit(venue)} className="text-gray-500 hover:text-white text-xl leading-none pb-1 transition-colors">⋮</button>
-            )}
-        </div>
+        <span className="text-[10px] text-white/25 font-medium ml-3 flex-shrink-0" style={{ fontFamily: 'Inter, sans-serif' }}>
+          {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
       </div>
-
     </div>
   )
 }

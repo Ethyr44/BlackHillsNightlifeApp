@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import QRCode from 'react-qr-code' 
 import { toast } from './GlobalToast'
 
 export default function KSocialHost({ currentUser, mode, onExit }) {
@@ -564,7 +563,12 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <h3 className="text-3xl font-['Bebas_Neue'] text-black mb-1 tracking-widest">Join The Stage</h3>
                         <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-6">Scan with BHNL App to enter queue</p>
                         <div className="flex justify-center bg-gray-100 p-4 rounded-2xl mb-6">
-                            <QRCode value={`${window.location.origin}/?join=${activeSession.id}`} size={200} />
+                            {/* 🟢 THE FIX: Replaced QRCode with the QR API standard used in VibeCode.js */}
+                            <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/?join=${activeSession.id}`)}&color=090812&bgcolor=ffffff`}
+                                alt="BHNL Session QR"
+                                className="w-48 h-48"
+                            />
                         </div>
                     </div>
                 </div>
@@ -577,7 +581,12 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
                         <h3 className="text-3xl font-['Bebas_Neue'] text-black mb-1 tracking-widest">Guest Access</h3>
                         <p className="text-yellow-900 font-bold uppercase tracking-widest text-[10px] mb-6">Scan with native camera for Temp Passport</p>
                         <div className="flex justify-center bg-white p-4 rounded-2xl mb-6">
-                            <QRCode value={`${window.location.origin}/?join=${activeSession.id}&guest=true`} size={200} fgColor="#000000" />
+                            {/* 🟢 THE FIX */}
+                            <img
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/?join=${activeSession.id}&guest=true`)}&color=000000&bgcolor=ffffff`}
+                                alt="Temp Passport QR"
+                                className="w-48 h-48"
+                            />
                         </div>
                     </div>
                 </div>

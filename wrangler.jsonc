@@ -10,5 +10,10 @@
   },
   "compatibility_flags": [
     "nodejs_compat"
-  ]
+  ],
+  "vars": {
+    "VITE_SUPABASE_URL": "https://usnzfxunnjabdliewggw.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "sb_publishable_otDB8Yy1AKfCuF4UxGmHFQ_f-8q0kqO",
+    "VITE_GOOGLE_MAPS_API_KEY": "AIzaSyBBpx2r70haAg8wMhoOeWQkytDB36qaKSw"
+  }
 }

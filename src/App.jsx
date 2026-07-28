@@ -363,46 +363,71 @@ function MainApp() {
 
   const effectiveUser = simulatedRole ? { ...currentUser, account_type: simulatedRole } : currentUser;
 
+  // 🟢 NEW: Extract user colors and generate hex-alpha combinations for the glow
+  const userPrimary = effectiveUser?.primary_color || '#4f8cff';
+  const userSecondary = effectiveUser?.secondary_color || '#22d4c8';
+  const userAccent = effectiveUser?.accent_color || '#f5557a';
+
+  const themeStyle = {
+    '--user-primary': userPrimary,
+    '--user-primary-glow': `${userPrimary}40`, // 40 adds 25% opacity for outer glows
+    '--user-secondary': userSecondary,
+    '--user-secondary-glow': `${userSecondary}40`,
+    '--user-accent': userAccent,
+    '--user-accent-glow': `${userAccent}40`,
+  };
+
   const ALL_TABS = ['Profile', 'Feed', 'Venues', 'Songbook', 'KSocial', 'Map', 'Leagues', 'Shop', 'Settings']
 
+  // 🟢 UPDATED: Unlocks all tabs to be displayed on the Nav Bar simultaneously
   const getAvailableTabs = () => {
-      // 1. Initialize our array with 'Home' so it is ALWAYS present
-      let tabs = ['Home']
+      let tabs = ['Home', 'Profile', 'Feed', 'Journal', 'Groups', 'Map', 'Venues', 'Events', 'Community', 'Songbook', 'Sports', 'KSocial', 'Leagues', 'Shop']
 
-      // 2. If the user is an Admin, inject 'Admin Dashboard' at the very front
       if (effectiveUser?.account_type === 'Admin') {
           tabs.unshift('Admin Dashboard')
       }
 
-      // 3. Inject the context-specific "Hub" tabs into the middle
-      if (activeHub === 'SOCIAL') {
-          tabs.push('Profile', 'Feed', 'Journal', 'Groups')
-      } else if (activeHub === 'LOCAL') {
-          tabs.push('Map', 'Venues', 'Events', 'Community') // Ensures Venues is present
-      } else if (activeHub === 'LIVE') {
-          tabs.push('Songbook', 'Sports', 'KSocial', 'Leagues')
-      } else if (activeHub === 'OPTIONS') {
-          tabs.push('Shop')
-      }
-
-      // 4. Global Visibility Controller 
       if (effectiveUser?.account_type !== 'Admin') {
           tabs = tabs.filter(tab => systemConfig[`show${tab}`] !== false)
       }
 
-      // 5. Cap it off with Settings so it is ALWAYS the last item
       if (!tabs.includes('Settings')) {
           tabs.push('Settings')
       }
 
-      // Filter out duplicates just in case!
       return [...new Set(tabs)]
   }
 
   const tabs = getAvailableTabs()
 
+  // 🟢 NEW: Handles Notification Click Routing
+  const handleNotifRoute = (type, targetId) => {
+      if (!type) {
+           if (targetId) onViewEntity(targetId);
+           return;
+      }
+      
+      const t = type.toLowerCase();
+      // Routes to Feed if it's social engagement
+      if (t.includes('post') || t.includes('comment') || t.includes('like')) {
+          setSearchParams({ tab: 'Feed', view: 'post', id: targetId || '' });
+      } 
+      // Routes to Events tab if it's an event
+      else if (t.includes('event')) {
+          setSearchParams({ tab: 'Events', view: 'event', id: targetId || '' });
+      } 
+      // Opens the Profile Modal if it's a person/venue
+      else if (t.includes('venue') || t.includes('host') || t.includes('friend') || t.includes('follow')) {
+          onViewEntity(targetId);
+      } 
+      // Fallback
+      else {
+          setSearchParams({ tab: 'Home' });
+      }
+  }
+
   return (
-    <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden">
+    <div className="min-h-screen bg-transparent text-gray-200 font-['DM_Sans'] pb-20 relative overflow-hidden" style={themeStyle}>
       {simulatedRole && (
           <button 
               onClick={() => setSimulatedRole(null)}
@@ -445,8 +470,8 @@ function MainApp() {
           setShowNotifications={setShowNotifications}
           setShowVibeCode={setShowVibeCode}
           onViewEntity={onViewEntity}
-          // 🟢 FIXED: Logo now takes you Home
-          onHomeClick={() => setSearchParams({ tab: 'Home' })} 
+          onNotifRoute={handleNotifRoute} // 🟢 NEW: Pass routing function
+          onHomeClick={() => setSearchParams({ tab: 'Home' })}
       />
 
       <Ticker />

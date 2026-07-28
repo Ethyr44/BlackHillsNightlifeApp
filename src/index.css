@@ -332,3 +332,26 @@ html, body, #root {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
+
+/* 21. Dynamic User Neon Theme */
+
+/* Applies the user's custom primary color as a vibrant glow to all structural frames */
+.glass-card, 
+.glass-card-elevated,
+.neon-frame {
+  border-color: var(--user-primary, var(--border-focus)) !important;
+  box-shadow: 0 0 20px var(--user-primary-glow, var(--blue-glow)), 
+              inset 0 0 10px var(--user-primary-glow, var(--blue-glow)) !important;
+}
+
+/* Gives interactive SVGs (like BottomNav and GlobalHeader icons) a cohesive neon drop-shadow */
+nav svg, button svg, .neon-icon {
+  filter: drop-shadow(0 0 6px var(--user-primary, var(--blue)));
+}
+
+/* Specific overrides for secondary/accent usage */
+.neon-frame-secondary {
+  border-color: var(--user-secondary) !important;
+  box-shadow: 0 0 20px var(--user-secondary-glow), 
+              inset 0 0 10px var(--user-secondary-glow) !important;
+}

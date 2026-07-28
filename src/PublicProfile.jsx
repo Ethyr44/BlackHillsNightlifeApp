@@ -145,15 +145,20 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
   return (
     <>
       {entity.slideshow_urls && entity.slideshow_urls.length > 0 ? (
-          entity.slideshow_urls.map((url, idx) => (
-             <img 
-                 key={idx} 
-                 src={url} 
-                 alt="Slideshow" 
-                 referrerPolicy="no-referrer" 
-                 className={`fixed inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out pointer-events-none ${idx === currentSlide ? 'opacity-30 z-0' : 'opacity-0 -z-10'}`} 
-             />
-          ))
+          <>
+            {entity.slideshow_urls.map((url, idx) => (
+               <img 
+                   key={idx} 
+                   src={url} 
+                   alt="Slideshow" 
+                   referrerPolicy="no-referrer" 
+                   // Changed opacity-30 to opacity-100
+                   className={`fixed inset-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out pointer-events-none ${idx === currentSlide ? 'opacity-100 z-0' : 'opacity-0 -z-10'}`} 
+               />
+            ))}
+            {/* Added a subtle top/bottom ambient shadow to ensure UI elements stay legible over full-brightness photos */}
+            <div className="fixed inset-0 z-0 pointer-events-none bg-gradient-to-b from-[#090812]/80 via-transparent to-[#090812]/90" />
+          </>
       ) : (
           <div className={`fixed inset-0 z-0 pointer-events-none ${gradientClass} transition-colors duration-1000`}></div>
       )}

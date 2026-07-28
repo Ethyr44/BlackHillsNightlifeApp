@@ -48,7 +48,6 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
         if (authError) {
             alert("Creation failed: " + authError.message)
         } else {
-            // Because triggers create the profile automatically, we just update it
             await supabase.from('profiles').update({
                 username: `DebugUser_${Math.floor(Math.random() * 1000)}`,
                 account_type: 'Regular',
@@ -58,6 +57,17 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
             
             alert(`Test account created: ${dummyEmail}`)
         }
+        setLoading(false)
+    }
+
+    // 🟢 NEW: 5. Clear All Notifications
+    const handleClearNotifications = async () => {
+        if (!window.confirm("WARNING: This will delete EVERY notification for ALL users. Proceed?")) return
+        setLoading(true)
+        // Uses .not('id', 'is', null) as a safe wildcard to delete all rows
+        const { error } = await supabase.from('notifications').delete().not('id', 'is', null)
+        if (error) alert("Error: " + error.message)
+        else alert("All notifications have been wiped!")
         setLoading(false)
     }
 
@@ -91,6 +101,10 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
                     </button>
                     <button onClick={handleTestBonus} disabled={loading} className="w-full bg-yellow-900/30 text-yellow-500 hover:bg-yellow-600 hover:text-black border border-yellow-500/50 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">
                         💰 Trigger Daily Bonus (All Users)
+                    </button>
+                    {/* 🟢 NEW: Clear Notifications Button */}
+                    <button onClick={handleClearNotifications} disabled={loading} className="w-full bg-red-950/40 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/50 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(239,68,68,0.15)]">
+                        🗑️ Clear ALL Notifications
                     </button>
                 </div>
             </div>

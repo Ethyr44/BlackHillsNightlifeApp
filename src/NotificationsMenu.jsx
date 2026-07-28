@@ -41,7 +41,9 @@ export default function NotificationsMenu({ userId, onClose, onRoute, onMarkRead
       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n))
       if (onMarkRead) onMarkRead()
     }
-    if (notif.target_id) { onClose(); onRoute(notif.type, notif.target_id) }
+    // 🟢 UPDATED: Always close the menu and attempt a route, falling back to title if target_id is null
+    onClose(); 
+    if (onRoute) onRoute(notif.type, notif.target_id || notif.title);
   }
 
   const timeAgo = (dateStr) => {

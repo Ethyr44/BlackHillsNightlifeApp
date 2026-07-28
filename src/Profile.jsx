@@ -28,16 +28,17 @@ const PREF_STYLES = {
   genres:  { active: 'bg-[rgba(245,85,122,0.15)] border-[rgba(245,85,122,0.8)] text-[#f5557a]', inactive: 'bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]' },
 }
 
+// 🟢 UPDATED: RankBadge with a stronger glow based on its passed color prop
 function RankBadge({ label, value, color }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.05)',
       backdropFilter: 'blur(16px)',
-      border: `1px solid ${color}40`,
+      border: `1px solid ${color}`,
       borderRadius: 12,
       padding: '6px 14px',
       textAlign: 'center',
-      boxShadow: `0 0 12px ${color}22`,
+      boxShadow: `0 0 15px ${color}55, inset 0 0 8px ${color}33`, 
     }}>
       <span style={{ display: 'block', fontSize: 9, color, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 2 }}>{label}</span>
       <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: 20, fontWeight: 800, color: '#fff', lineHeight: 1 }}>{value}</span>
@@ -45,12 +46,14 @@ function RankBadge({ label, value, color }) {
   )
 }
 
+// 🟢 UPDATED: SectionCard utilizing the global CSS variables for a neon frame
 function SectionCard({ children, accent, style = {} }) {
   return (
     <div style={{
       background: 'rgba(255,255,255,0.04)',
       backdropFilter: 'blur(20px)',
-      border: '1px solid rgba(255,255,255,0.08)',
+      border: '1px solid var(--user-primary)', 
+      boxShadow: '0 0 25px var(--user-primary-glow), inset 0 0 10px var(--user-primary-glow)', 
       borderRadius: 20,
       padding: '20px 20px',
       position: 'relative',
@@ -58,7 +61,7 @@ function SectionCard({ children, accent, style = {} }) {
       ...style,
     }}>
       {accent && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: '20px 20px 0 0' }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: accent, borderRadius: '20px 20px 0 0', boxShadow: `0 0 15px ${accent}` }} />
       )}
       {children}
     </div>

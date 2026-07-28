@@ -72,7 +72,8 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
               src={url}
               alt=""
               referrerPolicy="no-referrer"
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-30' : 'opacity-0'}`}
+              // Changed opacity-30 to opacity-100
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${idx === currentSlide ? 'opacity-100' : 'opacity-0'}`}
             />
           ))
         ) : (
@@ -84,8 +85,8 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
             }}
           />
         )}
-        {/* Overlay for legibility */}
-        <div className="absolute inset-0 bg-[#070d1a]/60 backdrop-blur-sm" />
+        {/* Replaced frosted glass with a transparent-to-dark gradient for text legibility */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070d1a]/90 via-[#070d1a]/20 to-transparent" />
       </div>
 
       {/* ── Top accent line (uses profile colors) ────────────────────────── */}

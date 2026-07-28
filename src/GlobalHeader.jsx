@@ -11,6 +11,7 @@ export default function GlobalHeader({
   setShowNotifications,
   setShowVibeCode,
   onViewEntity,
+  onNotifRoute, // 🟢 Added to props
   onHomeClick
 }) {
   const [unreadCount, setUnreadCount] = useState(0)
@@ -122,7 +123,11 @@ export default function GlobalHeader({
             <NotificationsMenu
               userId={currentUser.id}
               onClose={() => setShowNotifications(false)}
-              onRoute={(type, id) => { if (onViewEntity) onViewEntity(id) }}
+              onRoute={(type, id) => { 
+                  // 🟢 UPDATED: Uses our new routing logic if available
+                  if (onNotifRoute) onNotifRoute(type, id);
+                  else if (onViewEntity) onViewEntity(id); 
+              }}
               onMarkRead={() => setUnreadCount(prev => Math.max(0, prev - 1))}
               onMarkAllRead={() => setUnreadCount(0)}
             />

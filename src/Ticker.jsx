@@ -95,18 +95,18 @@ export default function Ticker() {
         className="whitespace-nowrap animate-ticker inline-block py-1.5"
         style={{ animationDuration: `${scrollSpeed}s`, fontSize: 11, fontFamily: 'Inter, sans-serif', fontWeight: 600, letterSpacing: '0.06em' }}
       >
-        <span className="mr-8">{tickerText}</span>
+        {/* Removed the duplicate span, leaving just one */}
         <span>{tickerText}</span>
       </div>
 
       <style>{`
         @keyframes ticker-scroll {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+          100% { transform: translateX(-100%); }
         }
         .animate-ticker {
           animation: ticker-scroll linear infinite;
-          padding-left: 100vw;
+          padding-left: 100%; 
         }
       `}</style>
     </div>

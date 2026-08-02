@@ -400,27 +400,36 @@ function MainApp() {
 
   const tabs = getAvailableTabs()
 
-  // 🟢 NEW: Handles Notification Click Routing
-  const handleNotifRoute = (type, targetId) => {
-      if (!type) {
-           if (targetId) onViewEntity(targetId);
-           return;
-      }
+  // 🟢 NEW: Handles Notification Click Routing Safely
+  const handleNotifRoute = (notif) => {
+      if (!notif) return;
       
-      const t = type.toLowerCase();
-      // Routes to Feed if it's social engagement
-      if (t.includes('post') || t.includes('comment') || t.includes('like')) {
-          setSearchParams({ tab: 'Feed', view: 'post', id: targetId || '' });
+      // Extract fields to determine intent safely (handles older notifications without a 'type')
+      const typeStr = (notif.type || '').toLowerCase();
+      const titleStr = (notif.title || '').toLowerCase();
+      const contentStr = (notif.content || '').toLowerCase();
+      
+      const isSocial = typeStr.includes('post') || titleStr.includes('post') || titleStr.includes('comment') || titleStr.includes('like') || contentStr.includes('replied');
+      const isEvent = typeStr.includes('event') || titleStr.includes('event');
+      
+      // 1. Social Engagements -> Navigate to Feed
+      if (isSocial) {
+          setSearchParams({ tab: 'Feed', view: 'post', id: notif.target_id || '' });
       } 
-      // Routes to Events tab if it's an event
-      else if (t.includes('event')) {
-          setSearchParams({ tab: 'Events', view: 'event', id: targetId || '' });
+      // 2. Events -> Navigate to Venues List
+      else if (isEvent) {
+          setSearchParams({ tab: 'Venues', view: 'venue', id: notif.target_id || '' });
       } 
-      // Opens the Profile Modal if it's a person/venue
-      else if (t.includes('venue') || t.includes('host') || t.includes('friend') || t.includes('follow')) {
-          onViewEntity(targetId);
-      } 
-      // Fallback
+      // 3. Entity Views (Friend requests, follows, specific venues)
+      else if (typeStr.includes('venue') || typeStr.includes('friend') || titleStr.includes('friend')) {
+          // Only fire onViewEntity if we actually have a target_id that represents a username/venue name
+          if (notif.target_id) {
+              onViewEntity(notif.target_id);
+          } else {
+              setSearchParams({ tab: 'Profile' }); 
+          }
+      }
+      // 4. Default Fallback
       else {
           setSearchParams({ tab: 'Home' });
       }

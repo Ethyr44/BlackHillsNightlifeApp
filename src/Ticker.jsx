@@ -80,7 +80,7 @@ export default function Ticker() {
   if (messages.length === 0) return null
 
   const tickerText = messages.join('   ·   ')
-  const scrollSpeed = Math.max(tickerText.length * 0.15, 10)
+  const scrollSpeed = Math.max(tickerText.length * 0.20, 13.3)
 
   return (
     <div

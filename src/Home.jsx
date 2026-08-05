@@ -70,9 +70,9 @@ export default function Home({ changeTab, currentUser }) {
       {/* Welcome header */}
       <div className="text-center mb-8">
         <img
-          src="/BHNLLogo512x512.png"
+          src="/pwa-512x512.png"
           alt="BHNL"
-          className="w-20 h-20 mx-auto mb-4 rounded-3xl object-cover shadow-[0_8px_32px_rgba(79,140,255,0.18)] border border-white/[0.08]"
+          className="w-48 h-48 mx-auto mb-4 rounded-3xl object-cover shadow-[0_8px_32px_rgba(79,140,255,0.18)] border border-white/[0.08]"
         />
         <p className="text-sm text-white/50 font-medium mb-1" style={{ fontFamily: 'Inter, sans-serif' }}>
           Welcome back,

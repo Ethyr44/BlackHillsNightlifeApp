@@ -1,6 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
+// Function helper to convert base64 VAPID key
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 function Toggle({ id, checked, onChange, label, description }) {
   return (
     <div
@@ -120,17 +132,59 @@ export default function Settings({ currentUser, setCurrentUser }) {
 
   const handleNotificationToggle = async () => {
     if (!notificationsEnabled) {
-      if (!('Notification' in window)) return alert('Push notifications not supported.')
-      const perm = await Notification.requestPermission()
-      if (perm === 'granted') {
-        setNotificationsEnabled(true)
-        localStorage.setItem('bhnl_notifications_enabled', 'true')
-      } else {
-        alert('Permission denied. Enable notifications in your browser settings.')
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        return alert('Push notifications are not supported on this browser or device.');
+      }
+
+      try {
+        // 1. Register Service Worker
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        
+        // 2. Request Permission
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          return alert('Permission denied. Enable notifications in your browser settings.');
+        }
+
+        // 3. Subscribe to Push Manager using VAPID Public Key
+        const vapidPublicKey = "BNeg_3KMEI61ocz7ftfF2dj9YiAhAzlQLb4EBYFevjZIEO1xjmiFWuMh6fPAm8MvyB_aPuuDEALPa-mEkLr89hc";
+        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey
+        });
+
+        const subJson = subscription.toJSON();
+
+        // 4. Save Subscription to Supabase
+        const { error } = await supabase.from('user_push_subscriptions').upsert({
+          user_id: currentUser.id,
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys.p256dh,
+          auth: subJson.keys.auth
+        }, { onConflict: 'endpoint' });
+
+        if (error) throw error;
+
+        setNotificationsEnabled(true);
+        localStorage.setItem('bhnl_notifications_enabled', 'true');
+        alert('Push notifications enabled for this device!');
+
+      } catch (err) {
+        alert('Failed to enable push notifications: ' + err.message);
       }
     } else {
-      setNotificationsEnabled(false)
-      localStorage.setItem('bhnl_notifications_enabled', 'false')
+      // Unsubscribe device
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) await sub.unsubscribe();
+        }
+      }
+      setNotificationsEnabled(false);
+      localStorage.setItem('bhnl_notifications_enabled', 'false');
     }
   }
 

@@ -40,6 +40,25 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     return () => supabase.removeChannel(sub)
   }, [])
 
+  useEffect(() => {
+    // 🟢 NEW: Intercept Web Share Target API Data
+    const params = new URLSearchParams(window.location.search);
+    const sharedTitle = params.get('share_title');
+    const sharedText = params.get('share_text');
+    const sharedUrl = params.get('share_url');
+
+    if (sharedTitle || sharedText || sharedUrl) {
+      // Combine whatever data the OS passed us into a single string
+      const contentPieces = [sharedTitle, sharedText, sharedUrl].filter(Boolean);
+      
+      setNewPostContent(contentPieces.join('\n\n')); // Auto-fill the composer
+      setComposerFocused(true); // Expand the composer UI
+
+      // Clean up the URL so the post doesn't duplicate if the user refreshes the page
+      window.history.replaceState({}, document.title, '/?tab=Feed');
+    }
+  }, []);
+
   const fetchLivingFeed = async (reset = false) => {
     if (page === 1 || reset) setLoading(true)
     const cur = reset ? 1 : page

@@ -123,10 +123,10 @@ export default function GlobalHeader({
             <NotificationsMenu
               userId={currentUser.id}
               onClose={() => setShowNotifications(false)}
-              onRoute={(type, id) => { 
+              onRoute={(notif) => { 
                   // 🟢 UPDATED: Uses our new routing logic if available
-                  if (onNotifRoute) onNotifRoute(type, id);
-                  else if (onViewEntity) onViewEntity(id); 
+                  if (onNotifRoute) onNotifRoute(notif);
+                  else if (onViewEntity && notif?.target_id) onViewEntity(notif.target_id); 
               }}
               onMarkRead={() => setUnreadCount(prev => Math.max(0, prev - 1))}
               onMarkAllRead={() => setUnreadCount(0)}

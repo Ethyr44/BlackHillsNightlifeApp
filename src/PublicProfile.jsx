@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { supabase } from './supabaseClient'
 import Setlist from './Setlist'
 import Repertoire from './Repertoire'
-import SongBook from './Songbook'
 import ProfileVenue from './ProfileVenue'
 import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
 import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
+
+const SongBook = lazy(() => import('./Songbook'))
 
 const Linkify = ({ text }) => {
     if (!text) return null;

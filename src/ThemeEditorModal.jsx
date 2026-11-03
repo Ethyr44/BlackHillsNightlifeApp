@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabaseClient'
 import { GRADIENTS } from './themeConstants'
+import { compressImageToWebP } from './utils'
 
 // ── gradient preview helper ─────────────────────────────────────────────────
 // Maps the Tailwind class string to a CSS gradient for the preview swatch,
@@ -69,12 +70,13 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
 
   const handleImageUpload = async (e, type) => {
     try {
-      const file = e.target.files[0]
-      if (!file) return
+      const rawFile = e.target.files[0]
+      if (!rawFile) return
       setUploading(true)
 
+      const file = await compressImageToWebP(rawFile, 1200, 0.82)
       const fileExt = file.name.split('.').pop()
-      const fileName = `${session.user.id}-${Math.random()}.${fileExt}`
+      const fileName = `${session.user.id}-${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${fileExt}`
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')

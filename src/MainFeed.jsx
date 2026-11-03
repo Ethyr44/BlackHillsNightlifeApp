@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import FeedPost from './FeedPost'
 import { EVENT_EMOJIS } from './VenueCard'
 import { toast } from './GlobalToast'
+import { compressImageToWebP } from './utils'
 
 export default function MainFeed({ currentUser, onViewEntity }) {
   const [feed, setFeed] = useState([])
@@ -64,18 +65,54 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     const cur = reset ? 1 : page
     const from = (cur - 1) * ITEMS_PER_PAGE
 
-    const { data: rawPosts } = await supabase.from('posts').select('*').order('created_at', { ascending: false }).range(from, from + ITEMS_PER_PAGE - 1)
-    const { data: profiles } = await supabase.from('profiles').select('id, username, profile_pic')
+    const [{ data: rawPosts }, { data: rawEvents }] = await Promise.all([
+      supabase.from('posts').select('*').order('created_at', { ascending: false }).range(from, from + ITEMS_PER_PAGE - 1),
+      supabase.from('events').select('*').eq('status', 'approved').limit(30).order('id', { ascending: false }),
+    ])
+
+    const postIds = (rawPosts || []).map(p => p.id).filter(Boolean)
+    const authorIds = [...new Set((rawPosts || []).map(p => p.author_id).filter(Boolean))]
+
+    const [{ data: profiles }, { data: likesData }, { data: commentsData }] = await Promise.all([
+      authorIds.length > 0
+        ? supabase.from('profiles').select('id, username, profile_pic').in('id', authorIds)
+        : Promise.resolve({ data: [] }),
+      postIds.length > 0
+        ? supabase.from('post_likes').select('post_id, user_id').in('post_id', postIds)
+        : Promise.resolve({ data: [] }),
+      postIds.length > 0
+        ? supabase.from('comments').select('post_id').in('post_id', postIds)
+        : Promise.resolve({ data: [] }),
+    ])
+
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]))
+    const likeCounts = {}
+    const userLikedSet = new Set()
+    ;(likesData || []).forEach(l => {
+      likeCounts[l.post_id] = (likeCounts[l.post_id] || 0) + 1
+      if (l.user_id === currentUser?.id) userLikedSet.add(l.post_id)
+    })
+
+    const commentCounts = {}
+    ;(commentsData || []).forEach(c => {
+      commentCounts[c.post_id] = (commentCounts[c.post_id] || 0) + 1
+    })
 
     const formattedPosts = (rawPosts || []).map(post => {
-      const author = profiles?.find(p => p.id === post.author_id) || {}
+      const author = profileMap.get(post.author_id) || {}
       return {
         id: `post_${post.id}`, type: 'post', timestamp: new Date(post.created_at || 0).getTime() || 0,
-        data: { ...post, username: author.username || 'Unknown', profile_pic: author.profile_pic },
+        data: {
+          ...post,
+          username: author.username || 'Unknown',
+          profile_pic: author.profile_pic,
+          initialLiked: userLikedSet.has(post.id),
+          initialLikeCount: likeCounts[post.id] || 0,
+          initialCommentCount: commentCounts[post.id] || 0,
+        },
       }
     })
 
-    const { data: rawEvents } = await supabase.from('events').select('*').eq('status', 'approved').limit(30).order('id', { ascending: false })
     const formattedEvents = (rawEvents || []).map(event => {
       const ts = new Date(event.created_at || event.event_date || 0).getTime()
       return { id: `event_${event.id}`, type: 'event', timestamp: isNaN(ts) ? 0 : ts, data: event }
@@ -103,9 +140,10 @@ export default function MainFeed({ currentUser, onViewEntity }) {
     let imageUrl = null
     if (selectedImage) {
       try {
-        const fileExt = selectedImage.name.split('.').pop()
+        const compressedFile = await compressImageToWebP(selectedImage)
+        const fileExt = compressedFile.name.split('.').pop()
         const fileName = `${currentUser.id}_${Date.now()}.${fileExt}`
-        const { error } = await supabase.storage.from('post_images').upload(fileName, selectedImage)
+        const { error } = await supabase.storage.from('post_images').upload(fileName, compressedFile)
         if (error) throw error
         const { data: { publicUrl } } = supabase.storage.from('post_images').getPublicUrl(fileName)
         imageUrl = publicUrl

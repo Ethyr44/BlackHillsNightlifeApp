@@ -67,14 +67,15 @@ const getVenueStatus = (venue) => {
   return { label: 'Closed', color: 'rgba(255,255,255,0.2)', glow: 'transparent' }
 }
 
-export default function VenueCard({ venue, currentUser, onOpenVenue, onOpenEvent, onAdminEdit }) {
-  const liveCount = useLiveVenueCount(venue.name)
+export default function VenueCard({ venue, currentUser, liveCount: propLiveCount, onOpenVenue, onOpenEvent, onAdminEdit }) {
+  const fallbackCount = useLiveVenueCount(propLiveCount === undefined ? venue.name : null)
+  const liveCount = propLiveCount !== undefined ? propLiveCount : fallbackCount
   const status = getVenueStatus(venue)
   const hasBg = hasCustomImage(venue.profile_pic)
 
   return (
     <div
-      className="w-full rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+      className="venue-card w-full rounded-2xl overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
       style={{
         background: 'rgba(255,255,255,0.035)',
         border: '1px solid rgba(255,255,255,0.08)',

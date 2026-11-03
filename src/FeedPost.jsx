@@ -112,41 +112,39 @@ function CommentIcon() {
 }
 
 export default function FeedPost({ item, currentUser, onViewEntity }) {
-  const [liked, setLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  const [liked, setLiked] = useState(() => Boolean(item?.data?.initialLiked))
+  const [likeCount, setLikeCount] = useState(() => item?.data?.initialLikeCount ?? 0)
   const [showComments, setShowComments] = useState(false)
   const [comments, setComments] = useState([])
   const [newComment, setNewComment] = useState('')
   const [replyingTo, setReplyingTo] = useState(null)
   const [isDeleted, setIsDeleted] = useState(false)
-  const [commentCount, setCommentCount] = useState(0)
+  const [commentCount, setCommentCount] = useState(() => item?.data?.initialCommentCount ?? 0)
 
   useEffect(() => {
     if (!item?.data?.id || !currentUser?.id) return
-
-    const checkLikeStatus = async () => {
-      const { data } = await supabase
-        .from('post_likes').select('id')
-        .eq('post_id', item.data.id).eq('user_id', currentUser.id).maybeSingle()
-      if (data) setLiked(true)
-    }
-    const fetchLikeCount = async () => {
-      const { count } = await supabase
-        .from('post_likes').select('*', { count: 'exact', head: true })
-        .eq('post_id', item.data.id)
-      setLikeCount(count || 0)
-    }
-    const fetchCommentCount = async () => {
-      const { count } = await supabase
-        .from('comments').select('*', { count: 'exact', head: true })
-        .eq('post_id', item.data.id)
-      setCommentCount(count || 0)
+    // Skip per-post queries when MainFeed already batch-loaded counts
+    if (item?.data?.initialLikeCount !== undefined) {
+      setLiked(Boolean(item.data.initialLiked))
+      setLikeCount(item.data.initialLikeCount)
+      setCommentCount(item.data.initialCommentCount ?? 0)
+      return
     }
 
-    checkLikeStatus()
-    fetchLikeCount()
-    fetchCommentCount()
-  }, [item?.data?.id, currentUser?.id])
+    let isMounted = true
+    Promise.all([
+      supabase.from('post_likes').select('id').eq('post_id', item.data.id).eq('user_id', currentUser.id).maybeSingle(),
+      supabase.from('post_likes').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id),
+      supabase.from('comments').select('*', { count: 'exact', head: true }).eq('post_id', item.data.id),
+    ]).then(([likeStatus, likesRes, commentsRes]) => {
+      if (!isMounted) return
+      if (likeStatus.data) setLiked(true)
+      setLikeCount(likesRes.count || 0)
+      setCommentCount(commentsRes.count || 0)
+    })
+
+    return () => { isMounted = false }
+  }, [item?.data?.id, item?.data?.initialLiked, item?.data?.initialLikeCount, item?.data?.initialCommentCount, currentUser?.id])
 
   const fetchComments = async () => {
     const { data, error } = await supabase
@@ -219,7 +217,7 @@ export default function FeedPost({ item, currentUser, onViewEntity }) {
 
   return (
     <article
-      className="rounded-2xl overflow-hidden mb-4 transition-all duration-200 hover:translate-y-[-1px] animate-[fadeIn_0.25s_ease-out]"
+      className="feed-card rounded-2xl overflow-hidden mb-4 transition-all duration-200 hover:translate-y-[-1px] animate-[fadeIn_0.25s_ease-out]"
       style={{
         background: 'rgba(255,255,255,0.04)',
         border: '1px solid rgba(255,255,255,0.08)',

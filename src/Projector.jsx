@@ -11,7 +11,7 @@ export default function Projector() {
     const [cycleView, setCycleView] = useState('scoreboard')
 
     const fetchAll = async (sessionId) => {
-        const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).single()
+        const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).maybeSingle()
         if (sessData) setSession(sessData)
 
         const { data: singerData } = await supabase.from('session_singers').select('*').eq('session_id', sessionId)

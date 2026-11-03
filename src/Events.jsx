@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { getBlackHillsDate } from './utils'
 
 export default function Events({ onViewEntity }) {
   const [events, setEvents] = useState([])
@@ -7,7 +8,7 @@ export default function Events({ onViewEntity }) {
   const [loading, setLoading] = useState(true)
   const [eventTypeFilter, setEventTypeFilter] = useState('All')
   
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(() => getBlackHillsDate())
   const [selectedDayEvents, setSelectedDayEvents] = useState(null)
 
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -16,12 +17,12 @@ export default function Events({ onViewEntity }) {
     async function fetchData() {
       setLoading(true)
       
-      // 1. Fetch One-Off Events
-      const { data: eventData } = await supabase.from('events').select('*').eq('status', 'approved')
+      // 1. Fetch One-Off Events and Venues in parallel
+      const [{ data: eventData }, { data: venueData }] = await Promise.all([
+        supabase.from('events').select('*').eq('status', 'approved'),
+        supabase.from('pages').select('*').eq('page_type', 'Venue')
+      ])
       if (eventData) setEvents(eventData)
-
-      // 2. Fetch Venues (for their recurring weekly schedules)
-      const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue')
       if (venueData) setVenues(venueData)
 
       setLoading(false)
@@ -38,7 +39,7 @@ export default function Events({ onViewEntity }) {
   const firstDay = getFirstDayOfMonth(year, month)
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
-  // 🟢 HELPER: Get all events (specific + recurring) for a given JS Date object
+  // 🟢 HELPER: Get all events (specific + recurring) for a given JS Date object (Anchored to Black Hills Time)
   const getEventsForDate = (dateObj) => {
       const dateString = dateObj.toLocaleDateString() // 🟢 Fixed: Uses local timezone string
       const dayName = daysOfWeek[dateObj.getDay()]
@@ -47,9 +48,9 @@ export default function Events({ onViewEntity }) {
           if (e.recurring_pattern && e.recurring_pattern !== 'none') return false
           if (e.recurring_weekly) return false
           const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
-          const eDate = new Date(safeDateStr)
+          const eDate = getBlackHillsDate(safeDateStr)
           
-          // 🟢 Fixed: Strict local match prevents midnight UTC bleed-over
+          // 🟢 Fixed: Strict Black Hills timezone match prevents midnight UTC bleed-over
           return eDate.toLocaleDateString() === dateString
       })
 
@@ -58,7 +59,7 @@ export default function Events({ onViewEntity }) {
           if (pattern === 'none') return false
 
           const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
-          const eDate = new Date(safeDateStr)
+          const eDate = getBlackHillsDate(safeDateStr)
           
           if (eDate.getDay() !== dateObj.getDay()) return false
           

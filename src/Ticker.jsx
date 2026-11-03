@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { getBlackHillsDate } from './utils'
 
 export default function Ticker() {
   const [messages, setMessages] = useState([])
@@ -29,20 +30,39 @@ export default function Ticker() {
   }, [])
 
   const fetchTickerData = async () => {
-    // 1. Fetch Manual Messages
-    const { data: manualData } = await supabase
-      .from('ticker_messages')
-      .select('message')
-      .eq('is_active', true)
-      .order('sort_order', { ascending: true })
+    const today = getBlackHillsDate()
+    const startOfToday = new Date(today)
+    startOfToday.setHours(0, 0, 0, 0)
 
-    let manualMsgs = manualData ? manualData.map(m => m.message) : []
+    // 1. Fetch Manual Messages, Weather, Approved Events, Total Accounts, and Today's Active Visitors in parallel
+    const [manualRes, weatherRes, eventsRes, totalUsersRes, activeTodayRes] = await Promise.all([
+      supabase
+        .from('ticker_messages')
+        .select('message')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true }),
+      fetch('https://api.open-meteo.com/v1/forecast?latitude=44.0805&longitude=-103.2310&current=temperature_2m&temperature_unit=fahrenheit').catch(() => null),
+      supabase
+        .from('events')
+        .select('title, venue, event_type, event_date, recurring_weekly')
+        .eq('status', 'approved'),
+      supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true }),
+      supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gte('last_active', startOfToday.toISOString())
+    ])
 
-    // 2. Fetch Live Weather Data (Rapid City)
+    let manualMsgs = manualRes?.data ? manualRes.data.map(m => m.message) : []
+    const totalAccounts = totalUsersRes?.count ?? 0
+    const visitedToday = Math.max(activeTodayRes?.count ?? 0, 1)
+
+    // 2. Parse Live Weather Data (Rapid City)
     let weatherString = ''
     try {
-      const weatherRes = await fetch('https://api.open-meteo.com/v1/forecast?latitude=44.0805&longitude=-103.2310&current=temperature_2m&temperature_unit=fahrenheit')
-      if (weatherRes.ok) {
+      if (weatherRes && weatherRes.ok) {
         const weatherData = await weatherRes.json()
         const currentTemp = Math.round(weatherData.current.temperature_2m)
         weatherString = `🌡️ RAPID CITY: ${currentTemp}°F`
@@ -51,20 +71,16 @@ export default function Ticker() {
       console.error("Failed to fetch weather data for ticker", error)
     }
 
-    // 3. Date Logic & Event Fetching
-    const today = new Date()
+    // 3. Date Logic & Event Filtering (Anchored to Black Hills Time)
     const todayDayOfWeek = today.getDay()
     const dateString = today.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
 
-    const { data: eventsData } = await supabase
-      .from('events')
-      .select('title, venue, event_type, event_date, recurring_weekly')
-      .eq('status', 'approved')
+    const eventsData = eventsRes?.data || []
 
-    const todaysEvents = (eventsData || []).filter(e => {
+    const todaysEvents = eventsData.filter(e => {
         const rawDate = e.event_date
         const safeDateStr = rawDate.includes('Z') || rawDate.includes('+') ? rawDate : rawDate + 'Z'
-        const eDate = new Date(safeDateStr)
+        const eDate = getBlackHillsDate(safeDateStr)
         if (e.recurring_weekly) return eDate.getDay() === todayDayOfWeek
         return eDate.getFullYear() === today.getFullYear() &&
                 eDate.getMonth() === today.getMonth() &&
@@ -87,6 +103,7 @@ export default function Ticker() {
     if (weatherString) {
         autoString += `   ·   ${weatherString}`
     }
+    autoString += `   ·   👥 TOTAL ACCOUNTS: ${totalAccounts.toLocaleString()}   ·   🔥 VISITED TODAY: ${visitedToday.toLocaleString()}`
     const typeStrings = []
     const order = ['KARAOKE', 'LIVE MUSIC', 'OPEN MIC', 'TRIVIA', 'OTHER']
     order.forEach(bucket => {
@@ -130,17 +147,6 @@ export default function Ticker() {
         {/* Removed the duplicate span, leaving just one */}
         <span>{tickerText}</span>
       </div>
-
-      <style>{`
-        @keyframes ticker-scroll {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-100%); }
-        }
-        .animate-ticker {
-          animation: ticker-scroll linear infinite;
-          padding-left: 100%; 
-        }
-      `}</style>
     </div>
   )
 }

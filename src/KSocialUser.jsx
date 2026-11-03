@@ -31,13 +31,20 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
     const fetchAll = async () => {
         const { data: sessData } = await supabase.from('active_sessions').select('*').eq('id', sessionId).maybeSingle()
-        if (sessData) setSession(sessData)
+        if (sessData) {
+            setSession(sessData)
+        } else {
+            setSession(null)
+            localStorage.removeItem('bhnl_joined_session')
+            if (onExit) onExit()
+            return
+        }
 
         const { data: sData } = await supabase.from('session_singers').select('*').eq('session_id', sessionId).order('created_at', { ascending: true })
         if (sData) setSingers(sData)
         
         if (currentUser && !isGuest) {
-            const { data: pData } = await supabase.from('profiles').select('active_setlist').eq('id', currentUser.id).single()
+            const { data: pData } = await supabase.from('profiles').select('active_setlist').eq('id', currentUser.id).maybeSingle()
             if (pData?.active_setlist?.length > 0) {
                 const { data: songs } = await supabase.from('songs').select('id, title, artist').in('id', pData.active_setlist)
                 if (songs) setUserSetlist(pData.active_setlist.map(id => songs.find(s => s.id === id)).filter(Boolean))

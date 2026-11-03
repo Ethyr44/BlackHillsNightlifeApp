@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { compressImageToWebP } from './utils'
 
 const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -55,26 +56,31 @@ export default function AdminPages() {
   }
 
   const handleFileUpload = async (event, isSlideshow = false) => {
-    const file = event.target.files[0]
-    if (!file) return
+    const rawFile = event.target.files[0]
+    if (!rawFile) return
     setUploading(true)
 
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Math.random()}.${fileExt}`
-    const filePath = `pages/${fileName}`
+    try {
+      const file = await compressImageToWebP(rawFile, 1200, 0.82)
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${fileExt}`
+      const filePath = `pages/${fileName}`
 
-    const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
-    if (uploadError) {
-        alert('Error uploading image!')
-        setUploading(false)
-        return
-    }
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file)
+      if (uploadError) {
+          alert('Error uploading image!')
+          setUploading(false)
+          return
+      }
 
-    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-    if (isSlideshow) {
-        setSlideshowUrls(prev => [...prev, data.publicUrl])
-    } else {
-        setProfilePic(data.publicUrl)
+      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
+      if (isSlideshow) {
+          setSlideshowUrls(prev => [...prev, data.publicUrl])
+      } else {
+          setProfilePic(data.publicUrl)
+      }
+    } catch (err) {
+      alert(err.message || 'Error processing image!')
     }
     setUploading(false)
   }

@@ -7,7 +7,7 @@ export default function VibeCode({ session, onClose }) {
 
   useEffect(() => {
     async function loadData() {
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
       setProfile(data)
     }
     loadData()

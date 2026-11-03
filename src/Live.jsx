@@ -45,8 +45,28 @@ export default function Live({ currentUser, onViewEntity }) {
     }, [currentUser])
 
     const fetchActiveSessions = async () => {
-        const { data } = await supabase.from('active_sessions').select('*').eq('is_active', true)
-        if (data) setActiveSessions(data)
+        const { data } = await supabase.from('active_sessions').select('*')
+        const activeList = (data || []).filter(s => s.is_active !== false && s.status !== 'completed')
+        setActiveSessions(activeList)
+
+        // If a user's joined session was closed/reset, return them to the default stage list
+        setJoinedSessionId(prevId => {
+            if (prevId && !activeList.some(s => s.id === prevId)) {
+                localStorage.removeItem('bhnl_joined_session')
+                return null
+            }
+            return prevId
+        })
+
+        // If a host's existing session was closed/reset by Admin, return them to the default view
+        setExistingSession(prevSess => {
+            if (prevSess && !activeList.some(s => s.id === prevSess.id)) {
+                localStorage.removeItem('bhnl_host_mode')
+                setHostMode(null)
+                return null
+            }
+            return prevSess
+        })
     }
 
     const handleJoin = (sessionId, hostName) => {

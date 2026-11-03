@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { supabase } from './supabaseClient'
 import ThemeEditorModal from './ThemeEditorModal'
 import Setlist from './Setlist'
@@ -8,9 +8,10 @@ import HostTracker from './HostTracker'
 import ProfileVenue from './ProfileVenue'
 import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
-import SongBook from './Songbook'
 import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
+
+const SongBook = lazy(() => import('./Songbook'))
 
 const GEM_STATS = {
   'Quartz':   { mult: 2, uses: 1, color: '#f9a8d4', glow: 'rgba(249,168,212,0.3)' },
@@ -127,13 +128,31 @@ export default function Profile({ session }) {
   }, [session])
 
   const fetchProfileData = async () => {
-    const { data: pData } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
-    if (pData) setProfile(pData)
+    const [
+      { data: pData },
+      { data: connections },
+      { data: postData },
+      { data: sysData },
+    ] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle(),
+      supabase.from('connections')
+        .select('follower_id, target_id')
+        .or(`target_id.eq.${session.user.id},follower_id.eq.${session.user.id}`)
+        .eq('connection_type', 'friend'),
+      supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false }),
+      supabase.from('system_categories').select('*'),
+    ])
 
-    const { data: connections } = await supabase.from('connections')
-      .select('follower_id, target_id')
-      .or(`target_id.eq.${session.user.id},follower_id.eq.${session.user.id}`)
-      .eq('connection_type', 'friend')
+    if (pData) {
+      setProfile(pData)
+      const [{ count: higherBhnl }, { count: higherKsocial }] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('lifestyle_points', pData.lifestyle_points || 0),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).gt('league_monthly', pData.league_monthly || 0),
+      ])
+      setBhnlRank(`#${(higherBhnl || 0) + 1}`)
+      setKsocialRank(`#${(higherKsocial || 0) + 1}`)
+    }
+
     const uniqueFriends = new Set()
     connections?.forEach(c => {
       if (c.follower_id !== session.user.id) uniqueFriends.add(c.follower_id)
@@ -141,20 +160,8 @@ export default function Profile({ session }) {
     })
     setFriendsCount(uniqueFriends.size)
 
-    const { data: postData } = await supabase.from('posts').select('*').eq('author_id', session.user.id).order('created_at', { ascending: false })
     if (postData) setPosts(postData)
 
-    const { data: allProfiles } = await supabase.from('profiles').select('id, lifestyle_points, league_monthly')
-    if (allProfiles) {
-      const sortedBhnl = [...allProfiles].sort((a, b) => (b.lifestyle_points || 0) - (a.lifestyle_points || 0))
-      const sortedKsocial = [...allProfiles].sort((a, b) => (b.league_monthly || 0) - (a.league_monthly || 0))
-      const bIndex = sortedBhnl.findIndex(p => p.id === session.user.id)
-      const kIndex = sortedKsocial.findIndex(p => p.id === session.user.id)
-      setBhnlRank(bIndex !== -1 ? `#${bIndex + 1}` : '#--')
-      setKsocialRank(kIndex !== -1 ? `#${kIndex + 1}` : '#--')
-    }
-
-    const { data: sysData } = await supabase.from('system_categories').select('*')
     if (sysData) {
       setSystemOptions({
         events: sysData.filter(d => d.category_type === 'event').map(d => d.name),
@@ -184,15 +191,20 @@ export default function Profile({ session }) {
       return alert(`You already have an active ${profile.active_multiplier}x Multiplier! Exhaust it before activating another gem.`)
     }
     const stats = GEM_STATS[gemName]
-    const currentGems = profile.inv_gems || {}
+    const currentGems = { ...(profile.inv_gems || {}) }
     if (!currentGems[gemName] || currentGems[gemName] < 1) return
-    currentGems[gemName] -= 1
-    const { error } = await supabase.from('profiles').update({
-      inv_gems: currentGems,
-      active_multiplier: stats.mult,
-      multiplier_uses_left: stats.uses,
-    }).eq('id', session.user.id)
-    if (error) { alert('Network Error: Could not consume gem.'); return }
+
+    // Try server-side atomic RPC first; fall back to client update if SQL migration not yet run
+    const { error: rpcError } = await supabase.rpc('consume_user_gem', { p_gem_name: gemName })
+    if (rpcError) {
+      currentGems[gemName] -= 1
+      const { error } = await supabase.from('profiles').update({
+        inv_gems: currentGems,
+        active_multiplier: stats.mult,
+        multiplier_uses_left: stats.uses,
+      }).eq('id', session.user.id)
+      if (error) { alert('Network Error: Could not consume gem.'); return }
+    }
     alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
     fetchProfileData()
   }

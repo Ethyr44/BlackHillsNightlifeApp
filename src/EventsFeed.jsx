@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import VenueCard, { EVENT_EMOJIS } from './VenueCard'
 import { toast } from './GlobalToast'
-import { getDistanceInFeet } from './utils'
+import { getDistanceInFeet, getBlackHillsDate } from './utils'
 
 export default function EventsFeed({ currentUser, onViewEntity }) {
   const [rawLineups, setRawLineups] = useState([])
+  const [checkinCounts, setCheckinCounts] = useState({})
   const [sortMode, setSortMode] = useState('distance')
   const [eventTypeFilter, setEventTypeFilter] = useState('All')
   const [venueSearch, setVenueSearch] = useState('')
@@ -29,13 +30,36 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
       )
     }
     fetchFeedData()
+
+    const checkinChannel = supabase.channel('public:venue_checkins:shared')
+      .on('postgres', { event: 'INSERT', schema: 'public', table: 'venue_checkins' }, payload => {
+        const vName = payload.new?.venue_name
+        if (vName) setCheckinCounts(prev => ({ ...prev, [vName]: (prev[vName] || 0) + 1 }))
+      })
+      .on('postgres', { event: 'DELETE', schema: 'public', table: 'venue_checkins' }, payload => {
+        const vName = payload.old?.venue_name
+        if (vName) setCheckinCounts(prev => ({ ...prev, [vName]: Math.max(0, (prev[vName] || 0) - 1) }))
+      })
+      .subscribe()
+
+    return () => supabase.removeChannel(checkinChannel)
   }, [])
 
   const fetchFeedData = async () => {
     setLoading(true)
-    const { data: venuesData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').order('name', { ascending: true })
-    const { data: eventsData } = await supabase.from('events').select('*').eq('status', 'approved')
-    const today = new Date()
+    const [{ data: venuesData }, { data: eventsData }, { data: checkinsData }] = await Promise.all([
+      supabase.from('pages').select('*').eq('page_type', 'Venue').order('name', { ascending: true }),
+      supabase.from('events').select('*').eq('status', 'approved'),
+      supabase.from('venue_checkins').select('venue_name'),
+    ])
+
+    const counts = {}
+    ;(checkinsData || []).forEach(row => {
+      if (row.venue_name) counts[row.venue_name] = (counts[row.venue_name] || 0) + 1
+    })
+    setCheckinCounts(counts)
+
+    const today = getBlackHillsDate()
 
     const builtLineups = (venuesData || []).map(venue => {
       const schedule = []
@@ -47,14 +71,14 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
         let matchedEvent = eventsData?.find(e => {
           if (e.venue !== venue.name || e.recurring_weekly) return false
           const safe = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
-          const d = new Date(safe)
+          const d = getBlackHillsDate(safe)
           return d.getFullYear() === slotDate.getFullYear() && d.getMonth() === slotDate.getMonth() && d.getDate() === slotDate.getDate()
         })
         if (!matchedEvent) {
           matchedEvent = eventsData?.find(e => {
             if (e.venue !== venue.name || !e.recurring_weekly) return false
             const safe = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z'
-            return new Date(safe).getDay() === slotDate.getDay()
+            return getBlackHillsDate(safe).getDay() === slotDate.getDay()
           })
         }
         if (!matchedEvent) {
@@ -239,6 +263,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
                 key={venue.id}
                 venue={venue}
                 currentUser={currentUser}
+                liveCount={checkinCounts[venue.name] || 0}
                 onOpenVenue={() => onViewEntity(venue.name)}
                 onOpenEvent={(slot, v) => handleOpenEvent(v || venue, slot)}
                 onAdminEdit={() => alert('To edit venue details, visit Admin Console → Manage Venues.')}

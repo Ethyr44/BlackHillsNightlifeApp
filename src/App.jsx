@@ -2,9 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react'
 import { BrowserRouter, useSearchParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
-import PublicProfile from './PublicProfile'
 import Onboarding from './Onboarding'
-import VibeCode from './VibeCode'
 import SplashScreen from './SplashScreen' 
 import Ticker from './Ticker'
 import { GlobalToast } from './GlobalToast'
@@ -12,7 +10,9 @@ import GlobalHeader from './GlobalHeader'
 import BottomNav from './BottomNav'
 import BackgroundManager from './BackgroundManager'
 
-// 🟢 NEW: Direct Code Splitting for the flattened navigation
+// 🟢 NEW: Direct Code Splitting for the flattened navigation & overlays
+const PublicProfile = lazy(() => import('./PublicProfile'))
+const VibeCode = lazy(() => import('./VibeCode'))
 const Home = lazy(() => import('./Home')) // <--- ADD THIS LINE
 const MainFeed = lazy(() => import('./MainFeed'))
 const EventsFeed = lazy(() => import('./EventsFeed')) // Serves as the Venues List
@@ -134,9 +134,11 @@ function MainApp() {
 
   const fetchUser = async () => {
     if (session?.user?.id) {
-      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+      const nowIso = new Date().toISOString();
+      const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
       if (data) {
-        setCurrentUser(data);
+        setCurrentUser({ ...data, last_active: nowIso });
+        supabase.from('profiles').update({ last_active: nowIso }).eq('id', session.user.id).then(() => {});
         
         if (joinSessionId && !isGuestMode) {
             localStorage.setItem('bhnl_joined_session', joinSessionId)
@@ -161,13 +163,16 @@ function MainApp() {
 
   useEffect(() => {
     if (session) fetchUser();
-    const pollInterval = setInterval(() => {
-      if (session?.user?.id) {
-        supabase.from('profiles').select('*').eq('id', session.user.id).single()
-          .then(({ data }) => { if (data) setCurrentUser(data); });
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && session?.user?.id) {
+        const nowIso = new Date().toISOString();
+        supabase.from('profiles').update({ last_active: nowIso }).eq('id', session.user.id).then(() => {});
+        supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+          .then(({ data }) => { if (data) setCurrentUser({ ...data, last_active: nowIso }); });
       }
-    }, 40000); 
-    return () => clearInterval(pollInterval);
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [session])
 
   useEffect(() => {
@@ -486,15 +491,15 @@ function MainApp() {
       <Ticker />
 
       <main className="max-w-2xl mx-auto relative z-10 w-full transition-all duration-300 pb-28">
-        {viewingEntity ? (
-          <PublicProfile 
-              entity={viewingEntity} 
-              onClose={() => { setSearchParams({ tab: activeTab }) }} 
-              currentUser={effectiveUser} 
-              forceAccess={forceFriendView ? 'friend' : null} 
-          />
-        ) : (
-          <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+        <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+          {viewingEntity ? (
+            <PublicProfile 
+                entity={viewingEntity} 
+                onClose={() => { setSearchParams({ tab: activeTab }) }} 
+                currentUser={effectiveUser} 
+                forceAccess={forceFriendView ? 'friend' : null} 
+            />
+          ) : (
             <div key={activeTab} className="animate-fade-in w-full h-full mt-4">
               {activeTab === 'Search' && searchResults && (
                 <div className="p-4 animate-fade-in">
@@ -536,8 +541,8 @@ function MainApp() {
               {activeTab === 'Sports' && <Sports />}
               {(activeTab === 'FAQ' || activeTab === 'Contact') && <About />}
             </div>
-          </Suspense>
-        )}
+          )}
+        </Suspense>
       </main>
 
       <BottomNav 
@@ -547,7 +552,11 @@ function MainApp() {
           viewingEntity={viewingEntity}
       />
 
-      {showVibeCode && <VibeCode session={session} onClose={() => setShowVibeCode(false)} />}
+      {showVibeCode && (
+        <Suspense fallback={null}>
+          <VibeCode session={session} onClose={() => setShowVibeCode(false)} />
+        </Suspense>
+      )}
       {showSplash && <SplashScreen username={currentUser?.username} phase={showSplash} onComplete={() => setShowSplash(false)} />}
     </div>
   )

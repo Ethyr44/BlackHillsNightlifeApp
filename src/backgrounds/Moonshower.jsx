@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { memo } from 'react'
 
-export default function Moonshower() {
+const STARS = generateStars(180)
+
+const Moonshower = memo(function Moonshower() {
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: -1 }}>
+    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: -1, contain: 'strict' }}>
       {/* Base gradient — rich midnight-to-deep-navy */}
       <div
         className="absolute inset-0"
@@ -56,9 +58,11 @@ export default function Moonshower() {
       />
     </div>
   )
-}
+})
 
-function MoonLayer() {
+export default Moonshower
+
+const MoonLayer = memo(function MoonLayer() {
   return (
     <div
       className="absolute"
@@ -92,30 +96,32 @@ function MoonLayer() {
       </div>
     </div>
   )
-}
+})
 
-function StarField() {
-  const stars = generateStars(180)
-
+const StarField = memo(function StarField() {
   return (
     <div className="absolute inset-0">
-      {stars.map((star, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            left: `${star.x}%`,
-            top: `${star.y}%`,
-            width: star.size,
-            height: star.size,
-            borderRadius: '50%',
-            background: star.color,
-            opacity: star.opacity,
-            boxShadow: star.size > 1.5 ? `0 0 ${star.size * 2}px ${star.color}` : 'none',
-            animation: `twinkle-star ${star.duration}s ease-in-out ${star.delay}s infinite`,
-          }}
-        />
-      ))}
+      {STARS.map((star, i) => {
+        const shouldTwinkle = star.size > 1.2
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: `${star.x}%`,
+              top: `${star.y}%`,
+              width: star.size,
+              height: star.size,
+              borderRadius: '50%',
+              background: star.color,
+              opacity: star.opacity,
+              '--star-base-opacity': star.opacity,
+              boxShadow: star.size > 1.5 ? `0 0 ${star.size * 2}px ${star.color}` : 'none',
+              animation: shouldTwinkle ? `twinkle-star ${star.duration}s ease-in-out ${star.delay}s infinite` : 'none',
+            }}
+          />
+        )
+      })}
 
       <style>{`
         @keyframes twinkle-star {
@@ -125,9 +131,9 @@ function StarField() {
       `}</style>
     </div>
   )
-}
+})
 
-function ShootingStars() {
+const ShootingStars = memo(function ShootingStars() {
   const meteors = [
     { top: '8%',  delay: '0s',   duration: '7s',  width: 100 },
     { top: '20%', delay: '3.5s', duration: '9s',  width: 80  },
@@ -164,7 +170,7 @@ function ShootingStars() {
       ))}
     </>
   )
-}
+})
 
 function generateStars(count) {
   const stars = []

@@ -71,6 +71,37 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
         setLoading(false)
     }
 
+    // 🟢 NEW: 6. Reset and Close All KSocial Sessions
+    const handleResetKSocialSessions = async () => {
+        if (!window.confirm("WARNING: This will shut down and reset ALL live KSocial sessions, clear all singer queues, and return the KSocial page to its default state. Proceed?")) return
+        setLoading(true)
+        try {
+            // 1. Wipe all active singer queues
+            const { error: singersErr } = await supabase.from('session_singers').delete().not('id', 'is', null)
+            if (singersErr) throw singersErr
+
+            // 2. Delete all open KSocial sessions
+            const { error: sessionsErr } = await supabase.from('active_sessions').delete().not('id', 'is', null)
+            if (sessionsErr) throw sessionsErr
+
+            // 3. Close any active Karaoke Crawl tournaments
+            await supabase.from('active_tournaments').update({ status: 'completed' }).eq('status', 'active')
+
+            // 4. Clean up auto-generated live stage announcements from the events table
+            await supabase.from('events').delete().ilike('description', '🎤 LIVE NOW! The Stage is open at%')
+
+            // 5. Clear local host/session state so KSocial resets to default
+            localStorage.removeItem('bhnl_joined_session')
+            localStorage.removeItem('bhnl_host_mode')
+
+            alert("All KSocial sessions have been shut down and reset to default!")
+        } catch (err) {
+            alert("Error resetting KSocial sessions: " + err.message)
+        } finally {
+            setLoading(false)
+        }
+    }
+
     return (
         <div className="space-y-6 animate-fade-in pb-10">
             <h3 className="text-3xl font-['Bebas_Neue'] text-red-500 tracking-widest border-b border-red-900/50 pb-2">God Mode (Debug)</h3>
@@ -105,6 +136,10 @@ export default function AdminDebug({ setTestOnboardingType, setShowSplash }) {
                     {/* 🟢 NEW: Clear Notifications Button */}
                     <button onClick={handleClearNotifications} disabled={loading} className="w-full bg-red-950/40 text-red-400 hover:bg-red-600 hover:text-white border border-red-500/50 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(239,68,68,0.15)]">
                         🗑️ Clear ALL Notifications
+                    </button>
+                    {/* 🟢 NEW: Reset and Close All KSocial Sessions Button */}
+                    <button onClick={handleResetKSocialSessions} disabled={loading} className="w-full bg-purple-950/40 text-purple-400 hover:bg-purple-600 hover:text-white border border-purple-500/50 py-4 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(168,85,247,0.15)]">
+                        🎤 Reset and Close all KSocial Sessions
                     </button>
                 </div>
             </div>

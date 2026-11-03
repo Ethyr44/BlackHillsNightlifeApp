@@ -81,7 +81,7 @@ function AdminVisibility() {
 
     useEffect(() => {
         const loadConfig = async () => {
-            const { data } = await supabase.from('system_config').select('page_visibility').single()
+            const { data } = await supabase.from('system_config').select('page_visibility').maybeSingle()
             if (data && data.page_visibility) {
                 setConfig(data.page_visibility)
             }

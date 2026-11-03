@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient'
 import MapVenueOverlay from './MapVenueOverlay'
 import MapGiftOverlay from './MapGiftOverlay'
 import MapDeployGift from './MapDeployGift'
-import { getDistanceInFeet } from './utils'
+import { getDistanceInFeet, getBlackHillsDate } from './utils'
 
 export default function Map({ currentUser, onViewEntity }) {
   const mapRef = useRef(null)
@@ -52,26 +52,30 @@ export default function Map({ currentUser, onViewEntity }) {
 
   useEffect(() => {
     async function init() {
-      const { data: venueData } = await supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null)
-      
-      const today = new Date();
-      today.setHours(0, 0, 0, 0); // Start of today
+      const today = getBlackHillsDate();
+      today.setHours(0, 0, 0, 0); // Start of today (Black Hills Time)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1); // Start of tomorrow
 
-      const { data: eventData } = await supabase
+      const [venueRes, eventRes, giftRes] = await Promise.all([
+        supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null),
+        supabase
           .from('events')
           .select('*')
           .eq('status', 'approved')
-          .or(`event_date.gte.${today.toISOString()},recurring_weekly.eq.true,recurring_pattern.neq.none`);
+          .or(`event_date.gte.${today.toISOString()},recurring_weekly.eq.true,recurring_pattern.neq.none`),
+        supabase.from('geo_gifts').select('*')
+      ]);
 
-      const { data: giftData } = await supabase.from('geo_gifts').select('*')
+      const venueData = venueRes.data;
+      const eventData = eventRes.data;
+      const giftData = giftRes.data;
       if (giftData) setGeoGifts(giftData)
 
-      // Filter eventData down to ONLY events happening today
+      // Filter eventData down to ONLY events happening today (Black Hills Time)
       const todaysEventsFiltered = (eventData || []).filter(e => {
           const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
-          const eDate = new Date(safeDateStr);
+          const eDate = getBlackHillsDate(safeDateStr);
           const startDay = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate());
           
           const pattern = e.recurring_pattern || (e.recurring_weekly ? 'weekly' : 'none');
@@ -90,7 +94,7 @@ export default function Map({ currentUser, onViewEntity }) {
       const venuesWithEvents = new Set(todaysEventsFiltered.map(e => e.venue));
 
       const processedVenues = venueData ? venueData.map(v => {
-         const now = new Date()
+         const now = getBlackHillsDate()
          const hasEventToday = venuesWithEvents.has(v.name);
 
          const todaysEvents = todaysEventsFiltered.filter(e => e.venue === v.name);
@@ -98,7 +102,7 @@ export default function Map({ currentUser, onViewEntity }) {
          let isLiveNow = false;
          if (todaysEvents.length > 0) {
              const activeEvent = todaysEvents[0]
-             const start = new Date(activeEvent.event_date)
+             const start = getBlackHillsDate(activeEvent.event_date)
              const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
              if (now >= start && now <= end) isLiveNow = true;
          }
@@ -316,28 +320,36 @@ export default function Map({ currentUser, onViewEntity }) {
               return
           }
           
-          const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single()
-          
-          const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
-          const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
-          const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
-          const newIron = (p.cur_iron || 0) + (activeGift.reward_resources?.Iron || 0)
-          
-          const newGems = { ...(p.inv_gems || {}) }
-          for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
-               newGems[gem] = (newGems[gem] || 0) + amt
+          // Try server-side atomic RPC first; fall back to client update if SQL migration not yet run
+          const { error: rpcError } = await supabase.rpc('claim_geo_gift', { p_gift_id: activeGift.id })
+          if (rpcError) {
+              const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
+              if (!p) {
+                  setClaiming(false)
+                  return
+              }
+              
+              const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
+              const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
+              const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
+              const newIron = (p.cur_iron || 0) + (activeGift.reward_resources?.Iron || 0)
+              
+              const newGems = { ...(p.inv_gems || {}) }
+              for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
+                   newGems[gem] = (newGems[gem] || 0) + amt
+              }
+
+              await supabase.from('profiles').update({
+                  lifestyle_points: newLp,
+                  cur_wood: newWood,
+                  cur_stone: newStone,
+                  cur_iron: newIron,
+                  inv_gems: newGems
+              }).eq('id', currentUser.id)
+
+              const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
+              await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
           }
-
-          await supabase.from('profiles').update({
-              lifestyle_points: newLp,
-              cur_wood: newWood,
-              cur_stone: newStone,
-              cur_iron: newIron,
-              inv_gems: newGems
-          }).eq('id', currentUser.id)
-
-          const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
-          await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
 
           alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp || 0} L$.`)
           setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))

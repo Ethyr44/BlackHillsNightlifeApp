@@ -23,10 +23,27 @@ export default function AdminEconomy() {
     fetchData()
   }
 
+  useEffect(() => {
+      const q = searchUser.trim()
+      if (!q) {
+          setUsers([])
+          return
+      }
+      const timer = setTimeout(async () => {
+          const { data } = await supabase
+              .from('profiles')
+              .select('id, username, account_type, lifestyle_points, league_monthly')
+              .ilike('username', `%${q}%`)
+              .limit(3)
+          if (data) setUsers(data)
+      }, 180)
+      return () => clearTimeout(timer)
+  }, [searchUser])
+
   const searchForUser = async () => {
       if(!searchUser) return alert("Enter a username to search")
       
-      const { data } = await supabase.from('profiles').select('id, username, account_type, lifestyle_points, league_monthly').ilike('username', `%${searchUser}%`).limit(5)
+      const { data } = await supabase.from('profiles').select('id, username, account_type, lifestyle_points, league_monthly').ilike('username', `%${searchUser}%`).limit(3)
       
       if (data) setUsers(data)
   }

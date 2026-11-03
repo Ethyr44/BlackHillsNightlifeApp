@@ -10,6 +10,7 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
   const [sortMode, setSortMode] = useState('distance')
   const [eventTypeFilter, setEventTypeFilter] = useState('All')
   const [venueSearch, setVenueSearch] = useState('')
+  const [showVenueSuggestions, setShowVenueSuggestions] = useState(false)
   const [venueLineups, setVenueLineups] = useState([])
   const [displayedVenues, setDisplayedVenues] = useState([])
   const [loading, setLoading] = useState(true)
@@ -182,12 +183,31 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
 
   const EVENT_TYPES = ['All', 'Karaoke', 'Live Music', 'Comedy', 'Open Mic', 'Trivia', 'Drinks']
 
+  const topVenueSuggestions = venueSearch.trim()
+    ? [...rawLineups]
+        .filter(v => {
+          const q = venueSearch.trim().toLowerCase()
+          return (
+            (v.name && v.name.toLowerCase().includes(q)) ||
+            (v.address && v.address.toLowerCase().includes(q)) ||
+            (v.tags && v.tags.join(' ').toLowerCase().includes(q))
+          )
+        })
+        .sort((a, b) => {
+          const q = venueSearch.trim().toLowerCase()
+          const aStarts = (a.name || '').toLowerCase().startsWith(q) ? 0 : 1
+          const bStarts = (b.name || '').toLowerCase().startsWith(q) ? 0 : 1
+          return aStarts - bStarts || (a.name || '').localeCompare(b.name || '')
+        })
+        .slice(0, 3)
+    : []
+
   return (
     <div className="space-y-4 animate-fade-in-up pb-4">
 
       {/* Search */}
-      <div className="relative mx-1">
-        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25">
+      <div className="relative mx-1 z-30">
+        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/25 pointer-events-none">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
           </svg>
@@ -195,7 +215,10 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
         <input
           type="text"
           value={venueSearch}
-          onChange={e => setVenueSearch(e.target.value)}
+          onChange={e => {
+            setVenueSearch(e.target.value)
+            setShowVenueSuggestions(true)
+          }}
           placeholder="Search venues, addresses, vibes..."
           className="w-full pl-10 pr-4 py-3 text-sm text-white/80 rounded-xl outline-none transition-all duration-200"
           style={{
@@ -204,9 +227,55 @@ export default function EventsFeed({ currentUser, onViewEntity }) {
             border: '1px solid rgba(255,255,255,0.08)',
             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
           }}
-          onFocus={e => e.target.style.borderColor = 'rgba(79,140,255,0.5)'}
-          onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+          onFocus={e => {
+            e.target.style.borderColor = 'rgba(79,140,255,0.5)'
+            setShowVenueSuggestions(true)
+          }}
+          onBlur={e => {
+            e.target.style.borderColor = 'rgba(255,255,255,0.08)'
+            setTimeout(() => setShowVenueSuggestions(false), 180)
+          }}
         />
+
+        {/* Top 3 Venue Suggestions Dropdown */}
+        {showVenueSuggestions && topVenueSuggestions.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-2 bg-[#0b1324]/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.75)] overflow-hidden z-50 animate-fade-in">
+            <div className="px-3.5 py-1.5 border-b border-white/[0.06] flex justify-between items-center">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-white/40">Top 3 Matching Venues</span>
+              <span className="text-[9px] font-bold uppercase tracking-widest text-[#4f8cff]/70">Tap to Open Page</span>
+            </div>
+            <div className="divide-y divide-white/[0.05]">
+              {topVenueSuggestions.map(v => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    setShowVenueSuggestions(false)
+                    if (onViewEntity) onViewEntity(v.name)
+                  }}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between gap-3 hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <img
+                      src={v.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${v.name}`}
+                      alt={v.name}
+                      className="w-8 h-8 rounded-full object-cover border border-white/10 bg-[#070d1a] flex-shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{v.name}</p>
+                      <p className="text-[10px] text-white/40 truncate">{v.address || (v.tags && v.tags.join(' · ')) || 'Venue'}</p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-[#4f8cff]/15 text-[#4f8cff] border border-[#4f8cff]/30 flex-shrink-0">
+                    Open →
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sort + Filter row */}

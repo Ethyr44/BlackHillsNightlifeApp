@@ -72,6 +72,12 @@ export default function Settings({ currentUser, setCurrentUser }) {
   const [saveStatus, setSaveStatus] = useState(null) // null | 'saving' | 'success' | 'error'
   const [locationEnabled, setLocationEnabled] = useState(() => localStorage.getItem('bhnl_location_enabled') === 'true')
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('bhnl_notifications_enabled') === 'true')
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(() => {
+    if (typeof currentUser?.email_notifications === 'boolean') return currentUser.email_notifications
+    if (typeof currentUser?.details?.email_notifications === 'boolean') return currentUser.details.email_notifications
+    const saved = localStorage.getItem('bhnl_email_notifications_enabled')
+    return saved !== null ? saved === 'true' : true
+  })
 
   const handleSaveName = async () => {
     setSaveStatus('saving')
@@ -188,6 +194,30 @@ export default function Settings({ currentUser, setCurrentUser }) {
     }
   }
 
+  const handleEmailNotificationToggle = async () => {
+    const nextState = !emailNotificationsEnabled
+    setEmailNotificationsEnabled(nextState)
+    localStorage.setItem('bhnl_email_notifications_enabled', String(nextState))
+
+    const updatedDetails = { ...(currentUser?.details || {}), email_notifications: nextState }
+    const { error } = await supabase
+      .from('profiles')
+      .update({ email_notifications: nextState, details: updatedDetails })
+      .eq('id', currentUser.id)
+
+    if (error) {
+      // Fallback if the email_notifications column hasn't been added via SQL yet
+      await supabase
+        .from('profiles')
+        .update({ details: updatedDetails })
+        .eq('id', currentUser.id)
+    }
+
+    if (setCurrentUser) {
+      setCurrentUser({ ...currentUser, email_notifications: nextState, details: updatedDetails })
+    }
+  }
+
   const StatusPill = () => {
     if (!saveStatus) return null
     const cfg = {
@@ -290,6 +320,13 @@ export default function Settings({ currentUser, setCurrentUser }) {
           onChange={handleNotificationToggle}
           label="Push Notifications"
           description="Get alerted when your turn is up on stage or you receive a message."
+        />
+        <Toggle
+          id="email-notifications"
+          checked={emailNotificationsEnabled}
+          onChange={handleEmailNotificationToggle}
+          label="Email Notifications"
+          description="Receive an email copy whenever you get a new notification in the app."
         />
       </Section>
 

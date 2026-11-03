@@ -506,10 +506,25 @@ function MainApp() {
                   <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 mb-6">Search Results</h2>
                   {searchResults.pages.length === 0 && searchResults.profiles.length === 0 && <p className="text-gray-500 italic">No matches found.</p>}
                   <div className="space-y-4">
+                    {searchResults.pages.map(page => (
+                      <div key={`page-${page.id}`} onClick={() => onViewEntity(page.name)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <img src={page.profile_pic || `https://api.dicebear.com/7.x/shapes/svg?seed=${page.name}`} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={page.name} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/shapes/svg?seed=${page.name}` }} />
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-white text-lg truncate">{page.name}</h4>
+                            {page.address && <p className="text-xs text-gray-400 truncate">{page.address}</p>}
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-500/30 flex-shrink-0">{page.page_type || 'Venue'}</span>
+                      </div>
+                    ))}
                     {searchResults.profiles.map(user => (
-                      <div key={user.id} onClick={() => onViewEntity(user.username)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center gap-4">
-                         <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` }} />
-                         <h4 className="font-bold text-white text-lg">{user.username}</h4>
+                      <div key={user.id} onClick={() => onViewEntity(user.username)} className="bg-gray-900 p-4 rounded-xl border border-gray-800 cursor-pointer hover:border-blue-500 transition-colors flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <img src={user.profile_pic || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}`} loading="lazy" decoding="async" className="w-12 h-12 rounded-full border border-gray-700 object-cover bg-black" alt={user.username} referrerPolicy="no-referrer" onError={(e) => { e.target.onerror = null; e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${user.username}` }} />
+                          <h4 className="font-bold text-white text-lg truncate">{user.username}</h4>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full bg-cyan-900/30 text-cyan-400 border border-cyan-500/30 flex-shrink-0">{user.account_type || 'User'}</span>
                       </div>
                     ))}
                   </div>

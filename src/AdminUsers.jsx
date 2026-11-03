@@ -57,6 +57,23 @@ export default function AdminUsers() {
     }
 
     // --- 2. USER ROLE OVERRIDE LOGIC ---
+    useEffect(() => {
+        const q = searchQuery.trim()
+        if (!q) {
+            setSearchResults([])
+            return
+        }
+        const timer = setTimeout(async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('id, username, account_type, account_status')
+                .ilike('username', `%${q}%`)
+                .limit(3)
+            if (data) setSearchResults(data)
+        }, 180)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
     const searchUsers = async (e) => {
         e.preventDefault()
         if (!searchQuery.trim()) return
@@ -65,7 +82,7 @@ export default function AdminUsers() {
             .from('profiles')
             .select('id, username, account_type, account_status')
             .ilike('username', `%${searchQuery}%`)
-            .limit(10)
+            .limit(3)
             
         if (error) alert("Search Error: " + error.message)
         if (data) setSearchResults(data)

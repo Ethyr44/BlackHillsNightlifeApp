@@ -29,8 +29,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_resend_api_key text := 're_YOUR_RESEND_API_KEY_HERE'; -- <-- PASTE YOUR RESEND API KEY HERE
-  v_sender_email   text := 'Black Hills Nightlife <alerts@blackhillsnightlife.com>'; -- <-- UPDATE SENDER EMAIL
+  v_resend_api_key text := 'YOUR_RESEND_API_KEY_HERE';
+  v_sender_email   text := 'Black Hills Nightlife <alerts@blackhillsnightlife.com>';
   v_user_email     text;
   v_username       text;
   v_email_enabled  boolean := true;

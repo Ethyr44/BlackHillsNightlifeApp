@@ -6,6 +6,24 @@ import MapGiftOverlay from './MapGiftOverlay'
 import MapDeployGift from './MapDeployGift'
 import { getDistanceInFeet, getBlackHillsDate } from './utils'
 
+// Generates coordinates guaranteed to be 25ft–85ft (within 100ft) of a venue
+function getOffsetWithin100Feet(venueLat, venueLng) {
+  const baseLat = parseFloat(venueLat)
+  const baseLng = parseFloat(venueLng)
+  const distanceFeet = 25 + Math.random() * 60 // 25ft to 85ft (strictly <= 100ft)
+  const angle = Math.random() * 2 * Math.PI
+  const feetPerDegLat = 364000
+  const feetPerDegLng = 364000 * Math.cos(baseLat * (Math.PI / 180))
+  const dLat = (distanceFeet * Math.cos(angle)) / feetPerDegLat
+  const dLng = (distanceFeet * Math.sin(angle)) / feetPerDegLng
+  return {
+    lat: Number((baseLat + dLat).toFixed(6)),
+    lng: Number((baseLng + dLng).toFixed(6))
+  }
+}
+
+const DAILY_GEM_POOL = ['Quartz', 'Quartz', 'Amethyst', 'Amethyst', 'Jade', 'Emerald', 'Sapphire', 'Ruby', 'Diamond']
+
 export default function Map({ currentUser, onViewEntity }) {
   const mapRef = useRef(null)
   const [mapInstance, setMapInstance] = useState(null)
@@ -50,6 +68,56 @@ export default function Map({ currentUser, onViewEntity }) {
     setFilters(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Spawns daily GeoGifts within 100ft of existing venues, prioritizing venues with events today
+  const spawnDailyVenueGeoGifts = async (venueList) => {
+    const validVenues = (venueList || []).filter(
+      v => v.lat !== null && v.lat !== undefined && v.lng !== null && v.lng !== undefined && !isNaN(parseFloat(v.lat)) && !isNaN(parseFloat(v.lng))
+    )
+    if (validVenues.length === 0) return []
+
+    const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5)
+    const eventVenues = shuffle(validVenues.filter(v => Boolean(v.eventToday)))
+    const otherVenues = shuffle(validVenues.filter(v => !v.eventToday))
+    const prioritized = [...eventVenues, ...otherVenues]
+
+    const targetCount = Math.max(7, eventVenues.length)
+    const selectedVenues = []
+    for (let i = 0; i < targetCount; i++) {
+      selectedVenues.push(prioritized[i % prioritized.length])
+    }
+
+    const endOfToday = getBlackHillsDate()
+    endOfToday.setHours(23, 59, 59, 999)
+
+    const newDrops = selectedVenues.map(v => {
+      const coords = getOffsetWithin100Feet(v.lat, v.lng)
+      const randomGem = DAILY_GEM_POOL[Math.floor(Math.random() * DAILY_GEM_POOL.length)]
+      return {
+        title: v.eventToday ? `🔥 Event Cache @ ${v.name}` : `📍 Venue Cache @ ${v.name}`,
+        lat: coords.lat,
+        lng: coords.lng,
+        reward_lp: v.eventToday ? 100 : 50,
+        reward_gems: { [randomGem]: 1 },
+        claimed_by: [],
+        expires_at: endOfToday.toISOString()
+      }
+    })
+
+    await supabase.from('geo_gifts').delete().not('id', 'is', null)
+    const { data: inserted, error } = await supabase.from('geo_gifts').insert(newDrops).select('*')
+    if (error) {
+      // Fallback to SECURITY DEFINER RPC if RLS restricts client-side table writes
+      const { error: rpcErr } = await supabase.rpc('regenerate_daily_gifts')
+      if (!rpcErr) {
+        const { data: rpcGifts } = await supabase.from('geo_gifts').select('*')
+        return rpcGifts || []
+      }
+      console.error('GeoGift auto-spawn error:', error)
+      return []
+    }
+    return inserted || []
+  }
+
   useEffect(() => {
     async function init() {
       const today = getBlackHillsDate();
@@ -69,8 +137,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
       const venueData = venueRes.data;
       const eventData = eventRes.data;
-      const giftData = giftRes.data;
-      if (giftData) setGeoGifts(giftData)
+      let giftData = giftRes.data || [];
 
       // Filter eventData down to ONLY events happening today (Black Hills Time)
       const todaysEventsFiltered = (eventData || []).filter(e => {
@@ -111,6 +178,38 @@ export default function Map({ currentUser, onViewEntity }) {
       }) : []
 
       setVenues(processedVenues)
+
+      // Check if GeoGifts need a daily reset/respawn or if any gift is outside 100ft of all venues
+      const nowTime = getBlackHillsDate()
+      const todayKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`
+      const savedDayKey = localStorage.getItem('bhnl_geogifts_day_key')
+
+      const validGiftsToday = giftData.filter(g => {
+        if (g.expires_at && getBlackHillsDate(g.expires_at) <= nowTime) return false
+        if (g.created_at && getBlackHillsDate(g.created_at) < today) return false
+        // Verify gift is within 100ft of at least one venue (unless Admin Test Drop)
+        if (g.title !== 'Admin Test Drop' && processedVenues.length > 0) {
+          const nearAnyVenue = processedVenues.some(
+            v => getDistanceInFeet(parseFloat(g.lat), parseFloat(g.lng), parseFloat(v.lat), parseFloat(v.lng)) <= 100
+          )
+          if (!nearAnyVenue) return false
+        }
+        return true
+      })
+
+      if (processedVenues.length > 0 && (validGiftsToday.length === 0 || savedDayKey !== todayKey)) {
+        const spawned = await spawnDailyVenueGeoGifts(processedVenues)
+        if (spawned.length > 0) {
+          giftData = spawned
+          localStorage.setItem('bhnl_geogifts_day_key', todayKey)
+        } else {
+          giftData = validGiftsToday
+        }
+      } else {
+        giftData = validGiftsToday
+      }
+
+      setGeoGifts(giftData)
 
       if (window.google && window.google.maps && window.google.maps.Map) {
         initializeMap()
@@ -267,18 +366,35 @@ export default function Map({ currentUser, onViewEntity }) {
   }, [mapInstance, venues, geoGifts, filters, currentUser?.id, isPlacingGift])
 
   useEffect(() => {
+      // Fetch users who have shared a location within the last 24 hours so the map stays fresh and uncluttered
       const fetchUsers = async () => {
-          const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
-          const { data } = await supabase.from('profiles').select('id, current_lat, current_lng').not('current_lat', 'is', null).gte('last_active', twoHoursAgo)
+          const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+          const { data } = await supabase
+              .from('profiles')
+              .select('id, current_lat, current_lng, last_active')
+              .not('current_lat', 'is', null)
+              .not('current_lng', 'is', null)
+              .gte('last_active', twentyFourHoursAgo)
           if (data) setActiveUsers(data)
       }
       fetchUsers()
       const sub = supabase.channel('public-users-location').on('postgres', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
               setActiveUsers(prev => {
+                  const hasCoords = payload.new.current_lat !== null && payload.new.current_lat !== undefined && payload.new.current_lng !== null && payload.new.current_lng !== undefined
+                  const cutoff = Date.now() - 24 * 60 * 60 * 1000
+                  const isRecent = !payload.new.last_active || new Date(payload.new.last_active).getTime() >= cutoff
+                  if (!hasCoords || !isRecent) {
+                      return prev.filter(u => u.id !== payload.new.id)
+                  }
+                  const updatedUser = {
+                      id: payload.new.id,
+                      current_lat: payload.new.current_lat,
+                      current_lng: payload.new.current_lng,
+                      last_active: payload.new.last_active
+                  }
                   const exists = prev.find(u => u.id === payload.new.id)
-                  if (exists) return prev.map(u => u.id === payload.new.id ? payload.new : u)
-                  else if (payload.new.current_lat) return [...prev, payload.new]
-                  return prev
+                  if (exists) return prev.map(u => u.id === payload.new.id ? updatedUser : u)
+                  return [...prev, updatedUser]
               })
           }).subscribe()
       return () => supabase.removeChannel(sub)
@@ -292,20 +408,26 @@ export default function Map({ currentUser, onViewEntity }) {
       if (filters.users) {
           activeUsers.forEach(user => {
               if (!user.current_lat || !user.current_lng) return
+              const isSelf = currentUser?.id && user.id === currentUser.id
               const position = { lat: parseFloat(user.current_lat), lng: parseFloat(user.current_lng) }
               const dotDiv = document.createElement('div')
-              dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
+              if (isSelf) {
+                  dotDiv.innerHTML = `<div class="w-3.5 h-3.5 bg-[#f5c542] rounded-full shadow-[0_0_16px_rgba(245,197,66,1)] border-2 border-white animate-pulse"></div>`
+              } else {
+                  dotDiv.innerHTML = `<div class="w-3 h-3 bg-cyan-400 rounded-full shadow-[0_0_12px_rgba(34,211,238,1)] border border-white animate-pulse"></div>`
+              }
               const marker = new window.google.maps.marker.AdvancedMarkerElement({ 
                   position, 
                   map: mapInstance, 
+                  title: isSelf ? 'Your Location' : undefined,
                   content: dotDiv,
-                  zIndex: 50,
-                  collisionBehavior: 'OPTIONAL_AND_HIDES_LOWER_PRIORITY'
+                  zIndex: isSelf ? 80 : 50,
+                  collisionBehavior: isSelf ? 'REQUIRED' : 'OPTIONAL_AND_HIDES_LOWER_PRIORITY'
               })
               userMarkersRef.current.push(marker)
           })
       }
-  }, [activeUsers, mapInstance, filters.users])
+  }, [activeUsers, mapInstance, filters.users, currentUser?.id])
 
   const handleClaimGift = async () => {
       setClaiming(true)
@@ -440,15 +562,22 @@ export default function Map({ currentUser, onViewEntity }) {
   }
 
   const handleForceRegenerate = async () => {
-      if (!window.confirm("This will wipe all current Geo-Gifts and spawn 7 new ones at random locations. Proceed?")) return;
+      if (!window.confirm("This will wipe all current Geo-Gifts and respawn new ones within 100ft of existing venues (prioritizing venues with events today). Proceed?")) return;
       
-      const { error } = await supabase.rpc('regenerate_daily_gifts')
-      if (error) {
-          alert("Error regenerating: " + error.message)
+      const spawned = await spawnDailyVenueGeoGifts(venues)
+      if (spawned.length > 0) {
+          setGeoGifts(spawned)
+          alert(`Success! ${spawned.length} new venue Geo-Gifts have dropped within 100ft of venues.`)
       } else {
-          alert("Success! 7 new caches have dropped.")
-          const { data } = await supabase.from('geo_gifts').select('*')
-          if (data) setGeoGifts(data)
+          // Fallback to RPC if direct insert was blocked by RLS
+          const { error } = await supabase.rpc('regenerate_daily_gifts')
+          if (error) {
+              alert("Error regenerating: " + error.message)
+          } else {
+              alert("Success! New venue caches have dropped.")
+              const { data } = await supabase.from('geo_gifts').select('*')
+              if (data) setGeoGifts(data)
+          }
       }
   }
 

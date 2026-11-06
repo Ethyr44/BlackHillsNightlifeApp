@@ -233,20 +233,35 @@ function MainApp() {
     let watchId;
     let lastUpdateTime = 0;
 
+    const updateUserPosition = async (position) => {
+      const { latitude, longitude } = position.coords;
+      const nowIso = new Date().toISOString();
+      await supabase.from('profiles').update({
+        current_lat: latitude,
+        current_lng: longitude,
+        last_active: nowIso
+      }).eq('id', currentUser.id);
+    };
+
     const pingLocation = () => {
       const isEnabled = localStorage.getItem('bhnl_location_enabled') === 'true';
       if (isEnabled && navigator.geolocation) {
+        // Immediately lock in current position when opening the app
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            lastUpdateTime = Date.now();
+            updateUserPosition(pos);
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+
         watchId = navigator.geolocation.watchPosition(
           async (position) => {
              const now = Date.now();
              if (now - lastUpdateTime >= 60000) {
                  lastUpdateTime = now;
-                 const { latitude, longitude } = position.coords;
-                 await supabase.from('profiles').update({ 
-                     current_lat: latitude, 
-                     current_lng: longitude, 
-                     last_active: new Date().toISOString() 
-                 }).eq('id', currentUser.id);
+                 await updateUserPosition(position);
              }
           },
           (err) => console.error("Radar Sweep Error:", err),
@@ -256,8 +271,25 @@ function MainApp() {
     };
     pingLocation();
 
-    return () => { if (watchId) navigator.geolocation.clearWatch(watchId); };
-  }, [currentUser]);
+    const handleVisibilityLocationSync = () => {
+      if (document.visibilityState === 'visible' && localStorage.getItem('bhnl_location_enabled') === 'true' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            lastUpdateTime = Date.now();
+            updateUserPosition(pos);
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityLocationSync);
+
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      document.removeEventListener('visibilitychange', handleVisibilityLocationSync);
+    };
+  }, [currentUser?.id]);
 
   useEffect(() => {
       if (currentUser?.account_type === 'Temp_Crawl' && activeTab !== 'KSocial') {

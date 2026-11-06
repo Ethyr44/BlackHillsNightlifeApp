@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { getBlackHillsDate } from './utils'
 
 export const EVENT_EMOJIS = {
   'Karaoke': '🎤',
@@ -43,7 +44,7 @@ function useLiveVenueCount(venueName) {
 }
 
 const getVenueStatus = (venue) => {
-  const now = new Date()
+  const now = getBlackHillsDate()
   const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
   const currentTime = now.getHours() * 100 + now.getMinutes()
 
@@ -72,6 +73,7 @@ export default function VenueCard({ venue, currentUser, liveCount: propLiveCount
   const liveCount = propLiveCount !== undefined ? propLiveCount : fallbackCount
   const status = getVenueStatus(venue)
   const hasBg = hasCustomImage(venue.profile_pic)
+  const canManage = currentUser?.account_type === 'Admin' || Boolean(venue?.owner_id && currentUser?.id === venue.owner_id)
 
   return (
     <div
@@ -156,10 +158,15 @@ export default function VenueCard({ venue, currentUser, liveCount: propLiveCount
           ))}
         </div>
 
-        {/* Admin dot menu */}
-        {currentUser?.account_type === 'Admin' && (
+        {/* Admin / Venue Owner recurring tracker menu */}
+        {canManage && (
           <button
-            onClick={() => onAdminEdit(venue)}
+            onClick={(e) => {
+              e.stopPropagation()
+              if (onAdminEdit) onAdminEdit(venue)
+              else if (onOpenEvent && venue.schedule?.[0]) onOpenEvent(venue.schedule[0], venue)
+            }}
+            title="Manage Recurring Events"
             className="absolute top-3 right-3 z-20 w-7 h-7 rounded-full flex items-center justify-center text-white/40 hover:text-white/80 hover:bg-white/[0.1] transition-all"
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">

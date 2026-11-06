@@ -232,7 +232,12 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
         {/* 🟢 DYNAMIC ROLE PROFILES */}
         {entity.account_type === 'Venue' || (isPage && (!entity.page_type || entity.page_type === 'Venue')) ? (
             <div className="mt-6">
-                <ProfileVenue profile={entity} isOwner={false} onViewEntity={onViewEntity} />
+                <ProfileVenue
+                    profile={entity}
+                    currentUser={currentUser}
+                    isOwner={currentUser?.account_type === 'Admin' || Boolean(entity.owner_id && currentUser?.id === entity.owner_id)}
+                    onViewEntity={onViewEntity}
+                />
             </div>
         ) : entity.account_type === 'Performer' || (isPage && entity.page_type === 'Performer') ? (
             <div className="mt-6">

@@ -529,6 +529,7 @@ function MainApp() {
                 entity={viewingEntity} 
                 onClose={() => { setSearchParams({ tab: activeTab }) }} 
                 currentUser={effectiveUser} 
+                onViewEntity={onViewEntity}
                 forceAccess={forceFriendView ? 'friend' : null} 
             />
           ) : (
@@ -570,7 +571,7 @@ function MainApp() {
               {activeTab === 'Feed' && <MainFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Venues' && <EventsFeed currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Profile' && <Profile session={session} />}
-              {activeTab === 'Events' && <Events onViewEntity={onViewEntity} />}
+              {activeTab === 'Events' && <Events currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Leagues' && <Leaderboard currentUser={effectiveUser} onViewEntity={onViewEntity} />}
               {activeTab === 'Songbook' && <SongBook currentUser={effectiveUser} />}
               {activeTab === 'Settings' && <Settings currentUser={effectiveUser} setCurrentUser={setCurrentUser} />}

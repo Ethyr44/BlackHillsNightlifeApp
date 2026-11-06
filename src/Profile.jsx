@@ -427,7 +427,7 @@ export default function Profile({ session }) {
         {/* Dynamic role dashboards */}
         {profile.account_type === 'Venue' ? (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 8 }}>
-            <ProfileVenue profile={profile} isOwner={true} onViewEntity={null} />
+            <ProfileVenue profile={profile} currentUser={profile} isOwner={true} onViewEntity={null} />
           </div>
         ) : profile.account_type === 'Performer' ? (
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16, marginTop: 8 }}>

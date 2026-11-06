@@ -4,7 +4,13 @@ import { supabase } from './supabaseClient'
 import MapVenueOverlay from './MapVenueOverlay'
 import MapGiftOverlay from './MapGiftOverlay'
 import MapDeployGift from './MapDeployGift'
-import { getDistanceInFeet, getBlackHillsDate } from './utils'
+import {
+  getDistanceInFeet,
+  getBlackHillsDate,
+  parseEventBlackHillsDate,
+  doesEventOccurOnDate,
+  getEventCategory,
+} from './utils'
 
 // Generates coordinates guaranteed to be 25ft–85ft (within 100ft) of a venue
 function getOffsetWithin100Feet(venueLat, venueLng) {
@@ -127,11 +133,7 @@ export default function Map({ currentUser, onViewEntity }) {
 
       const [venueRes, eventRes, giftRes] = await Promise.all([
         supabase.from('pages').select('*').eq('page_type', 'Venue').not('lat', 'is', null),
-        supabase
-          .from('events')
-          .select('*')
-          .eq('status', 'approved')
-          .or(`event_date.gte.${today.toISOString()},recurring_weekly.eq.true,recurring_pattern.neq.none`),
+        supabase.from('events').select('*').eq('status', 'approved'),
         supabase.from('geo_gifts').select('*')
       ]);
 
@@ -139,42 +141,56 @@ export default function Map({ currentUser, onViewEntity }) {
       const eventData = eventRes.data;
       let giftData = giftRes.data || [];
 
-      // Filter eventData down to ONLY events happening today (Black Hills Time)
-      const todaysEventsFiltered = (eventData || []).filter(e => {
-          const safeDateStr = e.event_date.includes('Z') || e.event_date.includes('+') ? e.event_date : e.event_date + 'Z';
-          const eDate = getBlackHillsDate(safeDateStr);
-          const startDay = new Date(eDate.getFullYear(), eDate.getMonth(), eDate.getDate());
-          
-          const pattern = e.recurring_pattern || (e.recurring_weekly ? 'weekly' : 'none');
-          if (pattern === 'none') {
-              return eDate >= today && eDate < tomorrow;
-          }
-          
-          if (eDate.getDay() !== today.getDay() || today < startDay) return false;
-          if (pattern === 'weekly') return true;
-          if (pattern === 'biweekly') return Math.round((today - startDay) / (1000 * 60 * 60 * 24 * 7)) % 2 === 0;
-          if (pattern === 'monthly') return Math.ceil(startDay.getDate() / 7) === Math.ceil(today.getDate() / 7);
-          return false;
-      });
+      // Filter eventData down to ALL events (Recurring, Non-Recurring, Special) happening today (Black Hills Time)
+      const todaysEventsFiltered = (eventData || []).filter(e =>
+          doesEventOccurOnDate(e, today, { ignoreStartDateForRecurring: true })
+      ).map(e => ({
+          ...e,
+          category: getEventCategory(e)
+      }));
 
-      // Create a fast lookup Set of venue names that have events today
-      const venuesWithEvents = new Set(todaysEventsFiltered.map(e => e.venue));
+      const todayShortDay = today.toLocaleDateString('en-US', { weekday: 'short' });
+      const todayLongDay = today.toLocaleDateString('en-US', { weekday: 'long' });
 
       const processedVenues = venueData ? venueData.map(v => {
          const now = getBlackHillsDate()
-         const hasEventToday = venuesWithEvents.has(v.name);
+         const venueClean = (v.name || '').trim().toLowerCase()
+         const todaysEvents = todaysEventsFiltered.filter(
+             e => (e.venue || '').trim().toLowerCase() === venueClean
+         );
 
-         const todaysEvents = todaysEventsFiltered.filter(e => e.venue === v.name);
-
-         let isLiveNow = false;
-         if (todaysEvents.length > 0) {
-             const activeEvent = todaysEvents[0]
-             const start = getBlackHillsDate(activeEvent.event_date)
-             const end = new Date(start.getTime() + (4 * 60 * 60 * 1000));
-             if (now >= start && now <= end) isLiveNow = true;
+         // Also check legacy recurring schedule on the venue if no DB event matched
+         if (todaysEvents.length === 0 && Array.isArray(v.details?.schedule)) {
+             const legacySlot = v.details.schedule.find(
+                 s => s.day === todayShortDay || s.day === todayLongDay
+             );
+             if (legacySlot?.event) {
+                 todaysEvents.push({
+                     ...legacySlot.event,
+                     venue: v.name,
+                     category: 'Recurring'
+                 });
+             }
          }
 
-         return { ...v, isLive: isLiveNow, eventToday: hasEventToday ? todaysEvents[0] : null }
+         const hasEventToday = todaysEvents.length > 0;
+
+         let isLiveNow = false;
+         if (hasEventToday && todaysEvents[0].event_date) {
+             const activeEvent = todaysEvents[0]
+             const start = parseEventBlackHillsDate(activeEvent.event_date)
+             const startToday = new Date(today)
+             startToday.setHours(start.getHours(), start.getMinutes(), 0, 0)
+             const endToday = new Date(startToday.getTime() + (4 * 60 * 60 * 1000));
+             if (now >= startToday && now <= endToday) isLiveNow = true;
+         }
+
+         return {
+             ...v,
+             isLive: isLiveNow,
+             eventToday: hasEventToday ? todaysEvents[0] : null,
+             eventsToday: todaysEvents
+         }
       }) : []
 
       setVenues(processedVenues)
@@ -292,13 +308,14 @@ export default function Map({ currentUser, onViewEntity }) {
               // 2. Check if a KSocial session is currently active
               const isLive = venue.isLive;
               
-              // 3. Create the Marker Element
+              // 3. Create the Marker Element (Glows neon pink whenever an Event — Recurring, Non-Recurring, or Special — is taking place today)
               const el = document.createElement('div');
-              el.className = `rounded-full border-2 border-[#090812] shadow-lg transition-all ${
-                  hasEventToday || isLive 
-                  ? 'bg-[#ff2d78] w-5 h-5 animate-pulse shadow-[0_0_15px_rgba(255,45,120,0.8)] z-50' 
-                  : 'bg-purple-600 w-4 h-4 opacity-80'
-              }`;
+              if (hasEventToday || isLive) {
+                  el.className = 'w-5 h-5 rounded-full bg-[#ff2d78] border-2 border-white animate-pulse transition-all z-50';
+                  el.style.boxShadow = '0 0 14px #ff2d78, 0 0 28px rgba(255,45,120,0.95)';
+              } else {
+                  el.className = 'w-4 h-4 rounded-full bg-purple-600 border-2 border-[#090812] shadow-lg opacity-85 transition-all';
+              }
               el.style.cursor = 'pointer';
 
               // 4. Add a special icon inside the dot ONLY if it is KSocial Live

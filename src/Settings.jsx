@@ -78,6 +78,33 @@ export default function Settings({ currentUser, setCurrentUser }) {
     const saved = localStorage.getItem('bhnl_email_notifications_enabled')
     return saved !== null ? saved === 'true' : true
   })
+  const [themeMode, setThemeMode] = useState(() => {
+    const saved = localStorage.getItem('bhnl_theme_mode')
+    if (saved === 'light' || saved === 'dark') return saved
+    if (currentUser?.details?.theme_mode === 'light' || currentUser?.details?.theme_mode === 'dark') {
+      return currentUser.details.theme_mode
+    }
+    return 'dark'
+  })
+
+  const handleThemeModeChange = async (targetMode) => {
+    const nextMode = targetMode === 'light' || targetMode === 'dark'
+      ? targetMode
+      : (themeMode === 'dark' ? 'light' : 'dark')
+
+    setThemeMode(nextMode)
+    localStorage.setItem('bhnl_theme_mode', nextMode)
+    document.documentElement.setAttribute('data-theme', nextMode)
+    window.dispatchEvent(new CustomEvent('bhnl-theme-change', { detail: nextMode }))
+
+    if (currentUser?.id) {
+      const updatedDetails = { ...(currentUser?.details || {}), theme_mode: nextMode }
+      await supabase.from('profiles').update({ details: updatedDetails }).eq('id', currentUser.id)
+      if (setCurrentUser) {
+        setCurrentUser({ ...currentUser, details: updatedDetails })
+      }
+    }
+  }
 
   const handleSaveName = async () => {
     setSaveStatus('saving')
@@ -303,6 +330,61 @@ export default function Settings({ currentUser, setCurrentUser }) {
             <StatusPill />
           </div>
         </div>
+      </Section>
+
+      {/* Appearance */}
+      <Section title="Appearance" accent="#a855f7">
+        <div className="grid grid-cols-2 gap-2.5 mb-1">
+          <button
+            type="button"
+            onClick={() => handleThemeModeChange('dark')}
+            className="p-3.5 rounded-xl text-left transition-all duration-200 flex items-center gap-3"
+            style={{
+              background: themeMode === 'dark' ? 'rgba(79,140,255,0.16)' : 'rgba(255,255,255,0.04)',
+              border: themeMode === 'dark' ? '1px solid rgba(79,140,255,0.5)' : '1px solid rgba(255,255,255,0.08)',
+              boxShadow: themeMode === 'dark' ? '0 4px 16px rgba(79,140,255,0.2)' : 'none',
+            }}
+          >
+            <span className="text-xl">🌙</span>
+            <div>
+              <p className="text-xs font-bold text-white/90" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                Dark Mode
+              </p>
+              <p className="text-[10px] text-white/40" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Default + Moonshower
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleThemeModeChange('light')}
+            className="p-3.5 rounded-xl text-left transition-all duration-200 flex items-center gap-3"
+            style={{
+              background: themeMode === 'light' ? 'rgba(79,140,255,0.16)' : 'rgba(255,255,255,0.04)',
+              border: themeMode === 'light' ? '1px solid rgba(79,140,255,0.5)' : '1px solid rgba(255,255,255,0.08)',
+              boxShadow: themeMode === 'light' ? '0 4px 16px rgba(79,140,255,0.2)' : 'none',
+            }}
+          >
+            <span className="text-xl">🌅</span>
+            <div>
+              <p className="text-xs font-bold text-white/90" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+                Light Mode
+              </p>
+              <p className="text-[10px] text-white/40" style={{ fontFamily: 'Inter, sans-serif' }}>
+                Sunset Gradient • No Stars
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <Toggle
+          id="light-mode-toggle"
+          checked={themeMode === 'light'}
+          onChange={() => handleThemeModeChange()}
+          label="Light Mode (Sunset)"
+          description="Switch from the default Dark Mode to a warm sunset gradient palette with dark text and disable the Moonshower animated background."
+        />
       </Section>
 
       {/* Permissions */}

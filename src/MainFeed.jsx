@@ -42,23 +42,62 @@ export default function MainFeed({ currentUser, onViewEntity }) {
   }, [])
 
   useEffect(() => {
-    // 🟢 NEW: Intercept Web Share Target API Data
-    const params = new URLSearchParams(window.location.search);
-    const sharedTitle = params.get('share_title');
-    const sharedText = params.get('share_text');
-    const sharedUrl = params.get('share_url');
+    // 🟢 Intercept Web Share Target API Data (via URL params or sessionStorage fallback)
+    const params = new URLSearchParams(window.location.search)
+    let sharedTitle = params.get('share_title') || ''
+    let sharedText = params.get('share_text') || ''
+    let sharedUrl = params.get('share_url') || ''
+
+    if (!sharedTitle && !sharedText && !sharedUrl) {
+      const pendingRaw = sessionStorage.getItem('bhnl_pending_share')
+      if (pendingRaw) {
+        try {
+          const parsed = JSON.parse(pendingRaw)
+          sharedTitle = parsed.title || ''
+          sharedText = parsed.text || ''
+          sharedUrl = parsed.url || ''
+        } catch {}
+      }
+    }
 
     if (sharedTitle || sharedText || sharedUrl) {
-      // Combine whatever data the OS passed us into a single string
-      const contentPieces = [sharedTitle, sharedText, sharedUrl].filter(Boolean);
-      
-      setNewPostContent(contentPieces.join('\n\n')); // Auto-fill the composer
-      setComposerFocused(true); // Expand the composer UI
+      const rawPieces = [sharedTitle.trim(), sharedText.trim(), sharedUrl.trim()].filter(Boolean)
+      // Deduplicate if e.g. Android embeds the URL inside sharedText as well as sharedUrl
+      const contentPieces = []
+      for (const piece of rawPieces) {
+        if (!contentPieces.some(existing => existing.includes(piece))) {
+          contentPieces.push(piece)
+        }
+      }
+
+      setNewPostContent(contentPieces.join('\n\n'))
+      setComposerFocused(true)
+      sessionStorage.removeItem('bhnl_pending_share')
+      toast.success('Shared post loaded into composer!')
 
       // Clean up the URL so the post doesn't duplicate if the user refreshes the page
-      window.history.replaceState({}, document.title, '/?tab=Feed');
+      window.history.replaceState({}, document.title, '/?tab=Feed')
     }
-  }, []);
+  }, [])
+
+  const handlePasteSharedContent = async () => {
+    try {
+      if (!navigator.clipboard?.readText) {
+        toast.error('Tap inside the text box and use Paste.')
+        return
+      }
+      const clipText = (await navigator.clipboard.readText())?.trim()
+      if (!clipText) {
+        toast.error('Clipboard is empty.')
+        return
+      }
+      setNewPostContent(prev => (prev.trim() ? `${prev.trim()}\n\n${clipText}` : clipText))
+      setComposerFocused(true)
+      toast.success('Pasted from clipboard!')
+    } catch {
+      toast.error('Clipboard permission denied — long-press inside the box to paste.')
+    }
+  }
 
   const fetchLivingFeed = async (reset = false) => {
     if (page === 1 || reset) setLoading(true)
@@ -224,13 +263,27 @@ export default function MainFeed({ currentUser, onViewEntity }) {
             className="flex items-center justify-between px-4 py-2.5"
             style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
           >
-            <label className="flex items-center gap-1.5 cursor-pointer text-white/30 hover:text-white/60 transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ fontFamily: 'Inter, sans-serif' }}>Photo</span>
-              <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-            </label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 cursor-pointer text-white/30 hover:text-white/60 transition-colors">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ fontFamily: 'Inter, sans-serif' }}>Photo</span>
+                <input type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
+              </label>
+
+              <button
+                type="button"
+                onClick={handlePasteSharedContent}
+                className="flex items-center gap-1.5 cursor-pointer text-white/30 hover:text-[#4f8cff] transition-colors"
+                title="Paste copied Facebook/Event link or text"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ fontFamily: 'Inter, sans-serif' }}>Paste Link</span>
+              </button>
+            </div>
 
             <button
               type="submit"

@@ -363,3 +363,195 @@ nav svg, header svg, .neon-icon {
   content-visibility: auto;
   contain-intrinsic-size: 0 220px;
 }
+
+/* 23. Light Mode Theme Palette (Warm Sunset Gradient + High-Contrast Dark Typography) */
+html[data-theme="light"] {
+  --bg-base: #f2916b;
+  --bg-surface: rgba(255, 241, 228, 0.84);
+  --bg-elevated: rgba(255, 245, 236, 0.9);
+  --bg-hover: rgba(248, 220, 200, 0.85);
+  --bg-card: rgba(255, 242, 230, 0.8);
+  --bg-card-hover: rgba(255, 246, 238, 0.92);
+
+  --border-subtle: rgba(74, 25, 58, 0.1);
+  --border-default: rgba(74, 25, 58, 0.16);
+  --border-strong: rgba(74, 25, 58, 0.25);
+
+  --text-primary: #160c24;
+  --text-secondary: #2b193f;
+  --text-muted: #432a5d;
+}
+
+html[data-theme="light"] body {
+  background: linear-gradient(165deg, #f5b971 0%, #f2916b 34%, #e57a93 68%, #b388d9 100%) fixed !important;
+  color: #160c24 !important;
+}
+
+/* Header, BottomNav & Ticker surfaces in Sunset Light Mode */
+html[data-theme="light"] header {
+  background: linear-gradient(90deg, rgba(255, 236, 216, 0.9) 0%, rgba(253, 224, 218, 0.9) 50%, rgba(238, 220, 248, 0.9) 100%) !important;
+  border-bottom-color: rgba(74, 25, 58, 0.15) !important;
+  box-shadow: 0 4px 20px rgba(74, 25, 58, 0.1) !important;
+}
+
+html[data-theme="light"] nav > div:first-child {
+  background: linear-gradient(90deg, rgba(255, 236, 216, 0.92) 0%, rgba(253, 224, 218, 0.92) 50%, rgba(238, 220, 248, 0.92) 100%) !important;
+  border-top-color: rgba(74, 25, 58, 0.15) !important;
+  box-shadow: 0 -4px 20px rgba(74, 25, 58, 0.1) !important;
+}
+
+/* Dark structural backgrounds convert to warm frosted sunset glass surfaces */
+html[data-theme="light"] .bg-\[\#070d1a\],
+html[data-theme="light"] .bg-\[\#070d1a\]\/80,
+html[data-theme="light"] .bg-\[\#070d1a\]\/90,
+html[data-theme="light"] .bg-\[\#070d1a\]\/95,
+html[data-theme="light"] .bg-\[\#090812\],
+html[data-theme="light"] .bg-\[\#090812\]\/80,
+html[data-theme="light"] .bg-\[\#090812\]\/95,
+html[data-theme="light"] .bg-\[\#0b1324\]\/95,
+html[data-theme="light"] .bg-\[\#0b1326\],
+html[data-theme="light"] .bg-\[\#0e1828\],
+html[data-theme="light"] .bg-\[\#0e1828\]\/90,
+html[data-theme="light"] .bg-\[\#0a1228\],
+html[data-theme="light"] .bg-\[\#0B0F19\],
+html[data-theme="light"] .bg-\[\#05070A\],
+html[data-theme="light"] .bg-\[\#030712\],
+html[data-theme="light"] .bg-\[\#030712\]\/90,
+html[data-theme="light"] .bg-\[\#030712\]\/95,
+html[data-theme="light"] .bg-gray-900,
+html[data-theme="light"] .bg-gray-900\/50,
+html[data-theme="light"] .bg-gray-900\/80,
+html[data-theme="light"] .bg-gray-800,
+html[data-theme="light"] .bg-gray-800\/50,
+html[data-theme="light"] .bg-slate-800\/50,
+html[data-theme="light"] .bg-black,
+html[data-theme="light"] .bg-black\/20,
+html[data-theme="light"] .bg-black\/30,
+html[data-theme="light"] .bg-black\/40,
+html[data-theme="light"] .bg-black\/50,
+html[data-theme="light"] .bg-black\/60,
+html[data-theme="light"] .bg-black\/80 {
+  background-color: rgba(255, 241, 228, 0.82) !important;
+  border-color: rgba(74, 25, 58, 0.16) !important;
+  color: #160c24 !important;
+  box-shadow: 0 4px 20px rgba(74, 25, 58, 0.1);
+}
+
+/* Inline translucent cards & panels (matching both React's spaced rgba and unspaced rgba) */
+html[data-theme="light"] .venue-card,
+html[data-theme="light"] .feed-card,
+html[data-theme="light"] .glass-card,
+html[data-theme="light"] .glass-card-elevated,
+html[data-theme="light"] .bg-white\/\[0\.02\],
+html[data-theme="light"] .bg-white\/\[0\.03\],
+html[data-theme="light"] .bg-white\/\[0\.04\],
+html[data-theme="light"] .bg-white\/\[0\.05\],
+html[data-theme="light"] .bg-white\/\[0\.06\],
+html[data-theme="light"] .bg-white\/\[0\.07\],
+html[data-theme="light"] [style*="rgba(255, 255, 255, 0.0"],
+html[data-theme="light"] [style*="rgba(255,255,255,0.0"],
+html[data-theme="light"] [style*="rgba(10, 18, 40"],
+html[data-theme="light"] [style*="rgba(10,18,40"],
+html[data-theme="light"] [style*="rgba(7, 13, 26"],
+html[data-theme="light"] [style*="rgba(7,13,26"],
+html[data-theme="light"] [style*="rgba(0, 0, 0, 0.2"],
+html[data-theme="light"] [style*="rgba(0,0,0,0.2"],
+html[data-theme="light"] [style*="rgba(0, 0, 0, 0.3"],
+html[data-theme="light"] [style*="rgba(0,0,0,0.3"] {
+  background-color: rgba(255, 242, 230, 0.8) !important;
+  border-color: rgba(74, 25, 58, 0.16) !important;
+  box-shadow: 0 4px 18px rgba(74, 25, 58, 0.1) !important;
+}
+
+/* VenueCard image overlay softens in Sunset Light Mode so dark text stays legible */
+html[data-theme="light"] .venue-card [style*="linear-gradient(90deg"] {
+  background: linear-gradient(90deg, rgba(255, 238, 222, 0.88) 0%, rgba(255, 230, 218, 0.55) 100%) !important;
+}
+
+/* Primary Typography Contrast — Deep Dark Espresso/Plum */
+html[data-theme="light"] .text-white,
+html[data-theme="light"] .text-white\/90,
+html[data-theme="light"] .text-white\/85,
+html[data-theme="light"] .text-white\/80,
+html[data-theme="light"] .text-white\/75,
+html[data-theme="light"] .text-white\/70,
+html[data-theme="light"] .text-gray-100,
+html[data-theme="light"] .text-gray-200,
+html[data-theme="light"] .text-gray-300 {
+  color: #160c24 !important;
+}
+
+/* Secondary & Muted Typography Contrast — Dark Rich Plum-Charcoal so all labels/timestamps are comfortably visible */
+html[data-theme="light"] .text-white\/65,
+html[data-theme="light"] .text-white\/60,
+html[data-theme="light"] .text-white\/55,
+html[data-theme="light"] .text-white\/50,
+html[data-theme="light"] .text-white\/45,
+html[data-theme="light"] .text-white\/40,
+html[data-theme="light"] .text-white\/35,
+html[data-theme="light"] .text-white\/30,
+html[data-theme="light"] .text-white\/25,
+html[data-theme="light"] .text-white\/20,
+html[data-theme="light"] .text-\[rgba\(255\,255\,255\,0\.4\)\],
+html[data-theme="light"] .text-gray-400,
+html[data-theme="light"] .text-gray-500,
+html[data-theme="light"] .text-gray-600,
+html[data-theme="light"] .text-slate-400 {
+  color: #351e4d !important;
+}
+
+/* Catch all inline React style={{ color: 'rgba(255,255,255,...)' }} and light ticker/badge text */
+html[data-theme="light"] [style*="color: rgba(255, 255, 255"],
+html[data-theme="light"] [style*="color:rgba(255,255,255"],
+html[data-theme="light"] [style*="color: rgb(255, 255, 255"],
+html[data-theme="light"] [style*="color:#fff"],
+html[data-theme="light"] [style*="color: rgba(180, 210, 255"],
+html[data-theme="light"] [style*="color: rgba(200, 210, 230"] {
+  color: #241338 !important;
+}
+
+/* Accent text colors darkened slightly in Light Mode for strong contrast against warm sunset surfaces */
+html[data-theme="light"] .text-\[\#22d4c8\],
+html[data-theme="light"] .text-\[\#22d4c8\]\/70,
+html[data-theme="light"] .text-cyan-300,
+html[data-theme="light"] .text-cyan-400 {
+  color: #0b6e69 !important;
+}
+
+html[data-theme="light"] .text-\[\#4f8cff\],
+html[data-theme="light"] .text-\[\#4f8cff\]\/70,
+html[data-theme="light"] .text-\[\#4f8cff\]\/50,
+html[data-theme="light"] .text-blue-300,
+html[data-theme="light"] .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+
+/* Keep crisp white text inside solid colored CTA buttons, gradient pills & icon badges */
+html[data-theme="light"] .bg-blue-600,
+html[data-theme="light"] .bg-purple-600,
+html[data-theme="light"] .bg-red-600,
+html[data-theme="light"] .bg-green-600,
+html[data-theme="light"] .bg-pink-600,
+html[data-theme="light"] .bg-\[\#ff2d78\],
+html[data-theme="light"] .bg-\[\#4f8cff\],
+html[data-theme="light"] [style*="linear-gradient(135deg, rgb(79, 140, 255)"],
+html[data-theme="light"] [style*="linear-gradient(135deg, #4f8cff"],
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#4f8cff\] span,
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#22d4c8\] span,
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#f5557a\] span,
+html[data-theme="light"] .bg-gradient-to-br.from-\[\#8a94a6\] span {
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select {
+  color: #160c24 !important;
+  background-color: rgba(255, 247, 240, 0.88) !important;
+  border-color: rgba(74, 25, 58, 0.22) !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #5e4173 !important;
+}

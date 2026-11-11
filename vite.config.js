@@ -17,10 +17,22 @@ export default defineConfig({
         name: 'Black Hills Nightlife',
         short_name: 'BHNL',
         description: 'The ultimate nightlife and entertainment guide for the Black Hills.',
+        start_url: '/',
+        scope: '/',
         theme_color: '#030712',
         background_color: '#030712',
         display: 'standalone',
         orientation: 'portrait',
+        share_target: {
+          action: '/?tab=Feed',
+          method: 'GET',
+          enctype: 'application/x-www-form-urlencoded',
+          params: {
+            title: 'share_title',
+            text: 'share_text',
+            url: 'share_url'
+          }
+        },
         icons: [
           {
             src: 'pwa-192x192.png',

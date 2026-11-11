@@ -61,8 +61,13 @@ const getInitialSplash = () => {
 
 function MainApp() {
   const [searchParams, setSearchParams] = useSearchParams()
-  // 🟢 FIXED: Default tab is now 'Home'
-  const activeTab = searchParams.get('tab') || "Home"
+  const hasSharePayload = Boolean(
+      searchParams.get('share_title') ||
+      searchParams.get('share_text') ||
+      searchParams.get('share_url')
+  )
+  // Default tab is 'Home', or 'Feed' if launched via Web Share Target ("Share to BHNL")
+  const activeTab = searchParams.get('tab') || (hasSharePayload ? "Feed" : "Home")
   
   // 🟢 THE FIX: Immediate Projector Intercept
   // If the URL is "?tab=Projector", render ONLY the Projector and nothing else!
@@ -91,6 +96,26 @@ function MainApp() {
 
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
+
+  // Capture incoming "Share to BHNL" payload immediately so it persists across auth/lazy loads
+  useEffect(() => {
+      const sTitle = searchParams.get('share_title')
+      const sText = searchParams.get('share_text')
+      const sUrl = searchParams.get('share_url')
+      if (sTitle || sText || sUrl) {
+          sessionStorage.setItem('bhnl_pending_share', JSON.stringify({
+              title: sTitle || '',
+              text: sText || '',
+              url: sUrl || ''
+          }))
+      }
+  }, [searchParams])
+
+  // Apply Dark Mode (default) or Light Mode on mount
+  useEffect(() => {
+      const savedTheme = localStorage.getItem('bhnl_theme_mode') || 'dark'
+      document.documentElement.setAttribute('data-theme', savedTheme)
+  }, [])
 
   // 1. You can default this to an empty object now
   const [systemConfig, setSystemConfig] = useState({})
@@ -137,6 +162,11 @@ function MainApp() {
       const nowIso = new Date().toISOString();
       const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
       if (data) {
+        if (data.details?.theme_mode && !localStorage.getItem('bhnl_theme_mode')) {
+          localStorage.setItem('bhnl_theme_mode', data.details.theme_mode);
+          document.documentElement.setAttribute('data-theme', data.details.theme_mode);
+          window.dispatchEvent(new CustomEvent('bhnl-theme-change', { detail: data.details.theme_mode }));
+        }
         setCurrentUser({ ...data, last_active: nowIso });
         supabase.from('profiles').update({ last_active: nowIso }).eq('id', session.user.id).then(() => {});
         

@@ -12,8 +12,12 @@ export default function MapVenueOverlay({ venue, distance, isProcessing, onCheck
     const hasEventToday = eventsToday.length > 0;
 
     return (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+        <div
+            onClick={onClose}
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+        >
             <div
+                onClick={e => e.stopPropagation()}
                 className={`bg-[#090812] border-2 w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.6)] ${
                     hasEventToday
                         ? 'border-[#ff2d78]/60 shadow-[0_0_35px_rgba(255,45,120,0.35)]'

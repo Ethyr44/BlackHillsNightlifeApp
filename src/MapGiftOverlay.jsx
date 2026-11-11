@@ -9,8 +9,14 @@ export default function MapGiftOverlay({ gift, distance, isProcessing, onClaim, 
             : null
 
     return (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-[#090812] border-2 border-pink-500/30 w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(219,39,119,0.3)]">
+        <div
+            onClick={onClose}
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+        >
+            <div
+                onClick={e => e.stopPropagation()}
+                className="bg-[#090812] border-2 border-pink-500/30 w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(219,39,119,0.3)]"
+            >
                 
                 {/* Header Image/Banner */}
                 <div className="h-32 bg-gradient-to-br from-pink-600/20 to-purple-600/20 relative">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import SongRow from './SongRow'
+import { extractSetlistsFromProfile, updateDualSetlistOnProfile } from './utils'
 
 const CAT_CONFIG = {
   'Fave':      { icon: '🌟', color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
@@ -11,11 +12,15 @@ const CAT_CONFIG = {
 
 export default function Repertoire({ userId, isOwner, canSuggest, currentUser, profileUser, trigger, setTrigger }) {
   const [songs, setSongs] = useState([])
-  const [activeSetlist, setActiveSetlist] = useState([])
+  const [sideAIds, setSideAIds] = useState([])
+  const [sideBIds, setSideBIds] = useState([])
+  const [activeSide, setActiveSide] = useState('A')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
+  const activeSetlist = activeSide === 'B' ? sideBIds : sideAIds
 
   const fetchSonglist = async () => {
     setLoading(true)
@@ -25,12 +30,24 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
   }
 
   const fetchProfileSetlist = async () => {
-    const { data } = await supabase.from('profiles').select('active_setlist').eq('id', userId).single()
-    if (data && data.active_setlist) setActiveSetlist(data.active_setlist)
-    else setActiveSetlist([])
+    const { data } = await supabase.from('profiles').select('active_setlist, details').eq('id', userId).single()
+    if (data) {
+      const parsed = extractSetlistsFromProfile(data)
+      setSideAIds(parsed.sideA)
+      setSideBIds(parsed.sideB)
+      setActiveSide(parsed.activeSide)
+    } else {
+      setSideAIds([])
+      setSideBIds([])
+    }
   }
 
-  useEffect(() => { fetchSonglist(); fetchProfileSetlist() }, [userId, trigger])
+  useEffect(() => {
+    fetchSonglist()
+    fetchProfileSetlist()
+    window.addEventListener('setlistUpdated', fetchProfileSetlist)
+    return () => window.removeEventListener('setlistUpdated', fetchProfileSetlist)
+  }, [userId, trigger])
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -54,17 +71,37 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
     fetchSonglist()
   }
 
+  const handleSwitchTargetSide = async (side) => {
+    setActiveSide(side)
+    if (isOwner && userId) {
+      await updateDualSetlistOnProfile(supabase, userId, {
+        sideA: sideAIds,
+        sideB: sideBIds,
+        activeSide: side
+      })
+      window.dispatchEvent(new Event('setlistUpdated'))
+    }
+  }
+
   const handleToggleSetlist = async (songId) => {
     let newSetlist = [...activeSetlist]
     if (newSetlist.includes(songId)) {
       newSetlist = newSetlist.filter(id => id !== songId)
     } else {
-      if (newSetlist.length >= 7) return alert('Setlist is full! (Max 7)')
+      if (newSetlist.length >= 7) return alert(`Side ${activeSide} is full! (Max 7 songs)`)
       newSetlist.push(songId)
     }
-    const { error } = await supabase.from('profiles').update({ active_setlist: newSetlist }).eq('id', userId)
+    const nextSideA = activeSide === 'A' ? newSetlist : sideAIds
+    const nextSideB = activeSide === 'B' ? newSetlist : sideBIds
+
+    const { error } = await updateDualSetlistOnProfile(supabase, userId, {
+      sideA: nextSideA,
+      sideB: nextSideB,
+      activeSide
+    })
     if (error) { alert('Network Error: Could not update setlist.'); return }
-    setActiveSetlist(newSetlist)
+    setSideAIds(nextSideA)
+    setSideBIds(nextSideB)
     if (setTrigger) setTrigger(prev => prev + 1)
     window.dispatchEvent(new Event('setlistUpdated'))
   }
@@ -113,6 +150,35 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
 
       {isExpanded && (
         <div className="border-t border-white/[0.06] p-4 space-y-3 animate-fade-in">
+          {/* Active Setlist Side Selector */}
+          {isOwner && (
+            <div className="flex items-center justify-between bg-white/[0.03] border border-white/[0.07] rounded-xl px-3 py-2">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-white/50">
+                Editing Setlist:
+              </span>
+              <div className="inline-flex rounded-lg p-0.5 bg-white/[0.04] border border-white/[0.08]">
+                {['A', 'B'].map(side => {
+                  const isSelected = activeSide === side
+                  const count = side === 'A' ? sideAIds.length : sideBIds.length
+                  return (
+                    <button
+                      key={side}
+                      type="button"
+                      onClick={() => handleSwitchTargetSide(side)}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-[#4f8cff] to-[#22d4c8] text-white'
+                          : 'text-white/45 hover:text-white/80'
+                      }`}
+                    >
+                      Side {side} ({count}/7)
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Search */}
           <div className="relative">
             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 text-sm">🔍</div>
@@ -158,7 +224,7 @@ export default function Repertoire({ userId, isOwner, canSuggest, currentUser, p
                                 : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
                             }`}
                           >
-                            {inSetlist ? '− Set' : '+ Set'}
+                            {inSetlist ? `− Side ${activeSide}` : `+ Side ${activeSide}`}
                           </button>
                           <div className="flex gap-1">
                             {entry.category !== 'Fave' && (

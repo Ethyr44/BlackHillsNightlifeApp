@@ -1,12 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabaseClient'
 import { toast } from './GlobalToast'
+import {
+    CONSUMABLE_CATALOG,
+    consumeInventoryAsset,
+    awardKSocialPoints,
+    extractSetlistsFromProfile,
+    updateDualSetlistOnProfile
+} from './utils'
 
 export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [session, setSession] = useState(null)
     const [singers, setSingers] = useState([])
     const [isLoading, setIsLoading] = useState(true)
     const [activeView, setActiveView] = useState('Menu')
+    const [liveProfile, setLiveProfile] = useState(currentUser || null)
     
     // 🟢 FIX: This stops the white screen crash during the Voting phase
     const [votedFor, setVotedFor] = useState({})
@@ -19,7 +27,13 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const [hasUsedSupervote, setHasUsedSupervote] = useState(() => localStorage.getItem(`sv_${sessionId}`) === 'used')
     const [multiStars, setMultiStars] = useState({ performance: 0, wow: 0, originality: 0 })
 
-    const [userSetlist, setUserSetlist] = useState([])
+    // Dual Setlists: Side A & Side B
+    const [sideASongs, setSideASongs] = useState([])
+    const [sideBSongs, setSideBSongs] = useState([])
+    const [activeSide, setActiveSide] = useState('A')
+    const setlistTouchRef = useRef(null)
+
+    const userSetlist = activeSide === 'B' ? sideBSongs : sideASongs
     const [searchQuery, setSearchQuery] = useState('')
     const [songResults, setSongResults] = useState([])
     const [searching, setSearching] = useState(false)
@@ -44,14 +58,36 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         if (sData) setSingers(sData)
         
         if (currentUser && !isGuest) {
-            const { data: pData } = await supabase.from('profiles').select('active_setlist').eq('id', currentUser.id).maybeSingle()
-            if (pData?.active_setlist?.length > 0) {
-                const { data: songs } = await supabase.from('songs').select('id, title, artist').in('id', pData.active_setlist)
-                if (songs) setUserSetlist(pData.active_setlist.map(id => songs.find(s => s.id === id)).filter(Boolean))
+            const { data: pData } = await supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
+            if (pData) {
+                setLiveProfile(pData)
+                const parsed = extractSetlistsFromProfile(pData)
+                setActiveSide(parsed.activeSide)
+                const allSongIds = Array.from(new Set([...parsed.sideA, ...parsed.sideB]))
+                if (allSongIds.length > 0) {
+                    const { data: songs } = await supabase.from('songs').select('id, title, artist').in('id', allSongIds)
+                    if (songs) {
+                        setSideASongs(parsed.sideA.map(id => songs.find(s => s.id === id)).filter(Boolean))
+                        setSideBSongs(parsed.sideB.map(id => songs.find(s => s.id === id)).filter(Boolean))
+                    }
+                } else {
+                    setSideASongs([])
+                    setSideBSongs([])
+                }
             }
         }
         setIsLoading(false)
     }
+
+    // Award +20 KSocial Points once per session joined
+    useEffect(() => {
+        if (!currentUser?.id || isGuest || !sessionId) return
+        awardKSocialPoints(supabase, currentUser.id, 20, {
+            title: 'Joined KSocial Session!',
+            guardKey: `ksocial_join_${sessionId}`,
+            emitToast: true
+        })
+    }, [sessionId, currentUser?.id, isGuest])
 
     useEffect(() => {
         if (!currentUser) return setIsLoading(false)
@@ -67,6 +103,47 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
 
     const activeSinger = singers.find(s => s.status === 'singing' || s.status === 'voting' || s.status === 'results')
     const myEntry = singers.find(s => s.user_id === currentUser?.id)
+
+    // Helper to resolve Microphone (incoming x2) & Megaphone (outgoing x2) vote multipliers
+    const applyVoteBuffsAndAward = async (baseVotePoints) => {
+        if (!activeSinger || baseVotePoints <= 0) return { buffMultiplier: 1, hasMegaphone: false, singerHasMic: false }
+        let hasMegaphone = Boolean(liveProfile?.details?.active_buffs?.megaphone)
+        let singerHasMic = false
+
+        if (activeSinger.user_id) {
+            const { data: singerProf } = await supabase
+                .from('profiles')
+                .select('details')
+                .eq('id', activeSinger.user_id)
+                .maybeSingle()
+            singerHasMic = Boolean(singerProf?.details?.active_buffs?.microphone)
+        }
+
+        const buffMultiplier = (hasMegaphone ? 2 : 1) * (singerHasMic ? 2 : 1)
+        const totalVotePoints = baseVotePoints * buffMultiplier
+
+        // Clear Voter's single-song Megaphone buff once used
+        if (hasMegaphone && currentUser?.id && !isGuest) {
+            const nextDetails = {
+                ...(liveProfile?.details || {}),
+                active_buffs: {
+                    ...(liveProfile?.details?.active_buffs || {}),
+                    megaphone: false
+                }
+            }
+            await supabase.from('profiles').update({ details: nextDetails }).eq('id', currentUser.id)
+            setLiveProfile(prev => (prev ? { ...prev, details: nextDetails } : prev))
+        }
+
+        // Award +1 KSocial Point per Vote Point received to the singer
+        if (activeSinger.user_id && totalVotePoints > 0) {
+            await awardKSocialPoints(supabase, activeSinger.user_id, totalVotePoints, {
+                title: 'Stage Votes Received!'
+            })
+        }
+
+        return { buffMultiplier, hasMegaphone, singerHasMic, totalVotePoints }
+    }
 
     // Reset Full Mode Taps when a new singer goes on stage
     useEffect(() => {
@@ -86,12 +163,14 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     useEffect(() => {
         if (tapCount > 0 && activeSinger?.status === 'voting' && session?.voting_style === 'tap') {
             const timer = setTimeout(async () => {
-                const pointsToSend = tapCount
-                setTapCount(0) 
+                const rawPoints = tapCount
+                setTapCount(0)
+                const { buffMultiplier } = await applyVoteBuffsAndAward(rawPoints)
+                const effectiveTaps = rawPoints * buffMultiplier
                 await supabase.rpc('submit_stage_vote', {
                     p_singer_id: activeSinger.id,
                     p_voting_style: 'tap',
-                    p_taps: pointsToSend,
+                    p_taps: effectiveTaps,
                     p_perf_stars: 0, p_wow_stars: 0, p_orig_stars: 0, p_is_supervote: superVoteActive
                 })
             }, 1000)
@@ -126,29 +205,73 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         setSearching(false)
     }
 
-    const updateSetlistOnServer = async (newSetlistIds) => {
-        if (isGuest || !currentUser) return;
-        const { error } = await supabase.rpc('update_user_setlist', { p_user_id: currentUser.id, p_new_setlist: newSetlistIds });
-        if (error) toast.error("Failed to update setlist: " + error.message);
+    const handleSwitchSide = async (nextSide) => {
+        if (nextSide === activeSide) return
+        setActiveSide(nextSide)
+        if (!isGuest && currentUser?.id) {
+            await updateDualSetlistOnProfile(supabase, currentUser.id, {
+                sideA: sideASongs.map(s => s.id),
+                sideB: sideBSongs.map(s => s.id),
+                activeSide: nextSide
+            })
+            window.dispatchEvent(new Event('setlistUpdated'))
+        }
+    }
+
+    const handleSetlistTouchStart = (e) => {
+        e.stopPropagation()
+        if (!e.touches || e.touches.length !== 1) return
+        setlistTouchRef.current = {
+            x: e.touches[0].clientX,
+            y: e.touches[0].clientY
+        }
+    }
+
+    const handleSetlistTouchEnd = (e) => {
+        e.stopPropagation()
+        if (!setlistTouchRef.current || !e.changedTouches || e.changedTouches.length === 0) return
+        const dx = e.changedTouches[0].clientX - setlistTouchRef.current.x
+        const dy = e.changedTouches[0].clientY - setlistTouchRef.current.y
+        setlistTouchRef.current = null
+        if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+            handleSwitchSide(activeSide === 'A' ? 'B' : 'A')
+        }
+    }
+
+    const syncDualSetlistsToServer = async (nextSideASongs, nextSideBSongs, side = activeSide) => {
+        if (isGuest || !currentUser?.id) return
+        const { error } = await updateDualSetlistOnProfile(supabase, currentUser.id, {
+            sideA: nextSideASongs.map(s => s.id),
+            sideB: nextSideBSongs.map(s => s.id),
+            activeSide: side
+        })
+        if (error) toast.error("Failed to update setlist: " + error.message)
+        else window.dispatchEvent(new Event('setlistUpdated'))
     }
 
     const addToSetlist = async (song) => {
-        if (userSetlist.length >= 7) return toast.error("Setlist max is 7 songs.")
-        if (userSetlist.find(s => s.id === song.id)) return toast.error("Song already in setlist.")
+        if (userSetlist.length >= 7) return toast.error(`Side ${activeSide} max is 7 songs.`)
+        if (userSetlist.find(s => s.id === song.id)) return toast.error(`Song already in Side ${activeSide}.`)
         const newList = [...userSetlist, song]
-        setUserSetlist(newList)
-        await updateSetlistOnServer(newList.map(s => s.id));
-        toast.success("Added to Setlist!")
+        const nextA = activeSide === 'A' ? newList : sideASongs
+        const nextB = activeSide === 'B' ? newList : sideBSongs
+        setSideASongs(nextA)
+        setSideBSongs(nextB)
+        await syncDualSetlistsToServer(nextA, nextB, activeSide)
+        toast.success(`Added to Side ${activeSide}!`)
     }
 
     const removeFromSetlist = async (indexToRemove) => {
         const newList = userSetlist.filter((_, idx) => idx !== indexToRemove)
-        setUserSetlist(newList)
-        await updateSetlistOnServer(newList.map(s => s.id));
+        const nextA = activeSide === 'A' ? newList : sideASongs
+        const nextB = activeSide === 'B' ? newList : sideBSongs
+        setSideASongs(nextA)
+        setSideBSongs(nextB)
+        await syncDualSetlistsToServer(nextA, nextB, activeSide)
     }
 
     const submitQueueToHost = async () => {
-        if (userSetlist.length === 0) return toast.error("Your Setlist is empty!")
+        if (userSetlist.length === 0) return toast.error(`Your Side ${activeSide} setlist is empty!`)
         const payload = {
             session_id: sessionId, user_id: currentUser.id, singer_name: currentUser.username || tempStageName,
             song_id: userSetlist[0].id, song_title: userSetlist[0].title, song_artist: userSetlist[0].artist,
@@ -156,7 +279,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         }
         await supabase.from('session_singers').insert([payload])
         setActiveView('Stage')
-        toast.success("Setlist submitted to Host!")
+        toast.success(`Side ${activeSide} submitted to Host!`)
     }
 
     // 🟢 VOTING ENGINE INTERACTIONS
@@ -181,14 +304,23 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     const submitFinalVote = async () => {
         if (!activeSinger) return
 
-        // 🟢 FIX: Perfectly mapped parameters to the SQL function
+        const rawStarsTotal =
+            session.voting_style === 'stars'
+                ? multiStars.performance
+                : multiStars.performance + multiStars.wow + multiStars.originality + (session.voting_style === 'full' ? fullModeTaps : 0)
+        const superMult = superVoteActive ? 2 : 1
+        const baseVotePts = rawStarsTotal * superMult
+
+        const { buffMultiplier, hasMegaphone, singerHasMic } = await applyVoteBuffsAndAward(baseVotePts)
+
+        // Apply Microphone / Megaphone multiplier to submitted vote values
         const { error } = await supabase.rpc('submit_stage_vote', {
             p_singer_id: activeSinger.id,
             p_voting_style: session.voting_style,
-            p_taps: fullModeTaps,
-            p_perf_stars: multiStars.performance,
-            p_wow_stars: multiStars.wow,
-            p_orig_stars: multiStars.originality,
+            p_taps: fullModeTaps * buffMultiplier,
+            p_perf_stars: multiStars.performance * buffMultiplier,
+            p_wow_stars: multiStars.wow * buffMultiplier,
+            p_orig_stars: multiStars.originality * buffMultiplier,
             p_is_supervote: superVoteActive
         })
 
@@ -198,8 +330,23 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
             setVotedFor(prev => ({ ...prev, [activeSinger.id]: true }))
             setMultiStars({ performance: 0, wow: 0, originality: 0 })
             setSuperVoteActive(false)
-            toast.success("Votes Locked In!")
+            if (hasMegaphone || singerHasMic) {
+                toast.success(`Votes Locked In! (${buffMultiplier}x Item Boost Applied!)`)
+            } else {
+                toast.success("Votes Locked In!")
+            }
         }
+    }
+
+    const handleConsumeInBackpack = async (assetName) => {
+        if (!currentUser?.id) return
+        const res = await consumeInventoryAsset(supabase, currentUser.id, assetName)
+        if (!res.ok) {
+            toast.error(res.message)
+            return
+        }
+        if (res.updatedProfile) setLiveProfile(res.updatedProfile)
+        toast.success(res.message)
     }
 
     if (isLoading) return <div className="text-white text-center py-20 animate-pulse">Connecting to Stage...</div>
@@ -292,11 +439,44 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
         return (
             <div className="max-w-md mx-auto p-4 animate-fade-in pb-20">
                 <button onClick={() => setActiveView('Menu')} className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-white mb-6">← Back to Menu</button>
-                <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">Your Setlist</h3>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-6">{userSetlist.length} / 7 Songs Ready</p>
+                <div className="flex items-center justify-between mb-2">
+                    <div>
+                        <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest leading-none">
+                            Setlist · Side {activeSide}
+                        </h3>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                            {userSetlist.length} / 7 Songs · Swipe left/right to switch sides
+                        </p>
+                    </div>
+                    <div className="inline-flex rounded-xl p-1 bg-black border border-gray-800">
+                        {['A', 'B'].map(side => {
+                            const isSelected = activeSide === side
+                            const count = side === 'A' ? sideASongs.length : sideBSongs.length
+                            return (
+                                <button
+                                    key={side}
+                                    type="button"
+                                    onClick={() => handleSwitchSide(side)}
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                        isSelected
+                                            ? 'bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg'
+                                            : 'text-gray-500 hover:text-white'
+                                    }`}
+                                >
+                                    Side {side} ({count})
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
 
-                <div className="space-y-2 mb-8 bg-[#090812] border border-gray-800 p-4 rounded-2xl">
-                    {userSetlist.length === 0 ? <p className="text-gray-600 text-xs italic text-center py-4">No songs added.</p> :
+                <div
+                    data-no-page-swipe="true"
+                    onTouchStart={handleSetlistTouchStart}
+                    onTouchEnd={handleSetlistTouchEnd}
+                    className="space-y-2 mb-6 mt-4 bg-[#090812] border border-gray-800 p-4 rounded-2xl select-none"
+                >
+                    {userSetlist.length === 0 ? <p className="text-gray-600 text-xs italic text-center py-4">No songs added to Side {activeSide} yet. Swipe left/right to flip sides.</p> :
                         userSetlist.map((song, i) => (
                             <div key={i} className="flex justify-between items-center bg-black p-3 rounded-xl border border-gray-800">
                                 <div className="truncate pr-2">
@@ -310,11 +490,11 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                 </div>
 
                 <button disabled={userSetlist.length === 0 || myEntry} onClick={submitQueueToHost} className="w-full mb-8 bg-purple-600 disabled:bg-gray-800 disabled:text-gray-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest shadow-lg transition-colors">
-                    {myEntry ? 'Already in Queue' : 'Submit Setlist to Stage'}
+                    {myEntry ? 'Already in Queue' : `Submit Side ${activeSide} to Stage`}
                 </button>
 
                 <div className="border-t border-gray-800 pt-6">
-                    <h4 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Search Songbook</h4>
+                    <h4 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Search Songbook (Add to Side {activeSide})</h4>
                     <form onSubmit={handleSearchSong} className="flex gap-2 mb-4">
                         <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Title or Artist..." className="flex-1 bg-black border border-gray-700 text-white rounded-lg p-3 text-sm outline-none focus:border-blue-500" />
                         <button type="submit" disabled={searching} className="bg-blue-600 text-white px-4 rounded-lg text-xs font-bold uppercase tracking-widest">{searching ? '...' : 'Find'}</button>
@@ -326,7 +506,7 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
                                     <h4 className="text-white font-bold text-sm truncate">{song.title}</h4>
                                     <p className="text-[9px] text-gray-500 uppercase font-bold truncate">{song.artist}</p>
                                 </div>
-                                <button onClick={() => addToSetlist(song)} className="bg-gray-800 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors flex-shrink-0">Add</button>
+                                <button onClick={() => addToSetlist(song)} className="bg-gray-800 text-blue-400 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-widest transition-colors flex-shrink-0">+ Side {activeSide}</button>
                             </div>
                         ))}
                     </div>
@@ -336,35 +516,96 @@ export default function KSocialUser({ currentUser, sessionId, onExit }) {
     }
 
     if (activeView === 'Items') {
-        const items = currentUser?.inventory || {}
+        const pObj = liveProfile || currentUser || {}
+        const gems = pObj.inv_gems || {}
+        const items = pObj.inv_items || pObj.inventory || {}
+        const activeBuffs = pObj.details?.active_buffs || {}
         return (
-            <div className="max-w-md mx-auto p-4 animate-fade-in pb-20">
-                <button onClick={() => setActiveView('Menu')} className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-white mb-6">← Back to Menu</button>
-                <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">Your Backpack</h3>
-                <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-6">Wallet & Consumables</p>
+            <div className="max-w-md mx-auto p-4 animate-fade-in pb-20 space-y-5">
+                <button onClick={() => setActiveView('Menu')} className="text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-white">← Back to Menu</button>
+                <div>
+                    <h3 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest mb-1">Your Backpack</h3>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Wallet, Gems & Stage Buffs</p>
+                </div>
 
-                <div className="grid grid-cols-2 gap-3 mb-6">
+                {/* Active Buffs Banner */}
+                {(pObj.multiplier_uses_left > 0 || activeBuffs.microphone || activeBuffs.megaphone) && (
+                    <div className="space-y-2">
+                        {pObj.multiplier_uses_left > 0 && (
+                            <div className="bg-emerald-900/20 border border-emerald-500/40 rounded-xl px-4 py-2.5 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+                                <span>Active L$ Multiplier: x{pObj.active_multiplier}</span>
+                                <span>{pObj.multiplier_uses_left} Left</span>
+                            </div>
+                        )}
+                        {activeBuffs.microphone && (
+                            <div className="bg-purple-900/20 border border-purple-500/40 rounded-xl px-4 py-2.5 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-purple-300">
+                                <span>🎤 Microphone Active</span>
+                                <span>Next Song Incoming Votes x2</span>
+                            </div>
+                        )}
+                        {activeBuffs.megaphone && (
+                            <div className="bg-yellow-900/20 border border-yellow-500/40 rounded-xl px-4 py-2.5 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-yellow-300">
+                                <span>📢 Megaphone Active</span>
+                                <span>Next Song Outgoing Votes x2</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
                     <div className="bg-black border border-blue-900/30 p-4 rounded-xl">
                         <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest block mb-1">Lifestyle Points</span>
-                        <span className="text-2xl font-['Bebas_Neue'] text-white">{currentUser?.lifestyle_points || 0}</span>
+                        <span className="text-2xl font-['Bebas_Neue'] text-white">{pObj.lifestyle_points || 0} L$</span>
                     </div>
                     <div className="bg-black border border-purple-900/30 p-4 rounded-xl">
-                        <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest block mb-1">SuperVotes</span>
-                        <span className="text-2xl font-['Bebas_Neue'] text-white">{items['SuperVote Token'] || 0}</span>
+                        <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest block mb-1">KSocial Points</span>
+                        <span className="text-2xl font-['Bebas_Neue'] text-white">{pObj.league_monthly || 0} PTS</span>
                     </div>
+                </div>
+
+                {/* Consumable Stage Items & Gems */}
+                <div className="bg-[#090812] border border-gray-800 p-4 rounded-2xl space-y-3">
+                    <h4 className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Gems & Stage Consumables</h4>
+                    {Object.entries({ ...gems, ...items }).filter(([, qty]) => qty >= 1).length === 0 ? (
+                        <p className="text-gray-600 text-xs italic text-center py-3">No gems or stage items in backpack.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {Object.entries({ ...gems, ...items }).map(([name, qty]) => {
+                                if (qty < 1) return null
+                                const specKey = Object.keys(CONSUMABLE_CATALOG).find(k => k.toLowerCase() === name.toLowerCase())
+                                const spec = specKey ? CONSUMABLE_CATALOG[specKey] : null
+                                return (
+                                    <div key={name} className="flex justify-between items-center bg-black p-3 rounded-xl border border-gray-800 gap-2">
+                                        <div>
+                                            <span className="text-white text-sm font-bold block">{spec?.icon ? `${spec.icon} ` : ''}{name} <span className="text-gray-400 text-xs">×{qty}</span></span>
+                                            {spec?.label && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{spec.label}</span>}
+                                        </div>
+                                        {spec && (
+                                            <button
+                                                onClick={() => handleConsumeInBackpack(name)}
+                                                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
+                                            >
+                                                Consume
+                                            </button>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 <div className="bg-[#090812] border border-gray-800 p-4 rounded-2xl">
                     <h4 className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-4">Crafting Materials</h4>
                     <div className="space-y-2">
                         <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-gray-800">
-                            <span className="text-white text-sm font-bold">Iron Ore</span><span className="text-gray-400 text-xs font-bold">{currentUser?.cur_iron || 0}</span>
+                            <span className="text-white text-sm font-bold">Iron Ore</span><span className="text-gray-400 text-xs font-bold">{pObj.cur_iron || 0}</span>
                         </div>
                         <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-gray-800">
-                            <span className="text-white text-sm font-bold">Wood</span><span className="text-gray-400 text-xs font-bold">{currentUser?.cur_wood || 0}</span>
+                            <span className="text-white text-sm font-bold">Wood</span><span className="text-gray-400 text-xs font-bold">{pObj.cur_wood || 0}</span>
                         </div>
                         <div className="flex justify-between items-center bg-black p-3 rounded-xl border border-gray-800">
-                            <span className="text-white text-sm font-bold">Stone</span><span className="text-gray-400 text-xs font-bold">{currentUser?.cur_stone || 0}</span>
+                            <span className="text-white text-sm font-bold">Stone</span><span className="text-gray-400 text-xs font-bold">{pObj.cur_stone || 0}</span>
                         </div>
                     </div>
                 </div>

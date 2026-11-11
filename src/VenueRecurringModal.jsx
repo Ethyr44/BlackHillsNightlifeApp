@@ -168,10 +168,12 @@ export default function VenueRecurringModal({
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 animate-fade-in"
+      onClick={onClose}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
     >
       <div
+        onClick={e => e.stopPropagation()}
         className="w-full max-w-md rounded-2xl overflow-hidden max-h-[88vh] flex flex-col"
         style={{
           background: 'rgba(10,18,40,0.97)',

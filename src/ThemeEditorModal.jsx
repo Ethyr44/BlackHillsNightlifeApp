@@ -126,10 +126,16 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070d1a]/80 backdrop-blur-md p-4 animate-fade-in">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-[#070d1a]/80 backdrop-blur-md p-4 animate-fade-in"
+    >
 
       {/* ── Modal card ────────────────────────────────────────────────── */}
-      <div className="bg-[#0e1828]/90 backdrop-blur-2xl border border-white/[0.08] rounded-3xl w-full max-w-sm shadow-[0_24px_64px_rgba(0,0,0,0.6)] max-h-[90vh] overflow-y-auto hide-scrollbar">
+      <div
+        onClick={e => e.stopPropagation()}
+        className="bg-[#0e1828]/90 backdrop-blur-2xl border border-white/[0.08] rounded-3xl w-full max-w-sm shadow-[0_24px_64px_rgba(0,0,0,0.6)] max-h-[90vh] overflow-y-auto hide-scrollbar"
+      >
 
         {/* Top accent line using current primary */}
         <div
@@ -145,9 +151,9 @@ export default function ThemeEditorModal({ session, profile, onClose, onUpdate }
                 className="text-xl font-extrabold text-white tracking-tight"
                 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
               >
-                Customize Identity
+                Customize Profile
               </h3>
-              <p className="text-white/40 text-xs mt-0.5">Personalize your profile theme</p>
+              <p className="text-white/40 text-xs mt-0.5">Personalize your profile & theme</p>
             </div>
             <button
               onClick={onClose}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
+import { awardLifestylePoints } from './utils'
 
 const accountTypes = [
   { id: 'Regular', icon: '👤', title: 'Regular', desc: 'Just here to vibe, vote, and explore.' },
@@ -313,8 +314,14 @@ export default function Onboarding({ session, onComplete, forcedType = null }) {
           return
       }
 
-      // 🟢 FEED FIX: Only inject the welcome post if this is their very first time applying
+      // 🟢 FEED FIX: Only inject the welcome post & +100 L$ New Profile bonus if this is their very first time applying
       if (!forcedType) {
+          await awardLifestylePoints(supabase, session.user.id, 100, {
+              title: 'New Profile Created!',
+              guardKey: 'create_new_profile',
+              applyMultiplier: false
+          })
+
           let welcomeMessage = `${finalUsername} has joined the scene!`
           if (accountType === 'Host') welcomeMessage = `🎤 New Host Alert: ${finalUsername} has joined the scene!`
           if (accountType === 'Admin') welcomeMessage = `⚙️ Admin ${finalUsername} has authenticated.`

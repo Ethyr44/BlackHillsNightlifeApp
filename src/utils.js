@@ -190,3 +190,467 @@ export async function compressImageToWebP(file, maxDimension = 1200, quality = 0
         img.src = objectUrl;
     });
 }
+
+// ============================================================================
+// CONSUMABLE ITEMS, POINT SYSTEM & DUAL SETLIST HELPERS
+// ============================================================================
+
+export const CONSUMABLE_CATALOG = {
+    // Instant Single-Use L$ Items (NOT multiplied by active multipliers)
+    Quartz: {
+        kind: 'instant_lp',
+        bonusLp: 80,
+        color: '#f9a8d4',
+        glow: 'rgba(249,168,212,0.28)',
+        icon: '💎',
+        label: '+80 L$ (Single Use)',
+        description: 'Instantly grants +80 L$ upon consumption.'
+    },
+    Agate: {
+        kind: 'instant_lp',
+        bonusLp: 50,
+        color: '#fb923c',
+        glow: 'rgba(251,146,60,0.28)',
+        icon: '🪨',
+        label: '+50 L$ (Single Use)',
+        description: 'Instantly grants +50 L$ upon consumption.'
+    },
+    Opal: {
+        kind: 'instant_lp',
+        bonusLp: 100,
+        color: '#a5b4fc',
+        glow: 'rgba(165,180,252,0.28)',
+        icon: '🔮',
+        label: '+100 L$ (Single Use)',
+        description: 'Instantly grants +100 L$ upon consumption.'
+    },
+    Onyx: {
+        kind: 'instant_lp',
+        bonusLp: 150,
+        color: '#94a3b8',
+        glow: 'rgba(148,163,184,0.28)',
+        icon: '🖤',
+        label: '+150 L$ (Single Use)',
+        description: 'Instantly grants +150 L$ upon consumption.'
+    },
+    Jade: {
+        kind: 'instant_lp',
+        bonusLp: 300,
+        color: '#34d399',
+        glow: 'rgba(52,211,153,0.28)',
+        icon: '🟢',
+        label: '+300 L$ (Single Use)',
+        description: 'Instantly grants +300 L$ upon consumption.'
+    },
+
+    // Action/Event Multiplier Gems (Applies ONLY to Action/Event L$ rewards)
+    Ruby: {
+        kind: 'multiplier',
+        mult: 2,
+        uses: 5,
+        color: '#f87171',
+        glow: 'rgba(248,113,113,0.28)',
+        icon: '♦️',
+        label: 'x2 L$ (Next 5 Rewards)',
+        description: 'Doubles L$ earned from the next 5 action/event rewards.'
+    },
+    Emerald: {
+        kind: 'multiplier',
+        mult: 3,
+        uses: 3,
+        color: '#10b981',
+        glow: 'rgba(16,185,129,0.28)',
+        icon: '💚',
+        label: 'x3 L$ (Next 3 Rewards)',
+        description: 'Triples L$ earned from the next 3 action/event rewards.'
+    },
+    Diamond: {
+        kind: 'multiplier',
+        mult: 4,
+        uses: 1,
+        color: '#67e8f9',
+        glow: 'rgba(103,232,249,0.28)',
+        icon: '💠',
+        label: 'x4 L$ (Next 1 Reward)',
+        description: 'Quadruples L$ earned from the next action/event reward.'
+    },
+
+    // KSocial Single-Song Vote Buff Items
+    Microphone: {
+        kind: 'ksocial_buff',
+        buffKey: 'microphone',
+        mult: 2,
+        uses: 1,
+        color: '#c084fc',
+        glow: 'rgba(192,132,252,0.28)',
+        icon: '🎤',
+        label: 'x2 Incoming Votes (1 Song)',
+        description: 'Doubles all Vote Points you receive for your next single song sung.'
+    },
+    Megaphone: {
+        kind: 'ksocial_buff',
+        buffKey: 'megaphone',
+        mult: 2,
+        uses: 1,
+        color: '#facc15',
+        glow: 'rgba(250,204,21,0.28)',
+        icon: '📢',
+        label: 'x2 Outgoing Votes (1 Song)',
+        description: 'Doubles the Vote Points you send to a singer for 1 song.'
+    }
+};
+
+export function getTodayBlackHillsKey() {
+    const bh = getBlackHillsDate();
+    const y = bh.getFullYear();
+    const m = String(bh.getMonth() + 1).padStart(2, '0');
+    const d = String(bh.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * Awards Action/Event-based Lifestyle Points (L$) to a user.
+ * Automatically applies & decrements active gem multipliers (Ruby/Emerald/Diamond).
+ * Multiplier bonuses NEVER apply to consumed items (those use consumeInventoryAsset).
+ */
+export async function awardLifestylePoints(supabase, userId, baseAmount, options = {}) {
+    if (!supabase || !userId || !baseAmount || baseAmount <= 0) {
+        return { awarded: 0, skipped: true };
+    }
+    const {
+        title = 'Reward Earned!',
+        guardKey = null,
+        applyMultiplier = true,
+        emitToast = true
+    } = options;
+
+    const { data: profile, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('id, lifestyle_points, active_multiplier, multiplier_uses_left, details')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (fetchErr || !profile) {
+        return { awarded: 0, error: fetchErr };
+    }
+
+    const details = { ...(profile.details || {}) };
+    const rewardGuards = { ...(details.reward_guards || {}) };
+
+    if (guardKey && rewardGuards[guardKey]) {
+        return { awarded: 0, skipped: true };
+    }
+
+    let multUses = Number(profile.multiplier_uses_left || 0);
+    let activeMult = Number(profile.active_multiplier || 1);
+    let appliedMult = 1;
+
+    if (applyMultiplier && multUses > 0 && activeMult > 1) {
+        appliedMult = activeMult;
+        multUses -= 1;
+        if (multUses <= 0) {
+            multUses = 0;
+            activeMult = 1;
+        }
+    }
+
+    const finalAward = Math.round(baseAmount * appliedMult);
+    const newLp = Number(profile.lifestyle_points || 0) + finalAward;
+
+    if (guardKey) {
+        rewardGuards[guardKey] = new Date().toISOString();
+        details.reward_guards = rewardGuards;
+    }
+
+    const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({
+            lifestyle_points: newLp,
+            active_multiplier: activeMult,
+            multiplier_uses_left: multUses,
+            details
+        })
+        .eq('id', userId);
+
+    if (updateErr) {
+        return { awarded: 0, error: updateErr };
+    }
+
+    if (emitToast && typeof window !== 'undefined') {
+        const displayTitle = appliedMult > 1 ? `${title} (${appliedMult}x Boost!)` : title;
+        window.dispatchEvent(
+            new CustomEvent('bhnl-reward-earned', {
+                detail: { title: displayTitle, points: `${finalAward} L$` }
+            })
+        );
+    }
+
+    return {
+        awarded: finalAward,
+        appliedMultiplier: appliedMult,
+        remainingUses: multUses,
+        newTotal: newLp
+    };
+}
+
+/**
+ * Awards KSocial Points (league_monthly & league_all_time) to a user.
+ */
+export async function awardKSocialPoints(supabase, userId, pointsToAdd, options = {}) {
+    if (!supabase || !userId || !pointsToAdd || pointsToAdd <= 0) {
+        return { awarded: 0, skipped: true };
+    }
+    const {
+        title = 'KSocial Points!',
+        guardKey = null,
+        clearMicrophoneBuff = false,
+        emitToast = false
+    } = options;
+
+    const { data: profile, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('id, league_monthly, league_all_time, details')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (fetchErr || !profile) {
+        return { awarded: 0, error: fetchErr };
+    }
+
+    const details = { ...(profile.details || {}) };
+    const rewardGuards = { ...(details.reward_guards || {}) };
+
+    if (guardKey && rewardGuards[guardKey]) {
+        return { awarded: 0, skipped: true };
+    }
+
+    if (guardKey) {
+        rewardGuards[guardKey] = new Date().toISOString();
+        details.reward_guards = rewardGuards;
+    }
+
+    if (clearMicrophoneBuff && details.active_buffs?.microphone) {
+        details.active_buffs = {
+            ...details.active_buffs,
+            microphone: false
+        };
+    }
+
+    const newMonthly = Number(profile.league_monthly || 0) + pointsToAdd;
+    const newAllTime = Number(profile.league_all_time || 0) + pointsToAdd;
+
+    const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({
+            league_monthly: newMonthly,
+            league_all_time: newAllTime,
+            details
+        })
+        .eq('id', userId);
+
+    if (updateErr) {
+        return { awarded: 0, error: updateErr };
+    }
+
+    if (emitToast && typeof window !== 'undefined') {
+        window.dispatchEvent(
+            new CustomEvent('bhnl-reward-earned', {
+                detail: { title, points: `${pointsToAdd} KSocial PTS` }
+            })
+        );
+    }
+
+    return { awarded: pointsToAdd, newMonthly, newAllTime };
+}
+
+/**
+ * Consumes a gem or item from the user's inventory (inv_gems or inv_items),
+ * removes it when quantity hits 0, and applies its exact single-use or instance effect.
+ * Multiplier bonuses DO NOT apply to consumed items.
+ */
+export async function consumeInventoryAsset(supabase, userId, rawItemName) {
+    if (!supabase || !userId || !rawItemName) {
+        return { ok: false, message: 'Invalid item.' };
+    }
+
+    const canonicalName = Object.keys(CONSUMABLE_CATALOG).find(
+        k => k.toLowerCase() === String(rawItemName).trim().toLowerCase()
+    ) || rawItemName;
+
+    const spec = CONSUMABLE_CATALOG[canonicalName];
+    if (!spec) {
+        return { ok: false, message: `${rawItemName} cannot be consumed directly.` };
+    }
+
+    const { data: profile, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('id, lifestyle_points, active_multiplier, multiplier_uses_left, inv_gems, inv_items, details')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (fetchErr || !profile) {
+        return { ok: false, message: 'Could not load profile inventory.' };
+    }
+
+    const invGems = { ...(profile.inv_gems || {}) };
+    const invItems = { ...(profile.inv_items || {}) };
+
+    // Locate item in inv_gems or inv_items
+    const gemKey = Object.keys(invGems).find(k => k.toLowerCase() === canonicalName.toLowerCase());
+    const itemKey = Object.keys(invItems).find(k => k.toLowerCase() === canonicalName.toLowerCase());
+
+    let sourceBucket = null;
+    let sourceKey = null;
+    if (gemKey && Number(invGems[gemKey]) > 0) {
+        sourceBucket = 'gems';
+        sourceKey = gemKey;
+    } else if (itemKey && Number(invItems[itemKey]) > 0) {
+        sourceBucket = 'items';
+        sourceKey = itemKey;
+    } else {
+        return { ok: false, message: `You do not have any ${canonicalName} in your inventory.` };
+    }
+
+    const details = { ...(profile.details || {}) };
+    const updates = {};
+
+    if (spec.kind === 'instant_lp') {
+        // Flat L$ grant — NEVER multiplied by active_multiplier
+        updates.lifestyle_points = Number(profile.lifestyle_points || 0) + spec.bonusLp;
+    } else if (spec.kind === 'multiplier') {
+        if (Number(profile.multiplier_uses_left || 0) > 0 && Number(profile.active_multiplier || 1) > 1) {
+            return {
+                ok: false,
+                message: `You already have an active ${profile.active_multiplier}x multiplier (${profile.multiplier_uses_left} uses left). Use it up before activating ${canonicalName}!`
+            };
+        }
+        updates.active_multiplier = spec.mult;
+        updates.multiplier_uses_left = spec.uses;
+    } else if (spec.kind === 'ksocial_buff') {
+        const activeBuffs = { ...(details.active_buffs || {}) };
+        if (activeBuffs[spec.buffKey]) {
+            return {
+                ok: false,
+                message: `${canonicalName} is already active for your next song!`
+            };
+        }
+        activeBuffs[spec.buffKey] = true;
+        details.active_buffs = activeBuffs;
+        updates.details = details;
+    }
+
+    // Decrement and remove key if 0
+    if (sourceBucket === 'gems') {
+        const nextQty = Number(invGems[sourceKey]) - 1;
+        if (nextQty <= 0) delete invGems[sourceKey];
+        else invGems[sourceKey] = nextQty;
+        updates.inv_gems = invGems;
+    } else {
+        const nextQty = Number(invItems[sourceKey]) - 1;
+        if (nextQty <= 0) delete invItems[sourceKey];
+        else invItems[sourceKey] = nextQty;
+        updates.inv_items = invItems;
+    }
+
+    const { data: updatedProfile, error: updateErr } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', userId)
+        .select('*')
+        .maybeSingle();
+
+    if (updateErr) {
+        return { ok: false, message: 'Network error: ' + updateErr.message };
+    }
+
+    let message = `${canonicalName} consumed!`;
+    if (spec.kind === 'instant_lp') {
+        message = `${spec.icon} ${canonicalName} consumed! +${spec.bonusLp} L$ added to your wallet.`;
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+                new CustomEvent('bhnl-reward-earned', {
+                    detail: { title: `${canonicalName} Consumed!`, points: `${spec.bonusLp} L$` }
+                })
+            );
+        }
+    } else if (spec.kind === 'multiplier') {
+        message = `${spec.icon} ${canonicalName} activated! x${spec.mult} L$ applied to your next ${spec.uses} reward${spec.uses > 1 ? 's' : ''}.`;
+    } else if (spec.kind === 'ksocial_buff') {
+        message =
+            spec.buffKey === 'microphone'
+                ? '🎤 Microphone active! Incoming Vote Points on your next song sung will be doubled (x2).'
+                : '📢 Megaphone active! Your next outgoing KSocial song vote will be doubled (x2).';
+    }
+
+    return { ok: true, message, spec, updatedProfile };
+}
+
+/**
+ * Extracts Side A and Side B setlists from a profile row.
+ */
+export function extractSetlistsFromProfile(profile) {
+    const rawSetlists = profile?.details?.setlists;
+    const legacyActive = Array.isArray(profile?.active_setlist) ? profile.active_setlist : [];
+    const sideA = Array.isArray(rawSetlists?.sideA) ? rawSetlists.sideA : legacyActive;
+    const sideB = Array.isArray(rawSetlists?.sideB) ? rawSetlists.sideB : [];
+    const activeSide = rawSetlists?.activeSide === 'B' ? 'B' : 'A';
+    return {
+        sideA,
+        sideB,
+        activeSide,
+        currentIds: activeSide === 'B' ? sideB : sideA
+    };
+}
+
+/**
+ * Saves Side A / Side B setlists to profiles.details.setlists and syncs profiles.active_setlist.
+ * Also awards +40 L$ the very first time a user fills a setlist to 7/7 songs!
+ */
+export async function updateDualSetlistOnProfile(supabase, userId, { sideA, sideB, activeSide }) {
+    const { data: profile, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('active_setlist, details')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (fetchErr) return { error: fetchErr };
+
+    const existing = extractSetlistsFromProfile(profile);
+    const nextSideA = Array.isArray(sideA) ? sideA : existing.sideA;
+    const nextSideB = Array.isArray(sideB) ? sideB : existing.sideB;
+    const nextActiveSide = activeSide === 'B' ? 'B' : activeSide === 'A' ? 'A' : existing.activeSide;
+    const nextActiveList = nextActiveSide === 'B' ? nextSideB : nextSideA;
+
+    const nextDetails = {
+        ...(profile?.details || {}),
+        setlists: {
+            sideA: nextSideA,
+            sideB: nextSideB,
+            activeSide: nextActiveSide
+        }
+    };
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({
+            active_setlist: nextActiveList,
+            details: nextDetails
+        })
+        .eq('id', userId);
+
+    if (!error && (nextSideA.length >= 7 || nextSideB.length >= 7)) {
+        await awardLifestylePoints(supabase, userId, 40, {
+            title: 'First Full Setlist!',
+            guardKey: 'first_full_setlist'
+        });
+    }
+
+    return {
+        error,
+        sideA: nextSideA,
+        sideB: nextSideB,
+        activeSide: nextActiveSide,
+        currentIds: nextActiveList
+    };
+}
+

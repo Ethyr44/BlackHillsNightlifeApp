@@ -21,10 +21,16 @@ export default function VibeCode({ session, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in"
+    >
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-blue-600/20 blur-[100px] rounded-full pointer-events-none"></div>
 
-      <div className="bg-[#090812] border-2 border-blue-500/30 w-full max-w-md rounded-3xl overflow-hidden shadow-[0_0_40px_rgba(59,130,246,0.2)] relative z-10 flex flex-col max-h-[90vh]">
+      <div
+        onClick={e => e.stopPropagation()}
+        className="bg-[#090812] border-2 border-blue-500/30 w-full max-w-md rounded-3xl overflow-hidden shadow-[0_0_40px_rgba(59,130,246,0.2)] relative z-10 flex flex-col max-h-[90vh]"
+      >
         
         <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-black/50">
           <h2 className="text-3xl font-['Bebas_Neue'] text-blue-400 tracking-wider">VIBE CODE</h2>

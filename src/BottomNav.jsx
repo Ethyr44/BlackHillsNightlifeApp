@@ -1,4 +1,14 @@
+import { useEffect, useRef } from 'react'
+
 export default function BottomNav({ displayTabs, activeTab, changeTab, viewingEntity }) {
+  const activeBtnRef = useRef(null)
+
+  useEffect(() => {
+    if (activeBtnRef.current && typeof activeBtnRef.current.scrollIntoView === 'function') {
+      activeBtnRef.current.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+    }
+  }, [activeTab])
+
   if (viewingEntity) return null
 
   const getTabIcon = (tab) => {
@@ -41,6 +51,7 @@ export default function BottomNav({ displayTabs, activeTab, changeTab, viewingEn
             return (
               <button
                 key={tab}
+                ref={active ? activeBtnRef : null}
                 onClick={() => changeTab(tab)}
                 className={`
                   relative flex flex-col items-center justify-center gap-[3px]

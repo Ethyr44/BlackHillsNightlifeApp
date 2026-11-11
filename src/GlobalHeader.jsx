@@ -19,6 +19,7 @@ export default function GlobalHeader({
   const [suggestions, setSuggestions] = useState([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchContainerRef = useRef(null)
+  const notifContainerRef = useRef(null)
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 8)
@@ -26,16 +27,23 @@ export default function GlobalHeader({
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Close suggestions dropdown when clicking outside
+  // Close suggestions & notifications dropdown when clicking/tapping outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
         setShowSuggestions(false)
       }
+      if (notifContainerRef.current && !notifContainerRef.current.contains(e.target)) {
+        setShowNotifications(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+    document.addEventListener('touchstart', handleClickOutside, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [setShowNotifications])
 
   // Fetch Top 3 Search Suggestions (Venues/Pages + Users)
   useEffect(() => {
@@ -220,7 +228,7 @@ export default function GlobalHeader({
         </form>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 relative">
+        <div ref={notifContainerRef} className="flex items-center gap-1 relative">
           {/* VibeCode / QR */}
           <button
             onClick={() => setShowVibeCode(true)}

@@ -7,6 +7,7 @@ import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
 import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
+import { awardLifestylePoints } from './utils'
 
 const SongBook = lazy(() => import('./Songbook'))
 
@@ -133,6 +134,12 @@ export default function PublicProfile({ entity, onClose, currentUser, onViewEnti
 
           if (isPage) {
               await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'follow_venue' })
+          } else {
+              // Award +40 L$ per Friend Connection (guarded per friend so unfriending/refriending cannot be farmed)
+              await awardLifestylePoints(supabase, currentUser.id, 40, {
+                  title: 'New Friend Connection!',
+                  guardKey: `friend_${entity.id}`
+              })
           }
           setFollowersCount(prev => prev + 1)
           setIsConnection(true)

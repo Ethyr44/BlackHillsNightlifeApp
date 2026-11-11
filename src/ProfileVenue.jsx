@@ -355,10 +355,14 @@ export default function ProfileVenue({ profile, currentUser, isOwner, onViewEnti
       {/* One-Off / Special Event Detail Modal */}
       {selectedLineupEvent && (
         <div
-          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-4 animate-fade-in"
+          onClick={() => setSelectedLineupEvent(null)}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-fade-in"
           style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)' }}
         >
-          <div className="w-full max-w-md rounded-2xl bg-[#0a1228] border border-white/10 p-5 space-y-4 shadow-2xl">
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-[#0a1228] border border-white/10 p-5 space-y-4 shadow-2xl"
+          >
             <div className="flex justify-between items-start">
               <div>
                 <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-pink-500/20 text-pink-300 border border-pink-500/30">

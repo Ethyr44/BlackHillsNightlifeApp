@@ -459,38 +459,50 @@ export default function Map({ currentUser, onViewEntity }) {
               return
           }
           
-          // Try server-side atomic RPC first; fall back to client update if SQL migration not yet run
-          const { error: rpcError } = await supabase.rpc('claim_geo_gift', { p_gift_id: activeGift.id })
-          if (rpcError) {
-              const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
-              if (!p) {
-                  setClaiming(false)
-                  return
-              }
-              
-              const newLp = (p.lifestyle_points || 0) + (activeGift.reward_lp || 0)
-              const newWood = (p.cur_wood || 0) + (activeGift.reward_resources?.Wood || 0)
-              const newStone = (p.cur_stone || 0) + (activeGift.reward_resources?.Stone || 0)
-              const newIron = (p.cur_iron || 0) + (activeGift.reward_resources?.Iron || 0)
-              
-              const newGems = { ...(p.inv_gems || {}) }
-              for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
-                   newGems[gem] = (newGems[gem] || 0) + amt
-              }
-
-              await supabase.from('profiles').update({
-                  lifestyle_points: newLp,
-                  cur_wood: newWood,
-                  cur_stone: newStone,
-                  cur_iron: newIron,
-                  inv_gems: newGems
-              }).eq('id', currentUser.id)
-
-              const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
-              await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
+          const { data: p } = await supabase.from('profiles').select('*').eq('id', currentUser.id).maybeSingle()
+          if (!p) {
+              setClaiming(false)
+              return
           }
 
-          alert(`🎁 Cache Claimed! Received ${activeGift.reward_lp || 0} L$.`)
+          let multUses = Number(p.multiplier_uses_left || 0)
+          let activeMult = Number(p.active_multiplier || 1)
+          let appliedMult = 1
+          if (multUses > 0 && activeMult > 1) {
+              appliedMult = activeMult
+              multUses -= 1
+              if (multUses <= 0) {
+                  multUses = 0
+                  activeMult = 1
+              }
+          }
+
+          const baseLp = Number(activeGift.reward_lp || 0)
+          const finalLpEarned = Math.round(baseLp * appliedMult)
+          const newLp = Number(p.lifestyle_points || 0) + finalLpEarned
+          const newWood = Number(p.cur_wood || 0) + Number(activeGift.reward_resources?.Wood || 0)
+          const newStone = Number(p.cur_stone || 0) + Number(activeGift.reward_resources?.Stone || 0)
+          const newIron = Number(p.cur_iron || 0) + Number(activeGift.reward_resources?.Iron || 0)
+
+          const newGems = { ...(p.inv_gems || {}) }
+          for (const [gem, amt] of Object.entries(activeGift.reward_gems || {})) {
+               newGems[gem] = (newGems[gem] || 0) + amt
+          }
+
+          await supabase.from('profiles').update({
+              lifestyle_points: newLp,
+              active_multiplier: activeMult,
+              multiplier_uses_left: multUses,
+              cur_wood: newWood,
+              cur_stone: newStone,
+              cur_iron: newIron,
+              inv_gems: newGems
+          }).eq('id', currentUser.id)
+
+          const updatedClaimers = [...(activeGift.claimed_by || []), currentUser.id]
+          await supabase.from('geo_gifts').update({ claimed_by: updatedClaimers }).eq('id', activeGift.id)
+
+          alert(`🎁 Cache Claimed! Received ${finalLpEarned} L$${appliedMult > 1 ? ` (${appliedMult}x Multiplier!)` : ''}.`)
           setGeoGifts(prev => prev.filter(g => g.id !== activeGift.id))
           setActiveGift(null)
           setClaiming(false)
@@ -499,7 +511,7 @@ export default function Map({ currentUser, onViewEntity }) {
           await supabase.from('notifications').insert([{
               user_id: currentUser.id,
               title: 'Cache Claimed!',
-              content: `You discovered a GeoGift and earned +${activeGift.reward_lp || 0} L$!`
+              content: `You discovered a GeoGift and earned +${finalLpEarned} L$!`
           }])
       }, (err) => {
           alert("Radar Offline. Ensure location services are enabled to claim Geo-Gifts.")
@@ -661,7 +673,7 @@ export default function Map({ currentUser, onViewEntity }) {
           )}
       </div>
 
-      <div style={mapContainerStyle} className="bg-gray-900 z-0">
+      <div data-no-page-swipe="true" style={mapContainerStyle} className="bg-gray-900 z-0">
         
         {/* PLACEMENT BANNER */}
         {isPlacingGift && (

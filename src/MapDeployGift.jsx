@@ -12,8 +12,14 @@ export default function MapDeployGift({ coords, isDeploying, onDeploy, onClose }
     }
 
     return (
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-red-900/10 border-2 border-red-500/50 w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.2)] p-6 relative">
+        <div
+            onClick={onClose}
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
+        >
+            <div
+                onClick={e => e.stopPropagation()}
+                className="bg-[#090812] border-2 border-red-500/50 w-full max-w-md rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.2)] p-6 relative"
+            >
                 
                 <button onClick={onClose} className="absolute top-6 right-6 text-gray-500 hover:text-white">✕</button>
                 
@@ -26,19 +32,22 @@ export default function MapDeployGift({ coords, isDeploying, onDeploy, onClose }
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Gem Type</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-pink-400 mb-1 block">Gem / Item Type</label>
                             <select 
                                 value={gemType} 
                                 onChange={e => setGemType(e.target.value)} 
                                 className="w-full bg-black border border-pink-900/50 p-4 rounded-xl text-white outline-none focus:border-pink-500"
                             >
-                                <option value="Quartz">Quartz</option>
-                                <option value="Amethyst">Amethyst</option>
-                                <option value="Jade">Jade</option>
-                                <option value="Emerald">Emerald</option>
-                                <option value="Sapphire">Sapphire</option>
-                                <option value="Ruby">Ruby</option>
-                                <option value="Diamond">Diamond</option>
+                                <option value="Agate">Agate (+50 L$)</option>
+                                <option value="Quartz">Quartz (+80 L$)</option>
+                                <option value="Opal">Opal (+100 L$)</option>
+                                <option value="Onyx">Onyx (+150 L$)</option>
+                                <option value="Jade">Jade (+300 L$)</option>
+                                <option value="Ruby">Ruby (x2 · 5 uses)</option>
+                                <option value="Emerald">Emerald (x3 · 3 uses)</option>
+                                <option value="Diamond">Diamond (x4 · 1 use)</option>
+                                <option value="Microphone">Microphone (x2 Incoming Votes)</option>
+                                <option value="Megaphone">Megaphone (x2 Outgoing Votes)</option>
                             </select>
                         </div>
                         <div>

@@ -10,18 +10,11 @@ import ProfileHost from './ProfileHost'
 import ProfilePerformer from './ProfilePerformer'
 import { GRADIENTS } from './themeConstants'
 import { toast } from './GlobalToast'
+import { CONSUMABLE_CATALOG, consumeInventoryAsset } from './utils'
 
 const SongBook = lazy(() => import('./Songbook'))
 
-const GEM_STATS = {
-  'Quartz':   { mult: 2, uses: 1, color: '#f9a8d4', glow: 'rgba(249,168,212,0.3)' },
-  'Amethyst': { mult: 2, uses: 2, color: '#c084fc', glow: 'rgba(192,132,252,0.3)' },
-  'Jade':     { mult: 3, uses: 1, color: '#34d399', glow: 'rgba(52,211,153,0.3)' },
-  'Emerald':  { mult: 3, uses: 2, color: '#10b981', glow: 'rgba(16,185,129,0.3)' },
-  'Sapphire': { mult: 4, uses: 1, color: '#4f8cff', glow: 'rgba(79,140,255,0.3)' },
-  'Ruby':     { mult: 2, uses: 5, color: '#f87171', glow: 'rgba(248,113,113,0.3)' },
-  'Diamond':  { mult: 4, uses: 4, color: '#67e8f9', glow: 'rgba(103,232,249,0.3)' },
-}
+const GEM_STATS = CONSUMABLE_CATALOG
 
 const PREF_STYLES = {
   events:  { active: 'bg-[rgba(34,212,200,0.15)] border-[#22d4c8] text-[#22d4c8]', inactive: 'bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]' },
@@ -186,27 +179,18 @@ export default function Profile({ session }) {
     setProfile(prev => ({ ...prev, [`pref_${type}`]: current }))
   }
 
-  const consumeGem = async (gemName) => {
-    if (profile.multiplier_uses_left > 0) {
-      return alert(`You already have an active ${profile.active_multiplier}x Multiplier! Exhaust it before activating another gem.`)
+  const handleConsumeAsset = async (assetName) => {
+    const res = await consumeInventoryAsset(supabase, session.user.id, assetName)
+    if (!res.ok) {
+      toast.error(res.message)
+      return
     }
-    const stats = GEM_STATS[gemName]
-    const currentGems = { ...(profile.inv_gems || {}) }
-    if (!currentGems[gemName] || currentGems[gemName] < 1) return
-
-    // Try server-side atomic RPC first; fall back to client update if SQL migration not yet run
-    const { error: rpcError } = await supabase.rpc('consume_user_gem', { p_gem_name: gemName })
-    if (rpcError) {
-      currentGems[gemName] -= 1
-      const { error } = await supabase.from('profiles').update({
-        inv_gems: currentGems,
-        active_multiplier: stats.mult,
-        multiplier_uses_left: stats.uses,
-      }).eq('id', session.user.id)
-      if (error) { alert('Network Error: Could not consume gem.'); return }
+    if (res.updatedProfile) {
+      setProfile(res.updatedProfile)
+    } else {
+      fetchProfileData()
     }
-    alert(`${gemName} Activated! Your next ${stats.uses} actions will be multiplied by ${stats.mult}x!`)
-    fetchProfileData()
+    toast.success(res.message)
   }
 
   const handleOpenFriends = async () => {
@@ -456,6 +440,7 @@ export default function Profile({ session }) {
       {/* ── FRIENDS LIST MODAL ── */}
       {showFriendsList && (
         <div
+          onClick={() => setShowFriendsList(false)}
           className="animate-fade-in"
           style={{
             position: 'fixed', inset: 0, background: 'rgba(7,13,26,0.85)',
@@ -463,20 +448,23 @@ export default function Profile({ session }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
           }}
         >
-          <div style={{
-            background: 'rgba(255,255,255,0.04)',
-            backdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 24,
-            width: '100%',
-            maxWidth: 420,
-            maxHeight: '80vh',
-            display: 'flex',
-            flexDirection: 'column',
-            padding: 24,
-            boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
-            position: 'relative',
-          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'rgba(255,255,255,0.04)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 24,
+              width: '100%',
+              maxWidth: 420,
+              maxHeight: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              padding: 24,
+              boxShadow: '0 24px 80px rgba(0,0,0,0.5)',
+              position: 'relative',
+            }}
+          >
             <button
               onClick={() => setShowFriendsList(false)}
               style={{
@@ -540,25 +528,34 @@ export default function Profile({ session }) {
       {/* ── INVENTORY & WALLET MODAL ── */}
       {showInventory && (
         <div
+          onClick={() => setShowInventory(false)}
           className="animate-fade-in"
           style={{
             position: 'fixed', inset: 0,
             background: 'rgba(7,13,26,0.9)',
             backdropFilter: 'blur(24px)',
-            zIndex: 50, overflowY: 'auto', padding: 16,
+            zIndex: 100,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 16,
           }}
         >
-          <div style={{
-            maxWidth: 460,
-            margin: '40px auto 80px',
-            background: 'rgba(255,255,255,0.04)',
-            backdropFilter: 'blur(24px)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 24,
-            padding: 24,
-            boxShadow: '0 0 60px rgba(16,185,129,0.08)',
-            position: 'relative',
-          }}>
+          <div
+            onClick={e => e.stopPropagation()}
+            className="hide-scrollbar"
+            style={{
+              width: '100%',
+              maxWidth: 460,
+              maxHeight: '88vh',
+              overflowY: 'auto',
+              background: 'rgba(255,255,255,0.04)',
+              backdropFilter: 'blur(24px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 24,
+              padding: 24,
+              boxShadow: '0 0 60px rgba(16,185,129,0.08)',
+              position: 'relative',
+            }}
+          >
             {/* Accent bar */}
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, #10b981, #4f8cff, #22d4c8)', borderRadius: '24px 24px 0 0' }} />
 
@@ -578,18 +575,44 @@ export default function Profile({ session }) {
               >✕</button>
             </div>
 
-            {/* Active multiplier banner */}
-            {profile.multiplier_uses_left > 0 && (
-              <div style={{
-                background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)',
-                borderRadius: 12, padding: '10px 14px', marginBottom: 16,
-                boxShadow: '0 0 16px rgba(16,185,129,0.15)',
-                animation: 'pulse-soft 2s ease-in-out infinite',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#34d399' }}>
-                  <span>Active Bonus: {profile.active_multiplier}x Pts</span>
-                  <span>{profile.multiplier_uses_left} Uses Left</span>
-                </div>
+            {/* Active multiplier & KSocial buff banners */}
+            {(profile.multiplier_uses_left > 0 || profile.details?.active_buffs?.microphone || profile.details?.active_buffs?.megaphone) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {profile.multiplier_uses_left > 0 && (
+                  <div style={{
+                    background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.4)',
+                    borderRadius: 12, padding: '10px 14px',
+                    boxShadow: '0 0 16px rgba(16,185,129,0.15)',
+                    animation: 'pulse-soft 2s ease-in-out infinite',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#34d399' }}>
+                      <span>Active Bonus: x{profile.active_multiplier} L$</span>
+                      <span>{profile.multiplier_uses_left} Instance{profile.multiplier_uses_left !== 1 ? 's' : ''} Left</span>
+                    </div>
+                  </div>
+                )}
+                {profile.details?.active_buffs?.microphone && (
+                  <div style={{
+                    background: 'rgba(192,132,252,0.14)', border: '1px solid rgba(192,132,252,0.4)',
+                    borderRadius: 12, padding: '10px 14px',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#c084fc' }}>
+                      <span>🎤 Microphone Active</span>
+                      <span>x2 Incoming Votes (1 Song)</span>
+                    </div>
+                  </div>
+                )}
+                {profile.details?.active_buffs?.megaphone && (
+                  <div style={{
+                    background: 'rgba(250,204,21,0.14)', border: '1px solid rgba(250,204,21,0.4)',
+                    borderRadius: 12, padding: '10px 14px',
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#facc15' }}>
+                      <span>📢 Megaphone Active</span>
+                      <span>x2 Outgoing Votes (1 Song)</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -636,7 +659,7 @@ export default function Profile({ session }) {
             {/* Gems */}
             <div style={{ marginBottom: 20 }}>
               <SectionLabel>Rare Gems</SectionLabel>
-              {Object.keys(gems).length === 0 ? (
+              {Object.entries(gems).filter(([, amt]) => amt >= 1).length === 0 ? (
                 <div style={{
                   background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: '16px 10px',
                   textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)',
@@ -646,7 +669,7 @@ export default function Profile({ session }) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   {Object.entries(gems).map(([gemName, amount]) => {
                     if (amount < 1) return null
-                    const stats = GEM_STATS[gemName]
+                    const stats = GEM_STATS[gemName] || Object.values(GEM_STATS).find((_, idx) => Object.keys(GEM_STATS)[idx].toLowerCase() === gemName.toLowerCase())
                     return (
                       <div key={gemName} style={{
                         background: `${stats?.glow || 'rgba(255,255,255,0.05)'}`,
@@ -655,27 +678,29 @@ export default function Profile({ session }) {
                         display: 'flex', flexDirection: 'column', gap: 6,
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontWeight: 700, color: stats?.color || '#fff', fontSize: 13 }}>{gemName}</span>
+                          <span style={{ fontWeight: 700, color: stats?.color || '#fff', fontSize: 13 }}>
+                            {stats?.icon ? `${stats.icon} ` : ''}{gemName}
+                          </span>
                           <span style={{
                             background: 'rgba(255,255,255,0.1)', borderRadius: 6,
                             padding: '2px 7px', fontSize: 11, fontWeight: 700, color: '#fff',
                           }}>×{amount}</span>
                         </div>
-                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)' }}>
-                          Boost: {stats?.mult}× ({stats?.uses} uses)
+                        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>
+                          {stats?.label || 'Single Use'}
                         </span>
                         <button
-                          onClick={() => consumeGem(gemName)}
+                          onClick={() => handleConsumeAsset(gemName)}
                           style={{
-                            background: 'rgba(255,255,255,0.07)',
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            background: 'rgba(255,255,255,0.09)',
+                            border: '1px solid rgba(255,255,255,0.16)',
                             borderRadius: 8, padding: '6px 0',
                             color: '#fff', fontSize: 10, fontWeight: 700,
                             letterSpacing: '0.08em', textTransform: 'uppercase',
                             cursor: 'pointer', transition: 'background 0.2s',
                           }}
-                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.13)'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.16)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.09)'}
                         >
                           Consume
                         </button>
@@ -689,30 +714,58 @@ export default function Profile({ session }) {
             {/* Items */}
             <div>
               <SectionLabel>Equipment & Items</SectionLabel>
-              {Object.keys(items).length === 0 ? (
+              {Object.entries(items).filter(([, amt]) => amt >= 1).length === 0 ? (
                 <div style={{
                   background: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: '16px 10px',
                   textAlign: 'center', fontSize: 11, color: 'rgba(255,255,255,0.2)',
                   fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
                 }}>No items acquired yet.</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {Object.entries(items).map(([itemName, amount]) => {
                     if (amount < 1) return null
+                    const specKey = Object.keys(CONSUMABLE_CATALOG).find(k => k.toLowerCase() === itemName.toLowerCase())
+                    const spec = specKey ? CONSUMABLE_CATALOG[specKey] : null
                     return (
                       <div key={itemName} style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 10, padding: '10px 14px',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        background: spec?.glow || 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${spec?.color ? `${spec.color}40` : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 12, padding: '12px 14px',
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
                       }}>
-                        <span style={{ fontWeight: 700, color: '#fff', fontSize: 13 }}>{itemName}</span>
-                        <span style={{
-                          background: 'rgba(255,255,255,0.08)', borderRadius: 6,
-                          padding: '3px 10px', fontSize: 10, fontWeight: 700,
-                          letterSpacing: '0.08em', textTransform: 'uppercase',
-                          color: 'rgba(255,255,255,0.5)',
-                        }}>Qty: {amount}</span>
+                        <div>
+                          <span style={{ display: 'block', fontWeight: 700, color: spec?.color || '#fff', fontSize: 13 }}>
+                            {spec?.icon ? `${spec.icon} ` : ''}{itemName}
+                          </span>
+                          {spec?.label && (
+                            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>
+                              {spec.label}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{
+                            background: 'rgba(255,255,255,0.08)', borderRadius: 6,
+                            padding: '4px 9px', fontSize: 10, fontWeight: 700,
+                            letterSpacing: '0.08em', textTransform: 'uppercase',
+                            color: 'rgba(255,255,255,0.65)',
+                          }}>×{amount}</span>
+                          {spec && (
+                            <button
+                              onClick={() => handleConsumeAsset(itemName)}
+                              style={{
+                                background: 'rgba(79,140,255,0.18)',
+                                border: '1px solid rgba(79,140,255,0.4)',
+                                borderRadius: 8, padding: '6px 12px',
+                                color: '#fff', fontSize: 10, fontWeight: 700,
+                                letterSpacing: '0.08em', textTransform: 'uppercase',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Consume
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )
                   })}

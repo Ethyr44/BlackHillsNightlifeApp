@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 import { toast } from './GlobalToast'
+import { awardKSocialPoints } from './utils'
 
 export default function KSocialHost({ currentUser, mode, onExit }) {
     const [view, setView] = useState('start_menu')
@@ -220,6 +221,11 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             if (singer.user_id) {
                 const { error: rpcError } = await supabase.rpc('mark_song_sung', { p_user_id: singer.user_id, p_song_id: singer.song_id })
                 if (rpcError) toast.error("Failed to mark song as sung: " + rpcError.message)
+                // Award +25 KSocial Points per song sung & clear single-song Microphone buff
+                await awardKSocialPoints(supabase, singer.user_id, 25, {
+                    title: 'Song Completed (+25 KSocial PTS)',
+                    clearMicrophoneBuff: true
+                })
             }
 
             let currentSetlist = Array.isArray(singer.setlist) ? singer.setlist : []
@@ -466,8 +472,14 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             </div>
 
             {expandedContender && (
-                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-md">
-                    <div className="bg-[#090812] p-6 rounded-3xl border-2 border-gray-800 w-full max-w-lg shadow-2xl relative">
+                <div
+                    onClick={() => setExpandedContender(null)}
+                    className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-md"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="bg-[#090812] p-6 rounded-3xl border-2 border-gray-800 w-full max-w-lg shadow-2xl relative"
+                    >
                         <button onClick={() => setExpandedContender(null)} className="absolute top-6 right-6 text-gray-500 hover:text-white font-bold text-xl">✕</button>
                         
                         <div className="flex items-center gap-4 mb-6 pb-6 border-b border-gray-800">
@@ -500,8 +512,14 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
 
             {/* MANUAL ADD SINGER MODAL */}
             {showAddSingerModal && (
-                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                    <div className="bg-[#090812] p-6 rounded-3xl border-2 border-purple-500/50 w-full max-w-md shadow-[0_0_30px_rgba(168,85,247,0.2)] relative">
+                <div
+                    onClick={() => setShowAddSingerModal(false)}
+                    className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="bg-[#090812] p-6 rounded-3xl border-2 border-purple-500/50 w-full max-w-md shadow-[0_0_30px_rgba(168,85,247,0.2)] relative"
+                    >
                         <button onClick={() => setShowAddSingerModal(false)} className="absolute top-6 right-6 text-gray-500 hover:text-white font-bold text-xl">✕</button>
                         
                         <h3 className="text-3xl font-['Bebas_Neue'] text-purple-400 tracking-widest mb-1">Add Walk-up Singer</h3>
@@ -530,8 +548,14 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             )}
 
             {showSettingsModal && (
-                <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                    <div className="bg-[#090812] border border-gray-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl">
+                <div
+                    onClick={() => setShowSettingsModal(false)}
+                    className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="bg-[#090812] border border-gray-800 p-6 rounded-3xl w-full max-w-sm shadow-2xl"
+                    >
                         <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest mb-4">Stage Settings</h3>
                         <div className="space-y-4">
                             <div>
@@ -557,8 +581,14 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             )}
 
             {showQR && (
-                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                    <div className="bg-white p-8 rounded-3xl text-center relative max-w-sm w-full">
+                <div
+                    onClick={() => setShowQR(false)}
+                    className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="bg-white p-8 rounded-3xl text-center relative max-w-sm w-full"
+                    >
                         <button onClick={() => setShowQR(false)} className="absolute top-4 right-4 text-gray-400 hover:text-black font-bold text-xl">✕</button>
                         <h3 className="text-3xl font-['Bebas_Neue'] text-black mb-1 tracking-widest">Join The Stage</h3>
                         <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-6">Scan with BHNL App to enter queue</p>
@@ -575,8 +605,14 @@ export default function KSocialHost({ currentUser, mode, onExit }) {
             )}
 
             {showTempQR && (
-                <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
-                    <div className="bg-yellow-500 p-8 rounded-3xl text-center relative max-w-sm w-full shadow-[0_0_50px_rgba(234,179,8,0.3)]">
+                <div
+                    onClick={() => setShowTempQR(false)}
+                    className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm"
+                >
+                    <div
+                        onClick={e => e.stopPropagation()}
+                        className="bg-yellow-500 p-8 rounded-3xl text-center relative max-w-sm w-full shadow-[0_0_50px_rgba(234,179,8,0.3)]"
+                    >
                         <button onClick={() => setShowTempQR(false)} className="absolute top-4 right-4 text-yellow-900 hover:text-black font-bold text-xl">✕</button>
                         <h3 className="text-3xl font-['Bebas_Neue'] text-black mb-1 tracking-widest">Guest Access</h3>
                         <p className="text-yellow-900 font-bold uppercase tracking-widest text-[10px] mb-6">Scan with native camera for Temp Passport</p>

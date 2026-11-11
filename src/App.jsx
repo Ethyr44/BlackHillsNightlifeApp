@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { BrowserRouter, useSearchParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import Auth from './Auth'
@@ -9,6 +9,7 @@ import { GlobalToast } from './GlobalToast'
 import GlobalHeader from './GlobalHeader'
 import BottomNav from './BottomNav'
 import BackgroundManager from './BackgroundManager'
+import { awardLifestylePoints, getTodayBlackHillsKey } from './utils'
 
 // 🟢 NEW: Direct Code Splitting for the flattened navigation & overlays
 const PublicProfile = lazy(() => import('./PublicProfile'))
@@ -96,6 +97,7 @@ function MainApp() {
 
   const [simulatedRole, setSimulatedRole] = useState(null)
   const [testOnboardingType, setTestOnboardingType] = useState(null)
+  const pageTouchStartRef = useRef(null)
 
   // Capture incoming "Share to BHNL" payload immediately so it persists across auth/lazy loads
   useEffect(() => {
@@ -151,11 +153,22 @@ function MainApp() {
   }, [showSplash])
 
   const showReward = (title, points) => {
-      if (points > 0) {
-          setRewardToast({ title, points })
+      if (points !== undefined && points !== null && points !== 0 && points !== '0') {
+          const formatted = typeof points === 'number' ? `${points} L$` : String(points)
+          setRewardToast({ title, points: formatted })
           setTimeout(() => setRewardToast(null), 5000)
       }
   }
+
+  useEffect(() => {
+      const handleRewardEvent = (e) => {
+          if (e?.detail) {
+              showReward(e.detail.title, e.detail.points)
+          }
+      }
+      window.addEventListener('bhnl-reward-earned', handleRewardEvent)
+      return () => window.removeEventListener('bhnl-reward-earned', handleRewardEvent)
+  }, [])
 
   const fetchUser = async () => {
     if (session?.user?.id) {
@@ -169,6 +182,15 @@ function MainApp() {
         }
         setCurrentUser({ ...data, last_active: nowIso });
         supabase.from('profiles').update({ last_active: nowIso }).eq('id', session.user.id).then(() => {});
+
+        // Award +50 L$ per daily login (once per Black Hills calendar day)
+        if ((data.onboarding_complete || data.onboarding_completed) && data.account_type !== 'Temp/Guest') {
+            const todayKey = getTodayBlackHillsKey()
+            awardLifestylePoints(supabase, session.user.id, 50, {
+                title: 'Daily Login Bonus!',
+                guardKey: `daily_login_${todayKey}`
+            })
+        }
         
         if (joinSessionId && !isGuestMode) {
             localStorage.setItem('bhnl_joined_session', joinSessionId)
@@ -248,8 +270,10 @@ function MainApp() {
                 { follower_id: currentUser.id, target_id: targetId, connection_type: 'friend' },
                 { follower_id: targetId, target_id: currentUser.id, connection_type: 'friend' }
             ])
-            const { data: earnedPts } = await supabase.rpc('trigger_reward', { target_user_id: currentUser.id, action_slug: 'scan_vibecode' })
-            showReward('VibeCode Scanned!', earnedPts)
+            await awardLifestylePoints(supabase, currentUser.id, 40, {
+                title: 'New Friend Connection!',
+                guardKey: `friend_${targetId}`
+            })
         }
         setSearchParams({ tab: activeTab, view: 'profile' }, { replace: true })
         setViewingEntity({ id: targetId }) 
@@ -467,6 +491,57 @@ function MainApp() {
 
   const tabs = getAvailableTabs()
 
+  const hasHorizontalScrollAncestor = (el) => {
+      let cur = el
+      while (cur && cur !== document.body) {
+          if (cur.dataset && cur.dataset.noPageSwipe === 'true') return true
+          const tag = (cur.tagName || '').toLowerCase()
+          if (tag === 'input' || tag === 'textarea' || tag === 'select') return true
+          const style = window.getComputedStyle(cur)
+          if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && cur.scrollWidth > cur.clientWidth + 8) {
+              return true
+          }
+          cur = cur.parentElement
+      }
+      return false
+  }
+
+  const handlePageTouchStart = (e) => {
+      if (viewingEntity || !e.touches || e.touches.length !== 1) {
+          pageTouchStartRef.current = null
+          return
+      }
+      if (hasHorizontalScrollAncestor(e.target)) {
+          pageTouchStartRef.current = null
+          return
+      }
+      pageTouchStartRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY
+      }
+  }
+
+  const handlePageTouchEnd = (e) => {
+      if (!pageTouchStartRef.current || viewingEntity || !e.changedTouches || e.changedTouches.length === 0) return
+      const dx = e.changedTouches[0].clientX - pageTouchStartRef.current.x
+      const dy = e.changedTouches[0].clientY - pageTouchStartRef.current.y
+      pageTouchStartRef.current = null
+
+      if (Math.abs(dx) > 65 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+          const currentIdx = tabs.indexOf(activeTab)
+          if (currentIdx === -1) return
+          if (dx < 0 && currentIdx < tabs.length - 1) {
+              // Swipe Left -> Next tab in BottomNav order
+              changeTab(tabs[currentIdx + 1])
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+          } else if (dx > 0 && currentIdx > 0) {
+              // Swipe Right -> Previous tab in BottomNav order
+              changeTab(tabs[currentIdx - 1])
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+          }
+      }
+  }
+
   // 🟢 NEW: Handles Notification Click Routing Safely
   const handleNotifRoute = (notif) => {
       if (!notif) return;
@@ -523,7 +598,7 @@ function MainApp() {
                     <div className="text-3xl animate-bounce">🎁</div>
                     <div>
                         <p className="text-white font-bold text-[10px] uppercase tracking-widest shadow-black">{rewardToast.title}</p>
-                        <p className="text-yellow-400 font-['Bebas_Neue'] text-3xl leading-none tracking-wider drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">+{rewardToast.points} PTS</p>
+                        <p className="text-yellow-400 font-['Bebas_Neue'] text-3xl leading-none tracking-wider drop-shadow-[0_0_10px_rgba(250,204,21,0.8)]">+{rewardToast.points}</p>
                     </div>
                 </div>
             </div>
@@ -552,7 +627,11 @@ function MainApp() {
 
       <Ticker />
 
-      <main className="max-w-2xl mx-auto relative z-10 w-full transition-all duration-300 pb-28">
+      <main
+          onTouchStart={handlePageTouchStart}
+          onTouchEnd={handlePageTouchEnd}
+          className="max-w-2xl mx-auto relative z-10 w-full transition-all duration-300 pb-28"
+      >
         <Suspense fallback={<div className="flex justify-center mt-20"><div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div></div>}>
           {viewingEntity ? (
             <PublicProfile 

@@ -399,8 +399,14 @@ export default function Events({ currentUser, onViewEntity }) {
 
       {/* Daily Lineup Modal */}
       {selectedDayDate && (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
-          <div className="bg-[#090812] w-full sm:max-w-md max-h-[82vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-gray-800 p-6 relative pb-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] hide-scrollbar">
+        <div
+          onClick={() => setSelectedDayDate(null)}
+          className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-[#090812] w-full sm:max-w-md max-h-[82vh] overflow-y-auto rounded-3xl border border-gray-800 p-6 relative pb-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] hide-scrollbar"
+          >
             <button
               onClick={() => setSelectedDayDate(null)}
               className="absolute top-6 right-6 text-gray-500 hover:text-white font-bold text-xl transition-colors"
@@ -532,8 +538,14 @@ export default function Events({ currentUser, onViewEntity }) {
 
       {/* Create / Edit Event Modal */}
       {isEditorOpen && (
-        <div className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-end sm:items-center justify-center sm:p-4 animate-fade-in">
-          <div className="bg-[#090812] w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-gray-800 p-6 relative shadow-2xl hide-scrollbar space-y-4">
+        <div
+          onClick={() => setIsEditorOpen(false)}
+          className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-[#090812] w-full sm:max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-gray-800 p-6 relative shadow-2xl hide-scrollbar space-y-4"
+          >
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-blue-400">

@@ -227,7 +227,7 @@ export default function ProfileHeader({ profile, friendsCount, latestPost, onEdi
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536M9 11l6.536-6.536a2 2 0 012.828 0l.172.172a2 2 0 010 2.828L12 14H9v-3z" />
             </svg>
-            Customize Theme
+            Customize Profile
           </button>
 
         </div>

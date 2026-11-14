@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
 
-export default function KCrawlManager({ session }) {
+export default function KCrawlManager({ session, onExit }) {
     const [activeCrawl, setActiveCrawl] = useState(null)
     const [linkedSessions, setLinkedSessions] = useState([])
     const [selectedSession, setSelectedSession] = useState(null)
@@ -123,6 +123,12 @@ export default function KCrawlManager({ session }) {
                     <h2 className="text-3xl font-['Bebas_Neue'] text-white tracking-widest">Crawl Command Center</h2>
                     <p className="text-red-400 text-[10px] font-bold uppercase tracking-widest">Master Tournament Hub</p>
                 </div>
+                <div className="flex items-center gap-2">
+                {onExit && (
+                    <button onClick={onExit} className="bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white px-4 py-3 border border-gray-700 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors">
+                        ← Back
+                    </button>
+                )}
                 {!activeCrawl ? (
                     <button onClick={launchCrawl} className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest shadow-[0_0_15px_rgba(239,68,68,0.4)]">
                         Initiate Crawl
@@ -132,6 +138,7 @@ export default function KCrawlManager({ session }) {
                         Terminate Hub
                     </button>
                 )}
+                </div>
             </div>
 
             {activeCrawl && (
@@ -156,7 +163,7 @@ export default function KCrawlManager({ session }) {
                                     className={`bg-gray-900 border text-left p-4 rounded-xl transition-all hover:scale-[1.02] ${sess.status === 'paused' ? 'border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.1)]' : 'border-[#00f5ff]/30 shadow-[0_0_15px_rgba(0,245,255,0.1)] hover:border-[#00f5ff]'}`}
                                 >
                                     <div className="flex justify-between items-start mb-2">
-                                        <h4 className="text-white font-bold text-lg leading-none">{sess.session_title}</h4>
+                                        <h4 className="text-white font-bold text-lg leading-none">{sess.title || sess.session_title || 'Crawl Stage'}</h4>
                                         <span className={`w-2 h-2 rounded-full ${sess.status === 'paused' ? 'bg-yellow-500' : 'bg-[#00f5ff] animate-pulse'}`}></span>
                                     </div>
                                     <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">📍 {sess.venue_name}</p>
@@ -174,7 +181,7 @@ export default function KCrawlManager({ session }) {
                     <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-md p-6 shadow-2xl animate-slide-up-fast">
                         <div className="flex justify-between items-start mb-6 border-b border-gray-800 pb-4">
                             <div>
-                                <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{selectedSession.session_title}</h3>
+                                <h3 className="text-2xl font-['Bebas_Neue'] text-white tracking-widest">{selectedSession.title || selectedSession.session_title || 'Crawl Stage'}</h3>
                                 <p className={`text-[10px] font-bold uppercase tracking-widest ${selectedSession.status === 'paused' ? 'text-yellow-500' : 'text-[#00f5ff]'}`}>
                                     {selectedSession.status === 'paused' ? 'STAGE PAUSED' : 'STAGE ACTIVE'}
                                 </p>

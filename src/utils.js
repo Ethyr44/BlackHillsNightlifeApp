@@ -376,8 +376,22 @@ export async function awardLifestylePoints(supabase, userId, baseAmount, options
         return { awarded: 0, error: updateErr };
     }
 
+    const displayTitle = appliedMult > 1 ? `${title} (${appliedMult}x Boost!)` : title;
+
+    // Insert a persistent notification for every L$ reward earned
+    await supabase
+        .from('notifications')
+        .insert([
+            {
+                user_id: userId,
+                title: `💰 +${finalAward} L$ Earned!`,
+                content: `${displayTitle} — +${finalAward} L$ added to your balance.`
+            }
+        ])
+        .then(() => {})
+        .catch(() => {});
+
     if (emitToast && typeof window !== 'undefined') {
-        const displayTitle = appliedMult > 1 ? `${title} (${appliedMult}x Boost!)` : title;
         window.dispatchEvent(
             new CustomEvent('bhnl-reward-earned', {
                 detail: { title: displayTitle, points: `${finalAward} L$` }
@@ -566,6 +580,18 @@ export async function consumeInventoryAsset(supabase, userId, rawItemName) {
     let message = `${canonicalName} consumed!`;
     if (spec.kind === 'instant_lp') {
         message = `${spec.icon} ${canonicalName} consumed! +${spec.bonusLp} L$ added to your wallet.`;
+        await supabase
+            .from('notifications')
+            .insert([
+                {
+                    user_id: userId,
+                    title: `💎 +${spec.bonusLp} L$ Received!`,
+                    content: `Consumed ${canonicalName} and received +${spec.bonusLp} L$!`
+                }
+            ])
+            .then(() => {})
+            .catch(() => {});
+
         if (typeof window !== 'undefined') {
             window.dispatchEvent(
                 new CustomEvent('bhnl-reward-earned', {
@@ -653,4 +679,59 @@ export async function updateDualSetlistOnProfile(supabase, userId, { sideA, side
         currentIds: nextActiveList
     };
 }
+
+/**
+ * Extracts a numeric rotation timestamp/order for a session_singers row.
+ * Uses setlist[0]._rotOrder when present, falling back to created_at or id.
+ */
+export function getSingerRotationOrder(singer, fallbackIdx = 0) {
+    const fromSetlist = Number(singer?.setlist?.[0]?._rotOrder);
+    if (Number.isFinite(fromSetlist) && fromSetlist > 0) return fromSetlist;
+    if (singer?.created_at) {
+        const ts = new Date(singer.created_at).getTime();
+        if (Number.isFinite(ts) && ts > 0) return ts;
+    }
+    return 1000000 + fallbackIdx * 1000;
+}
+
+/**
+ * Attaches _rotOrder onto the first item of a singer's setlist array so queue order
+ * persists in Supabase without requiring extra schema columns.
+ */
+export function withSingerRotationOrder(setlist, rotOrder = Date.now()) {
+    const list = Array.isArray(setlist) && setlist.length > 0
+        ? setlist.map(item => ({ ...item }))
+        : [{ id: 'manual-entry', title: 'TBD', artist: 'TBD' }];
+    list[0] = { ...list[0], _rotOrder: rotOrder };
+    return list;
+}
+
+/**
+ * Sorts active (non-pending) contenders in true karaoke rotation order:
+ * 1. Currently on stage (singing / voting / results)
+ * 2. On deck (standby)
+ * 3. Queued contenders ordered by their rotation timestamp (_rotOrder / created_at)
+ */
+export function sortSingersForRotation(singers = []) {
+    const statusPriority = (status) => {
+        if (status === 'singing' || status === 'voting' || status === 'results') return 0;
+        if (status === 'standby') return 1;
+        return 2;
+    };
+
+    return singers
+        .filter(s => s.status !== 'pending')
+        .map((s, idx) => ({ s, idx }))
+        .sort((a, b) => {
+            const pa = statusPriority(a.s.status);
+            const pb = statusPriority(b.s.status);
+            if (pa !== pb) return pa - pb;
+            const oa = getSingerRotationOrder(a.s, a.idx);
+            const ob = getSingerRotationOrder(b.s, b.idx);
+            if (oa !== ob) return oa - ob;
+            return String(a.s.id).localeCompare(String(b.s.id));
+        })
+        .map(item => item.s);
+}
+
 

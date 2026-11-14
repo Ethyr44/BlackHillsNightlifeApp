@@ -67,19 +67,8 @@ function MainApp() {
       searchParams.get('share_text') ||
       searchParams.get('share_url')
   )
-  // Default tab is 'Home', or 'Feed' if launched via Web Share Target ("Share to BHNL")
-  const activeTab = searchParams.get('tab') || (hasSharePayload ? "Feed" : "Home")
-  
-  // 🟢 THE FIX: Immediate Projector Intercept
-  // If the URL is "?tab=Projector", render ONLY the Projector and nothing else!
-  if (activeTab === 'Projector') {
-      return (
-          <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white font-['Bebas_Neue'] text-4xl animate-pulse">Loading Display...</div>}>
-              <Projector />
-          </Suspense>
-      )
-  }
-
+  // Default tab is 'Home', 'KSocial' when scanning a KSocial Join QR, or 'Feed' if launched via Web Share Target
+  const activeTab = searchParams.get('tab') || (searchParams.get('join') ? "KSocial" : hasSharePayload ? "Feed" : "Home")
   const activeHub = HUB_MAP[activeTab] || 'SOCIAL'; // Pure derived state
 
   const [session, setSession] = useState(null)
@@ -404,6 +393,15 @@ function MainApp() {
     alert("This entity hasn't been added to the directory yet!")
   }
 
+  // 🟢 Immediate Projector Intercept (after all hooks so Rules of Hooks are always respected)
+  if (activeTab === 'Projector') {
+      return (
+          <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white font-['Bebas_Neue'] text-4xl animate-pulse">Loading Display...</div>}>
+              <Projector />
+          </Suspense>
+      )
+  }
+
   if (joinSessionId && isGuestMode) {
       return (
           <div className="min-h-screen bg-[#090812] font-sans selection:bg-yellow-500/30">
@@ -551,11 +549,26 @@ function MainApp() {
       const titleStr = (notif.title || '').toLowerCase();
       const contentStr = (notif.content || '').toLowerCase();
       
+      const isCommunity =
+          typeStr.includes('community') ||
+          titleStr.includes('community board') ||
+          contentStr.includes('[post:');
       const isSocial = typeStr.includes('post') || titleStr.includes('post') || titleStr.includes('comment') || titleStr.includes('like') || contentStr.includes('replied');
       const isEvent = typeStr.includes('event') || titleStr.includes('event');
-      
+      const isLpReward = titleStr.includes('l$') || contentStr.includes('l$');
+
+      // 0. Community Board Updates -> Navigate directly to the Community Board post
+      if (isCommunity) {
+          const match = (notif.content || '').match(/\[post:([^\]]+)\]/i);
+          const postId = notif.target_id || (match ? match[1] : '');
+          if (postId) {
+              setSearchParams({ tab: 'Community', post: postId });
+          } else {
+              setSearchParams({ tab: 'Community' });
+          }
+      }
       // 1. Social Engagements -> Navigate to Feed
-      if (isSocial) {
+      else if (isSocial) {
           setSearchParams({ tab: 'Feed', view: 'post', id: notif.target_id || '' });
       } 
       // 2. Events -> Navigate to Venues List
@@ -571,7 +584,11 @@ function MainApp() {
               setSearchParams({ tab: 'Profile' }); 
           }
       }
-      // 4. Default Fallback
+      // 4. L$ Points / Wallet Rewards -> Navigate to Profile
+      else if (isLpReward) {
+          setSearchParams({ tab: 'Profile' });
+      }
+      // 5. Default Fallback
       else {
           setSearchParams({ tab: 'Home' });
       }
@@ -694,7 +711,7 @@ function MainApp() {
               {/* 🟢 NEW: Standalone Journal Route */}
               {activeTab === 'Journal' && <JournalFeed currentUser={effectiveUser} />}
               {activeTab === 'Groups' && <Group />}
-              {activeTab === 'Community' && <Community />}
+              {activeTab === 'Community' && <Community currentUser={effectiveUser} />}
               {activeTab === 'Sports' && <Sports />}
               {(activeTab === 'FAQ' || activeTab === 'Contact') && <About />}
             </div>
@@ -720,6 +737,18 @@ function MainApp() {
 }
 
 export default function App() {
+  const isProjectorWindow =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('tab') === 'Projector'
+
+  if (isProjectorWindow) {
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white font-['Bebas_Neue'] text-4xl animate-pulse">Loading Display...</div>}>
+        <Projector />
+      </Suspense>
+    )
+  }
+
   return (
     <BrowserRouter>
       <MainApp />
